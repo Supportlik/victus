@@ -20,10 +20,12 @@ import { describeError } from '../core/problem';
   template: `
     <article class="card" [class.compact]="compact()" [class]="'card ' + c().status" [attr.data-capture]="c().id">
       <div class="media">
-        @if (c().kind === 'image' && c().attachment_id) {
-          <a [href]="api.attachmentUrl(c().attachment_id!)" target="_blank" rel="noopener" title="Open full size">
-            <img [src]="api.attachmentUrl(c().attachment_id!)" alt="capture photo" loading="lazy" />
-          </a>
+        @if (images().length) {
+          @for (a of images(); track a.id) {
+            <a [href]="api.attachmentUrl(a.id)" target="_blank" rel="noopener" title="Open full size">
+              <img [src]="api.attachmentUrl(a.id)" alt="capture photo" loading="lazy" />
+            </a>
+          }
         } @else if (c().kind === 'audio') {
           <span class="glyph" aria-hidden="true">🎙</span>
         } @else {
@@ -42,7 +44,7 @@ import { describeError } from '../core/problem';
         </div>
         @if (c().text) { <p class="text">{{ c().text }}</p> }
         @if (c().kind === 'audio') {
-          @if (c().attachment_id) { <audio controls preload="none" [src]="api.attachmentUrl(c().attachment_id!)"></audio> }
+          @for (a of audios(); track a.id) { <audio controls preload="none" [src]="api.attachmentUrl(a.id)"></audio> }
           @if (c().transcript) { <p class="transcript">“{{ c().transcript }}”</p> }
           @else if (c().transcript === '') { <p class="v-small v-muted">No speech detected in this recording.</p> }
           @else { <p class="v-small v-muted">No transcript yet.</p> }
@@ -86,7 +88,7 @@ import { describeError } from '../core/problem';
     .card.compact { grid-template-columns: 3rem 1fr; padding: 0.5rem; }
     .card.discarded { opacity: 0.7; }
     .card.processed { border-style: dashed; }
-    .media { display: grid; place-items: center; }
+    .media { display: grid; gap: 0.25rem; place-items: center; align-content: start; }
     .media img { width: 4.5rem; height: 4.5rem; object-fit: cover; border-radius: var(--v-radius); display: block; }
     .compact .media img { width: 3rem; height: 3rem; }
     .glyph { font-size: 1.4rem; color: var(--v-ink-3); }
@@ -122,6 +124,20 @@ export class CaptureCard {
 
   readonly isOpen = computed(() => ['new', 'failed'].includes(this.c().status));
   readonly canAct = computed(() => !this.readonly() && this.c().status !== 'processed' && this.c().status !== 'assigned');
+
+  /** Files of this capture, split by what they are. */
+  private files(): { id: string; mime: string }[] {
+    const c = this.c();
+    if (c.attachments?.length) return c.attachments;
+    return c.attachment_id ? [{ id: c.attachment_id, mime: c.attachment_mime ?? '' }] : [];
+  }
+  images(): { id: string; mime: string }[] {
+    return this.files().filter((a) => a.mime.startsWith('image/'));
+  }
+  audios(): { id: string; mime: string }[] {
+    const audio = this.files().filter((a) => a.mime.startsWith('audio/') || a.mime.startsWith('video/'));
+    return audio.length ? audio : this.c().attachment_id && this.c().kind === 'audio' ? [{ id: this.c().attachment_id!, mime: '' }] : [];
+  }
 
   statusLabel(): string {
     const s = this.c().status;

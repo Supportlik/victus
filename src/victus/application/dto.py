@@ -335,6 +335,16 @@ class MatchResult:
 
 
 @dataclass(frozen=True, slots=True)
+class AttachmentRef:
+    """One file of a capture."""
+
+    id: str
+    mime: str
+    size: int
+    original_name: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class CaptureView:
     id: str
     kind: str
@@ -349,6 +359,7 @@ class CaptureView:
     processed_at: datetime | None
     agent_run_id: str | None
     product_id: int | None = None  # set for captures about one product (label photo)
+    attachments: list[AttachmentRef] = field(default_factory=list)
     created: bool = True  # False when the upload was a duplicate (content hash)
 
 

@@ -92,7 +92,11 @@ def kind_for_mime(mime: str) -> CaptureKind:
 
 
 def capture_view(
-    cap: orm.Capture, transcript: orm.Transcript | None, *, created: bool = True
+    cap: orm.Capture,
+    transcript: orm.Transcript | None,
+    *,
+    created: bool = True,
+    attachments: list[orm.Attachment] | None = None,
 ) -> dto.CaptureView:
     return dto.CaptureView(
         id=cap.id,
@@ -108,8 +112,16 @@ def capture_view(
         processed_at=cap.processed_at,
         agent_run_id=cap.agent_run_id,
         product_id=cap.product_id,
+        attachments=[
+            dto.AttachmentRef(id=a.id, mime=a.mime, size=a.size, original_name=a.original_name)
+            for a in (attachments if attachments is not None else _fallback_attachments(cap))
+        ],
         created=created,
     )
+
+
+def _fallback_attachments(cap: orm.Capture) -> list[orm.Attachment]:
+    return [cap.attachment] if cap.attachment is not None else []
 
 
 def queue_follow_up_if_needed(
@@ -146,6 +158,15 @@ def queue_follow_up_if_needed(
 
 
 @dataclass(frozen=True, slots=True)
+class UploadFile:
+    """One file of an upload."""
+
+    data: bytes
+    filename: str | None = None
+    mime: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class UploadInput:
     text: str | None = None
     data: bytes | None = None
@@ -154,6 +175,20 @@ class UploadInput:
     target_date: date | None = None
     captured_at: datetime | None = None
     product_id: int | None = None  # a capture about one product has no target day
+    #: several files taken together stay one capture (photos, or a photo plus a voice note)
+    files: tuple[UploadFile, ...] = ()
+
+    def all_files(self) -> list[UploadFile]:
+        first = [UploadFile(self.data, self.filename, self.mime)] if self.data else []
+        return first + list(self.files)
+
+
+def content_hash_of(text: str | None, digests: list[str]) -> str:
+    """One file keeps its own digest, so re-uploading it is still a no-op (R35)."""
+    if len(digests) == 1 and not text:
+        return digests[0]
+    joined = "|".join([text or "", *digests])
+    return hashlib.sha256(joined.encode("utf-8")).hexdigest()
 
 
 class UploadCapture(UseCase):
@@ -166,39 +201,46 @@ class UploadCapture(UseCase):
     def execute(self, inp: UploadInput) -> dto.CaptureView:
         self.ctx.require(SCOPE_CAPTURE_WRITE)
         text = (inp.text or "").strip() or None
-        if not text and not inp.data:
-            raise ValidationFailed("a capture needs text or a file")
+        if not text and not inp.all_files():
+            raise ValidationFailed("a capture needs text or at least one file")
         ts = inp.captured_at or now()
         with self._uow() as uow:
             if inp.product_id is not None and uow.products.get(inp.product_id) is None:
                 raise NotFound(f"product {inp.product_id} not found")
-            attachment: orm.Attachment | None = None
-            if inp.data:
-                mime = sniff_mime(inp.mime, inp.filename)
-                kind = kind_for_mime(mime)
-                digest = hashlib.sha256(inp.data).hexdigest()
+            files = inp.all_files()
+            attachments: list[orm.Attachment] = []
+            digests: list[str] = []
+            kind = CaptureKind.TEXT
+            for f in files:
+                mime = sniff_mime(f.mime, f.filename)
+                file_kind = kind_for_mime(mime)
+                # audio decides the kind: it is the one that gets transcribed
+                if file_kind == CaptureKind.AUDIO or kind == CaptureKind.TEXT:
+                    kind = file_kind
+                digest = hashlib.sha256(f.data).hexdigest()
+                digests.append(digest)
                 attachment = uow.captures.attachment_by_hash(digest)
                 if attachment is None:
-                    key = self.blobs.put(self.ctx.tenant_id, digest, inp.data)
+                    key = self.blobs.put(self.ctx.tenant_id, digest, f.data)
                     attachment = uow.captures.add_attachment(
                         orm.Attachment(
                             tenant_id=self.ctx.tenant_id,
                             sha256=digest,
                             mime=mime,
-                            size=len(inp.data),
+                            size=len(f.data),
                             storage_key=key,
-                            original_name=inp.filename,
+                            original_name=f.filename,
                         )
                     )
-                content_hash = digest
-            else:
-                kind = CaptureKind.TEXT
-                assert text is not None
-                content_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
+                attachments.append(attachment)
+            content_hash = content_hash_of(text, digests)
             existing = uow.captures.by_hash(content_hash)
             if existing is not None:
                 return capture_view(
-                    existing, uow.captures.transcript_for(existing.id), created=False
+                    existing,
+                    uow.captures.transcript_for(existing.id),
+                    created=False,
+                    attachments=list(uow.captures.attachments_of(existing.id)),
                 )
             cap = uow.captures.add(
                 orm.Capture(
@@ -209,13 +251,15 @@ class UploadCapture(UseCase):
                     target_date=None if inp.product_id is not None else inp.target_date,
                     text=text,
                     status=CaptureStatus.NEW.value,
-                    attachment_id=attachment.id if attachment else None,
+                    attachment_id=attachments[0].id if attachments else None,
                     content_hash=content_hash,
                     product_id=inp.product_id,
                 )
             )
-            if attachment is not None:
-                cap.attachment = attachment
+            if attachments:
+                cap.attachment = attachments[0]
+                for i, att in enumerate(attachments, start=1):
+                    uow.captures.link_attachment(cap.id, att.id, i)
             if inp.target_date is not None and inp.product_id is None:
                 queue_follow_up_if_needed(uow, self.ctx, inp.target_date, [cap.id], ts)
             uow.audit.record(
@@ -226,9 +270,10 @@ class UploadCapture(UseCase):
                     "kind": kind.value,
                     "target_date": inp.target_date.isoformat() if inp.target_date else None,
                     "product_id": inp.product_id,
+                    "files": len(attachments),
                 },
             )
-            view = capture_view(cap, None)
+            view = capture_view(cap, None, attachments=attachments)
             uow.commit()
             return view
 
@@ -240,10 +285,12 @@ DELETABLE_STATUSES = frozenset(
 
 
 def _remove_capture(uow: UnitOfWork, blobs: BlobStorage | None, cap: orm.Capture) -> None:
-    """Delete a capture and its attachment blob when nothing else references it."""
-    att = cap.attachment
+    """Delete a capture and every blob of it that nothing else references."""
+    files = list(uow.captures.attachments_of(cap.id))
     uow.captures.delete(cap)
-    if att is not None and uow.captures.attachment_refs(att.id) == 0:
+    for att in files:
+        if uow.captures.attachment_refs(att.id) > 0:
+            continue
         key = att.storage_key
         uow.captures.delete_attachment(att)
         if blobs is not None:
@@ -311,7 +358,14 @@ class ListCaptures(UseCase):
             rows = uow.captures.list(
                 status=status, target_date=target_date, limit=limit, product_id=product_id
             )
-            return [capture_view(c, uow.captures.transcript_for(c.id)) for c in rows]
+            return [
+                capture_view(
+                    c,
+                    uow.captures.transcript_for(c.id),
+                    attachments=list(uow.captures.attachments_of(c.id)),
+                )
+                for c in rows
+            ]
 
 
 class GetCapture(UseCase):
@@ -321,7 +375,11 @@ class GetCapture(UseCase):
             cap = uow.captures.get(capture_id)
             if cap is None:
                 raise NotFound(f"capture {capture_id} not found")
-            return capture_view(cap, uow.captures.transcript_for(cap.id))
+            return capture_view(
+                cap,
+                uow.captures.transcript_for(cap.id),
+                attachments=list(uow.captures.attachments_of(cap.id)),
+            )
 
 
 class UpdateCapture(UseCase):

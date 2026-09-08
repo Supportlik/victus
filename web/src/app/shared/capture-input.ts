@@ -2,15 +2,21 @@ import { ChangeDetectionStrategy, Component, ElementRef, inject, input, output, 
 import { ApiClient, Capture } from '../api';
 import { describeError } from '../core/problem';
 
+interface Pending {
+  file: File;
+  url: string | null;
+  kind: 'image' | 'audio' | 'other';
+}
+
 /**
  * Voice, camera and file input for captures, usable on a day, a product or the inbox.
  *
- * - "Record" uses MediaRecorder (webm/opus in Chrome and Firefox, mp4 in Safari); the
- *   server converts and transcribes.
- * - "Take photo" opens the camera app on phones and the webcam in place on a computer,
- *   falling back to a file dialog when no camera is available.
- * - "Choose" accepts several images or audio files at once.
- * Each file is uploaded as its own capture with the given day or product.
+ * Everything collected here goes up as **one** capture, so several photos, a voice note
+ * and a line of text taken together keep their context (R64):
+ * - "Record" uses MediaRecorder (webm/opus in Chrome and Firefox, mp4 in Safari).
+ * - "Take photo" opens the camera in place — full screen on a phone, with a camera switch
+ *   and "another one" — and says why when no camera is reachable.
+ * - "Choose" adds existing images or audio files.
  */
 @Component({
   selector: 'v-capture-input',
@@ -30,18 +36,46 @@ import { describeError } from '../core/problem';
       <button type="button" class="v-btn" (click)="picker.click()" [disabled]="busy()"><span aria-hidden="true">🖼</span> Choose</button>
       <input #picker type="file" accept="image/*,audio/*" multiple hidden (change)="onFiles($event)" />
       @if (busy()) { <span class="v-small v-muted">Uploading…</span> }
-      @if (cameraOpen()) {
-        <div class="cam-live">
-          <video #preview autoplay playsinline muted></video>
+      @if (notice(); as n) { <span class="v-small v-muted">{{ n }}</span> }
+      @if (error(); as e) {
+        <span class="v-small err">{{ e }}</span>
+        <button type="button" class="v-btn small quiet" (click)="picker.click()">Choose a file instead</button>
+      }
+
+      @if (pending().length) {
+        <div class="tray">
+          <ul class="items">
+            @for (p of pending(); track p.file.name + p.file.size) {
+              <li>
+                @if (p.kind === 'image' && p.url) { <img [src]="p.url" alt="" /> }
+                @else { <span class="glyph" aria-hidden="true">{{ p.kind === 'audio' ? '🎙' : '📄' }}</span> }
+                <span class="name">{{ p.file.name }}</span>
+                <button type="button" class="v-btn quiet small danger" (click)="drop(p)" aria-label="Remove">✕</button>
+              </li>
+            }
+          </ul>
           <div class="v-actions">
-            <button type="button" class="v-btn primary" (click)="shoot()">Take the picture</button>
-            <button type="button" class="v-btn quiet" (click)="closeCamera()">Cancel</button>
+            <button type="button" class="v-btn primary" (click)="submit()" [disabled]="busy()">
+              Save as one capture ({{ pending().length }})
+            </button>
+            <button type="button" class="v-btn quiet" (click)="clear()" [disabled]="busy()">Discard</button>
           </div>
         </div>
       }
-      @if (notice(); as n) { <span class="v-small v-muted">{{ n }}</span> }
-      @if (error(); as e) { <span class="v-small err">{{ e }}</span> }
     </div>
+
+    @if (cameraOpen()) {
+      <div class="cam" role="dialog" aria-label="Camera">
+        <div class="bar">
+          <button type="button" class="v-btn primary" (click)="shoot(false)">Take the picture</button>
+          <button type="button" class="v-btn" (click)="shoot(true)">Take another one</button>
+          @if (canSwitch()) { <button type="button" class="v-btn" (click)="switchCamera()">Switch camera</button> }
+          <span class="shots">{{ pending().length }} taken</span>
+          <button type="button" class="v-btn quiet" (click)="closeCamera()">Done</button>
+        </div>
+        <video #preview autoplay playsinline muted></video>
+      </div>
+    }
   `,
   styles: `
     .cap { display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; }
@@ -49,8 +83,20 @@ import { describeError } from '../core/problem';
     .rec { font-variant-numeric: tabular-nums; }
     .pulse { width: 0.6rem; height: 0.6rem; border-radius: 50%; background: var(--v-bad); display: inline-block; animation: pulse 1s infinite; }
     .err { color: var(--v-bad); }
-    .cam-live { flex-basis: 100%; display: grid; gap: 0.5rem; justify-items: start; }
-    .cam-live video { width: 100%; max-width: 26rem; border-radius: var(--v-radius-l); background: #000; }
+
+    .tray { flex-basis: 100%; display: grid; gap: 0.5rem; padding: 0.5rem; border: 1px dashed var(--v-line-strong); border-radius: var(--v-radius-l); }
+    .items { list-style: none; margin: 0; padding: 0; display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .items li { display: flex; align-items: center; gap: 0.35rem; padding: 0.25rem 0.4rem; border: 1px solid var(--v-line); border-radius: var(--v-radius); background: var(--v-surface); }
+    .items img { width: 3rem; height: 3rem; object-fit: cover; border-radius: var(--v-radius); }
+    .items .name { max-width: 9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--v-fs-xs); color: var(--v-ink-2); }
+    .items .glyph { font-size: 1.2rem; }
+
+    /* Full screen on a phone; the buttons stay above the picture and always visible. */
+    .cam { position: fixed; inset: 0; z-index: 50; background: #000; display: grid; grid-template-rows: auto 1fr; }
+    .cam .bar { display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; padding: 0.6rem; background: var(--v-surface); border-bottom: 1px solid var(--v-line); }
+    .cam .shots { margin-left: auto; font-size: var(--v-fs-s); color: var(--v-ink-2); }
+    .cam video { width: 100%; height: 100%; object-fit: contain; background: #000; }
+
     @keyframes pulse { 50% { opacity: 0.3; } }
   `,
 })
@@ -61,6 +107,8 @@ export class CaptureInput {
   /** Product the captures are about (label photo, correction); omit for days. */
   readonly productId = input<number | null>(null);
   readonly compact = input(false);
+  /** Text sent with the files, so a typed line stays part of the same capture. */
+  readonly text = input<string>('');
   readonly uploaded = output<Capture>();
 
   readonly busy = signal(false);
@@ -68,15 +116,20 @@ export class CaptureInput {
   readonly elapsed = signal('0:00');
   readonly error = signal<string | null>(null);
   readonly notice = signal<string | null>(null);
+  readonly pending = signal<Pending[]>([]);
   readonly canRecord = typeof MediaRecorder !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
   readonly cameraOpen = signal(false);
+  readonly canSwitch = signal(false);
+
   private readonly preview = viewChild<ElementRef<HTMLVideoElement>>('preview');
   private cameraStream: MediaStream | null = null;
-
+  private facing: 'environment' | 'user' = 'environment';
   private recorder: MediaRecorder | null = null;
   private chunks: Blob[] = [];
   private startedAt = 0;
   private ticker: ReturnType<typeof setInterval> | null = null;
+
+  // ── voice ────────────────────────────────────────────────────────────────
 
   async startRecording(): Promise<void> {
     this.error.set(null);
@@ -95,8 +148,7 @@ export class CaptureInput {
         stream.getTracks().forEach((t) => t.stop());
         const type = rec.mimeType || 'audio/webm';
         const ext = type.includes('mp4') ? 'm4a' : type.includes('ogg') ? 'ogg' : 'webm';
-        const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-        this.upload([new File(this.chunks, `voice-${stamp}.${ext}`, { type })]);
+        this.add(new File(this.chunks, `voice-${this.stamp()}.${ext}`, { type }));
       };
       rec.start();
       this.recorder = rec;
@@ -108,7 +160,7 @@ export class CaptureInput {
         this.elapsed.set(`${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`);
       }, 500);
     } catch (e) {
-      this.error.set(e instanceof Error ? e.message : 'Microphone not available');
+      this.error.set(this.mediaMessage(e, 'Microphone'));
     }
   }
 
@@ -120,23 +172,27 @@ export class CaptureInput {
     this.recorder = null;
   }
 
-  /**
-   * On a phone the file input with `capture` opens the camera app; on a computer it would
-   * only open a file dialog, so there we grab the webcam ourselves and shoot in place.
-   */
+  // ── camera ───────────────────────────────────────────────────────────────
+
   async takePhoto(): Promise<void> {
     this.error.set(null);
+    this.notice.set(null);
     if (!navigator.mediaDevices?.getUserMedia) {
-      this.cameraFallback();
+      this.error.set('This browser exposes no camera (it needs a secure connection).');
       return;
     }
+    await this.openCamera();
+  }
+
+  private async openCamera(): Promise<void> {
     try {
       this.cameraStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1600 } },
+        video: { facingMode: { ideal: this.facing }, width: { ideal: 1600 } },
         audio: false,
       });
       this.cameraOpen.set(true);
-      // the <video> only exists once the block above is rendered
+      void this.detectCameras();
+      // the <video> exists only once the dialog is rendered
       setTimeout(() => {
         const el = this.preview()?.nativeElement;
         if (el && this.cameraStream) {
@@ -144,26 +200,29 @@ export class CaptureInput {
           void el.play().catch(() => undefined);
         }
       });
-    } catch {
-      this.cameraFallback();
+    } catch (e) {
+      this.cameraOpen.set(false);
+      this.error.set(this.mediaMessage(e, 'Camera'));
     }
   }
 
-  /** No camera, or permission denied: let the person pick a file instead. */
-  private cameraFallback(): void {
-    this.closeCamera();
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.setAttribute('capture', 'environment');
-    input.onchange = () => {
-      const file = input.files?.[0];
-      if (file) this.upload([file]);
-    };
-    input.click();
+  private async detectCameras(): Promise<void> {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      this.canSwitch.set(devices.filter((d) => d.kind === 'videoinput').length > 1);
+    } catch {
+      this.canSwitch.set(false);
+    }
   }
 
-  shoot(): void {
+  async switchCamera(): Promise<void> {
+    this.facing = this.facing === 'environment' ? 'user' : 'environment';
+    this.stopStream();
+    await this.openCamera();
+  }
+
+  /** Take a picture; `again` keeps the camera open for the next one. */
+  shoot(again: boolean): void {
     const el = this.preview()?.nativeElement;
     if (!el || !el.videoWidth) return;
     const canvas = document.createElement('canvas');
@@ -176,11 +235,11 @@ export class CaptureInput {
       return;
     }
     ctx.drawImage(el, 0, 0, canvas.width, canvas.height);
-    const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const stamp = this.stamp();
     canvas.toBlob(
       (blob) => {
-        this.closeCamera();
-        if (blob) this.upload([new File([blob], `photo-${stamp}.jpg`, { type: 'image/jpeg' })]);
+        if (blob) this.add(new File([blob], `photo-${stamp}.jpg`, { type: 'image/jpeg' }));
+        if (!again) this.closeCamera();
       },
       'image/jpeg',
       0.92,
@@ -188,47 +247,79 @@ export class CaptureInput {
   }
 
   closeCamera(): void {
-    this.cameraStream?.getTracks().forEach((t) => t.stop());
-    this.cameraStream = null;
+    this.stopStream();
     this.cameraOpen.set(false);
   }
+
+  private stopStream(): void {
+    this.cameraStream?.getTracks().forEach((t) => t.stop());
+    this.cameraStream = null;
+  }
+
+  private mediaMessage(e: unknown, what: string): string {
+    const name = e instanceof Error ? e.name : '';
+    if (name === 'NotAllowedError') return `${what} blocked: allow it for this site in the browser.`;
+    if (name === 'NotFoundError' || name === 'OverconstrainedError') return `No ${what.toLowerCase()} found on this device.`;
+    if (name === 'NotReadableError') return `The ${what.toLowerCase()} is in use by another program.`;
+    return `${what} not available${e instanceof Error && e.message ? `: ${e.message}` : ''}.`;
+  }
+
+  // ── the tray: everything here goes up as one capture ─────────────────────
 
   onFiles(ev: Event): void {
     const el = ev.target as HTMLInputElement;
     const files = Array.from(el.files ?? []);
     el.value = '';
-    if (files.length) this.upload(files);
+    files.forEach((f) => this.add(f));
   }
 
-  private upload(files: File[]): void {
+  private add(file: File): void {
+    const kind = file.type.startsWith('image/') ? 'image' : file.type.startsWith('audio/') ? 'audio' : 'other';
+    const url = kind === 'image' ? URL.createObjectURL(file) : null;
+    this.pending.update((list) => [...list, { file, url, kind }]);
+  }
+
+  drop(p: Pending): void {
+    if (p.url) URL.revokeObjectURL(p.url);
+    this.pending.update((list) => list.filter((x) => x !== p));
+  }
+
+  clear(): void {
+    this.pending().forEach((p) => p.url && URL.revokeObjectURL(p.url));
+    this.pending.set([]);
+  }
+
+  /** Upload the whole tray as one capture. */
+  submit(): void {
+    const items = this.pending();
+    if (!items.length) return;
+    const form = new FormData();
+    for (const p of items) form.append('file', p.file, p.file.name);
+    const text = this.text().trim();
+    if (text) form.append('text', text);
+    const day = this.targetDate();
+    const product = this.productId();
+    if (product != null) form.append('product_id', String(product));
+    else if (day) form.append('target_date', day);
+
     this.busy.set(true);
     this.error.set(null);
     this.notice.set(null);
-    let pending = files.length;
-    let duplicates = 0;
-    const done = () => {
-      if (--pending > 0) return;
-      this.busy.set(false);
-      if (duplicates) this.notice.set(duplicates === 1 ? 'Already captured (same content).' : `${duplicates} files were already captured.`);
-    };
-    for (const file of files) {
-      const form = new FormData();
-      form.append('file', file, file.name);
-      const day = this.targetDate();
-      const product = this.productId();
-      if (product != null) form.append('product_id', String(product));
-      else if (day) form.append('target_date', day);
-      this.api.uploadCapture(form).subscribe({
-        next: (c) => {
-          if (c.created === false) duplicates++;
-          else this.uploaded.emit(c);
-          done();
-        },
-        error: (e: unknown) => {
-          this.error.set(describeError(e));
-          done();
-        },
-      });
-    }
+    this.api.uploadCapture(form).subscribe({
+      next: (c) => {
+        if (c.created === false) this.notice.set('Already captured (same content).');
+        else this.uploaded.emit(c);
+        this.clear();
+        this.busy.set(false);
+      },
+      error: (e: unknown) => {
+        this.error.set(describeError(e));
+        this.busy.set(false);
+      },
+    });
+  }
+
+  private stamp(): string {
+    return new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   }
 }

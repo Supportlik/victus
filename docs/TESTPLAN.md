@@ -236,6 +236,7 @@ The pyramid is deliberate: most cases are `T-DOM`/`T-SVC`; E2E covers the two fl
 | T-SVC-055 | Accept one item | day with two drafted items | `ApproveLineItem` with a correction | item accepted, day stays draft, capture still assigned; second call 409 | service | yes | 3 |
 | T-SVC-056 | Last item accepted | one drafted item left | `ApproveLineItem` | day leaves draft, becomes reliable, capture processed | service | yes | 3 |
 | T-RPT-010 | Timeline block | seeded days and weights | render a definition with `timeline` | one row per period day, the rolling window as configured, corridor bounds present | reports | yes | 2 |
+| T-SVC-065 | One capture, several files | two photos and a voice note | `UploadCapture(files=…)` | one capture with three ordered attachments, kind audio, re-upload is a no-op, delete removes every orphan blob | service | yes | 3 |
 | T-SVC-063 | Rules | settings saved | upsert twice with the same `when`, list, filter by scope | replaced instead of duplicated, priority order, tenant isolation, each change a settings version | service | yes | 3 |
 | T-SVC-064 | Rule validation | blank `when`, unknown scope | `UpsertRule` | 422; `rules_markdown` renders the agent section | service | yes | 3 |
 | T-SVC-061 | Product usage | product logged on two days | `GetProductUsage` | newest day first, totals, foreign tenant 404 | service | yes | 1 |

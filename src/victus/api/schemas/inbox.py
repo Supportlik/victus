@@ -13,6 +13,13 @@ CaptureStatusLiteral = Literal["new", "in_progress", "assigned", "processed", "d
 AgentModeLiteral = Literal["historical", "batch", "manual", "follow_up"]
 
 
+class AttachmentRefOut(Out):
+    id: str
+    mime: str
+    size: int
+    original_name: str | None = None
+
+
 class CaptureOut(Out):
     id: str
     kind: str
@@ -27,6 +34,7 @@ class CaptureOut(Out):
     processed_at: datetime | None = None
     agent_run_id: str | None = None
     product_id: int | None = None
+    attachments: list[AttachmentRefOut] = Field(default_factory=list)
     created: bool = True
 
 

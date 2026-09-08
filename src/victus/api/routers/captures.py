@@ -33,31 +33,29 @@ async def upload_capture(
     text: Annotated[str | None, Form()] = None,
     target_date: Annotated[date | None, Form()] = None,
     product_id: Annotated[int | None, Form()] = None,
-    file: Annotated[UploadFile | None, File()] = None,
+    file: Annotated[list[UploadFile] | None, File()] = None,
 ) -> Response:
-    data: bytes | None = None
-    filename: str | None = None
-    mime: str | None = None
-    if file is not None:
-        data = await file.read(MAX_UPLOAD_BYTES + 1)
-        if len(data) > MAX_UPLOAD_BYTES:
+    """Several `file` parts become **one** capture, so photos and a voice note
+    taken together keep their context (R64)."""
+    files: list[uc.UploadFile] = []
+    total = 0
+    for part in file or []:
+        data = await part.read(MAX_UPLOAD_BYTES + 1)
+        total += len(data)
+        if len(data) > MAX_UPLOAD_BYTES or total > MAX_UPLOAD_BYTES:
             return JSONResponse(
-                {"title": "Payload too large", "detail": "file exceeds 50 MB", "status": 413},
+                {"title": "Payload too large", "detail": "the upload exceeds 50 MB", "status": 413},
                 status_code=status.HTTP_413_CONTENT_TOO_LARGE,
                 media_type="application/problem+json",
             )
-        filename = file.filename
-        mime = file.content_type
-        if not data:
-            data = None
+        if data:
+            files.append(uc.UploadFile(data=data, filename=part.filename, mime=part.content_type))
     view = uc.UploadCapture(uow, ctx, blobs).execute(
         uc.UploadInput(
             text=text,
-            data=data,
-            filename=filename,
-            mime=mime,
             target_date=target_date,
             product_id=product_id,
+            files=tuple(files),
         )
     )
     if view.created and view.kind == CaptureKind.AUDIO.value and transcription is not None:

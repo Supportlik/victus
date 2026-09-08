@@ -220,6 +220,10 @@ class CapturesOpenIn(_In):
 
 class CaptureGetIn(_In):
     id: str
+    attachment_id: str | None = Field(
+        default=None,
+        description="Which file to return when the capture carries several (default: the first).",
+    )
 
 
 class CaptureMarkIn(_In):
@@ -594,10 +598,14 @@ def _capture_get(tc: ToolContext, inp: CaptureGetIn) -> ToolResult:
         cap = capture_uc.TranscribeCapture(
             tc.uow_factory, tc.ctx, tc.blobs, tc.transcription
         ).execute(inp.id)
-    if cap.kind == CaptureKind.IMAGE.value and cap.attachment_id:
+    image_ids = [a.id for a in cap.attachments if a.mime.startswith("image/")]
+    if not image_ids and cap.kind == CaptureKind.IMAGE.value and cap.attachment_id:
+        image_ids = [cap.attachment_id]
+    if image_ids:
         if tc.blobs is None:
             raise ToolError("unavailable", "blob storage is not configured")
-        att = capture_uc.GetAttachment(tc.uow_factory, tc.ctx, tc.blobs).execute(cap.attachment_id)
+        wanted = inp.attachment_id or image_ids[0]
+        att = capture_uc.GetAttachment(tc.uow_factory, tc.ctx, tc.blobs).execute(wanted)
         caption = json.dumps(jsonable(cap))
         return ImageResult(
             data_b64=base64.b64encode(att.data).decode("ascii"), mime=att.mime, text=caption

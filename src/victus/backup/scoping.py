@@ -22,6 +22,7 @@ PARENT: dict[str, tuple[str, str, str]] = {
     "meal": ("day_log_id", "day_log", "id"),
     "line_item": ("meal_id", "meal", "id"),
     "transcript": ("capture_id", "capture", "id"),
+    "capture_attachment": ("capture_id", "capture", "id"),
     "agent_session": ("run_id", "agent_run", "id"),
 }
 

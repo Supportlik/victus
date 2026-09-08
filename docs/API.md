@@ -122,7 +122,7 @@ The tenant is always derived from the principal (session or token); it never app
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/captures` | Multipart: `text` and/or `file` (audio, image), optional `target_date` or `product_id` (a capture about one product: label photo or spoken correction, R52; it never has a day). `201` with the capture; an upload whose content hash already exists returns `200` with the existing capture and `created: false` (no-op, R35). Audio is transcribed right away when a transcription provider is configured; a failed transcription leaves the capture `failed` and the upload still succeeds |
+| POST | `/captures` | Multipart: `text` and/or several `file` parts, which become **one** capture (R64) (audio, image), optional `target_date` or `product_id` (a capture about one product: label photo or spoken correction, R52; it never has a day). `201` with the capture; an upload whose content hash already exists returns `200` with the existing capture and `created: false` (no-op, R35). Audio is transcribed right away when a transcription provider is configured; a failed transcription leaves the capture `failed` and the upload still succeeds |
 | GET | `/captures?status=&date=&product_id=&limit=` | List (newest first). Reading the list also purges captures that were discarded more than a day ago |
 | DELETE | `/captures/{id}` | Delete a capture the agent has not used (`new`, `failed` or `discarded`); `409` otherwise. Its blob goes too when no other capture references it |
 | GET / PATCH | `/captures/{id}` | Detail incl. `transcript`, `attachment_id`, `attachment_mime` / change `status` (e.g. `discarded`), `target_date` or `product_id`. Re-targeting a `new` capture to a drafted or locked day queues a `follow_up` run |

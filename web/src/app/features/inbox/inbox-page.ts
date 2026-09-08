@@ -39,9 +39,9 @@ type Filter = 'open' | 'assigned' | 'processed' | 'discarded' | 'failed' | 'all'
           <h3>Add a capture</h3>
           <label class="v-field day"><span>For day</span><input name="date" type="date" [(ngModel)]="targetDate" /></label>
         </div>
-        <v-capture-input [targetDate]="targetDate || null" (uploaded)="onUploaded($event)" />
+        <v-capture-input [targetDate]="targetDate || null" [text]="text" (uploaded)="onUploaded($event)" />
         <form class="typed" (ngSubmit)="upload()">
-          <textarea name="text" [(ngModel)]="text" rows="2" placeholder="…or type it: lunch 400 g quark with berries, two slices of rye bread" [disabled]="busy()"></textarea>
+          <textarea name="text" [(ngModel)]="text" rows="2" placeholder="Type it, or add a line to the photos above: lunch 400 g quark with berries" [disabled]="busy()"></textarea>
           <button type="submit" class="v-btn" [disabled]="busy() || !text.trim()">Save text</button>
         </form>
       </section>

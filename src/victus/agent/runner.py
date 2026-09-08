@@ -145,6 +145,14 @@ def _downscale(data: bytes, mime: str) -> tuple[bytes, str]:
         return data, mime
 
 
+def _image_refs(cap: dto.CaptureView) -> list[dto.AttachmentRef]:
+    """The image files of a capture (a capture may carry several, R64)."""
+    refs = [a for a in cap.attachments if a.mime.startswith("image/")]
+    if refs or cap.attachment_id is None or cap.kind != CaptureKind.IMAGE.value:
+        return refs
+    return [dto.AttachmentRef(id=cap.attachment_id, mime="image/*", size=0, original_name=None)]
+
+
 def context_json(view: dto.DayContextView) -> str:
     data = cast(dict[str, Any], jsonable(view))
     return json.dumps(data, ensure_ascii=False, indent=1, default=str)
@@ -208,12 +216,11 @@ class DayDrafter:
         blocks: list[dict[str, Any]] = []
         if self.tc.blobs is None:
             return blocks
-        images = [c for c in view.captures if c.kind == CaptureKind.IMAGE.value and c.attachment_id]
+        images = [(cap, ref.id) for cap in view.captures for ref in _image_refs(cap)]
         allowed = self.budget.take_images(len(images))
-        for cap in images[:allowed]:
-            assert cap.attachment_id is not None
+        for cap, attachment_id in images[:allowed]:
             att = capture_uc.GetAttachment(self.tc.uow_factory, self.tc.ctx, self.tc.blobs).execute(
-                cap.attachment_id
+                attachment_id
             )
             data, mime = _downscale(att.data, att.mime)
             blocks.append({"type": "text", "text": f"Image for capture {cap.id}:"})
@@ -412,26 +419,32 @@ class DayDrafter:
             product_rules = tenant_rules(self.tc, "products")
             if product_rules:
                 content.append({"type": "text", "text": product_rules})
-            if fresh.kind == CaptureKind.IMAGE.value and fresh.attachment_id and self.tc.blobs:
-                if self.budget.take_images(1):
-                    att = capture_uc.GetAttachment(
-                        self.tc.uow_factory, self.tc.ctx, self.tc.blobs
-                    ).execute(fresh.attachment_id)
-                    data, mime = _downscale(att.data, att.mime)
-                    content.append(
-                        {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": mime,
-                                "data": base64.b64encode(data).decode("ascii"),
-                            },
-                        }
-                    )
-                else:
-                    content.append(
-                        {"type": "text", "text": "Image omitted: image budget exhausted."}
-                    )
+            blobs = self.tc.blobs
+            refs = _image_refs(fresh) if blobs is not None else []
+            allowed = self.budget.take_images(len(refs)) if refs else 0
+            for ref in refs[:allowed]:
+                assert blobs is not None
+                att = capture_uc.GetAttachment(self.tc.uow_factory, self.tc.ctx, blobs).execute(
+                    ref.id
+                )
+                data, mime = _downscale(att.data, att.mime)
+                content.append(
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": mime,
+                            "data": base64.b64encode(data).decode("ascii"),
+                        },
+                    }
+                )
+            if allowed < len(refs):
+                content.append(
+                    {
+                        "type": "text",
+                        "text": f"{len(refs) - allowed} image(s) omitted: image budget exhausted.",
+                    }
+                )
         except ApplicationError as exc:
             outcome.outcome, outcome.error = "failed", exc.detail
             self._record(run_id, outcome, started)

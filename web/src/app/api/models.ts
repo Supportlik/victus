@@ -260,6 +260,8 @@ export interface DayMessage {
   capture_kind?: 'text' | 'audio' | 'image' | null;
   attachment_id?: string | null;
   attachment_mime?: string | null;
+  /** Every file of this capture, in order; the first one is `attachment_id`. */
+  attachments?: AttachmentRef[];
   transcript?: string | null;
 }
 
@@ -378,6 +380,13 @@ export interface WeightEntry {
 // ── Captures & agent ─────────────────────────────────────────────────────
 export type CaptureStatus = 'new' | 'in_progress' | 'assigned' | 'processed' | 'discarded' | 'failed';
 
+export interface AttachmentRef {
+  id: string;
+  mime: string;
+  size: number;
+  original_name?: string | null;
+}
+
 export interface Capture {
   id: string;
   kind: 'text' | 'audio' | 'image';
@@ -388,6 +397,8 @@ export interface Capture {
   transcript?: string | null;
   attachment_id?: string | null;
   attachment_mime?: string | null;
+  /** Every file of this capture, in order; the first one is `attachment_id`. */
+  attachments?: AttachmentRef[];
   content_hash?: string;
   processed_at?: string | null;
   agent_run_id?: string | null;

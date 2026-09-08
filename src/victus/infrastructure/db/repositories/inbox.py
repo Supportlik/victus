@@ -70,6 +70,40 @@ class CaptureRepo(Repo):
             )
         )
 
+    def link_attachment(self, capture_id: str, attachment_id: str, position: int) -> None:
+        self.session.merge(
+            orm.CaptureAttachment(
+                capture_id=capture_id, attachment_id=attachment_id, position=position
+            )
+        )
+        self.session.flush()
+
+    def attachments_of(self, capture_id: str) -> Sequence[orm.Attachment]:
+        """Every file of a capture, in order (falls back to the single link)."""
+        rows = self.session.execute(
+            select(orm.Attachment)
+            .join(orm.CaptureAttachment, orm.CaptureAttachment.attachment_id == orm.Attachment.id)
+            .where(
+                orm.CaptureAttachment.capture_id == capture_id,
+                orm.Attachment.tenant_id == self.tenant_id,
+            )
+            .order_by(orm.CaptureAttachment.position)
+        ).scalars()
+        found = list(rows)
+        if found:
+            return found
+        cap = self.get(capture_id)
+        return [cap.attachment] if cap is not None and cap.attachment is not None else []
+
+    def attachment_refs(self, attachment_id: str) -> int:
+        by_column = self.scoped(
+            select(orm.Capture).where(orm.Capture.attachment_id == attachment_id), orm.Capture
+        )
+        links = select(orm.CaptureAttachment).where(
+            orm.CaptureAttachment.attachment_id == attachment_id
+        )
+        return len(self.session.scalars(by_column).all()) + len(self.session.scalars(links).all())
+
     def add_transcript(self, transcript: orm.Transcript) -> orm.Transcript:
         if self.get(transcript.capture_id) is None:
             raise PermissionError("capture not in tenant")
@@ -91,12 +125,6 @@ class CaptureRepo(Repo):
         self.guard(capture)
         self.session.delete(capture)
         self.session.flush()
-
-    def attachment_refs(self, attachment_id: str) -> int:
-        stmt = self.scoped(
-            select(orm.Capture).where(orm.Capture.attachment_id == attachment_id), orm.Capture
-        )
-        return len(self.session.scalars(stmt).all())
 
     def delete_attachment(self, attachment: orm.Attachment) -> None:
         self.guard(attachment)

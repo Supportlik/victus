@@ -678,6 +678,25 @@ class Capture(Base):
     attachment: Mapped[Attachment | None] = relationship()
 
 
+class CaptureAttachment(Base):
+    """Files that belong to one capture, in the order they were added.
+
+    ``capture.attachment_id`` keeps pointing at the first one, so anything that
+    only needs "the" file (transcription, thumbnails) stays unchanged.
+    """
+
+    __tablename__ = "capture_attachment"
+    __table_args__ = (Index("ix_capture_attachment_capture", "capture_id", "position"),)
+
+    capture_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("capture.id", ondelete="CASCADE"), primary_key=True
+    )
+    attachment_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("attachment.id", ondelete="CASCADE"), primary_key=True
+    )
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+
 class Transcript(Base):
     __tablename__ = "transcript"
 

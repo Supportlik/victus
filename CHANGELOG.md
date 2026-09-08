@@ -91,6 +91,10 @@ All notable changes to Victus are documented here. The format follows
 - "Take photo" uses the webcam on a computer: a live preview with a shutter button, falling back to the
   file dialog when no camera is available. On phones it still opens the camera app.
 
+- A capture can carry several files (R64, migration 0006): photos, a voice note and a typed line taken
+  together stay one capture, so the agent sees them as one thing. The camera stays open for another
+  picture, offers a camera switch and runs full screen on a phone; the tray shows what will be sent.
+
 ### Changed
 - No importer in the product (ADR 0011): existing data enters through the backup archive format, REST or MCP.
 - One model session per day (ADR 0009) and a resumable per-day thread (ADR 0010); lock TTL 5 minutes;

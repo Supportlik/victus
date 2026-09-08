@@ -133,3 +133,39 @@ def test_prompt_echo_transcripts_mark_the_capture_failed(
     )
     view2 = uc.TranscribeCapture(factory, alice, blobs, FakeTranscription("")).execute(cap2.id)
     assert view2.status == "failed" and view2.transcript == ""
+
+
+def test_several_files_become_one_capture(factory: UowFactory, alice: TenantContext) -> None:
+    """T-SVC-065: photos and a voice note taken together stay one note (R64)."""
+    blobs = InMemoryBlobStorage()
+    view = uc.UploadCapture(factory, alice, blobs).execute(
+        uc.UploadInput(
+            text="lunch at the bakery",
+            files=(
+                uc.UploadFile(data=PNG, filename="a.png", mime="image/png"),
+                uc.UploadFile(data=PNG + b"x", filename="b.png", mime="image/png"),
+                uc.UploadFile(data=b"RIFF....WAVEfmt ", filename="note.wav", mime="audio/wav"),
+            ),
+        )
+    )
+    assert [a.original_name for a in view.attachments] == ["a.png", "b.png", "note.wav"]
+    assert view.attachment_id == view.attachments[0].id
+    assert view.kind == "audio"  # the audio decides: it is what gets transcribed
+    assert len(blobs.blobs) == 3
+
+    # the same three files plus the same text are the same capture
+    again = uc.UploadCapture(factory, alice, blobs).execute(
+        uc.UploadInput(
+            text="lunch at the bakery",
+            files=(
+                uc.UploadFile(data=PNG, filename="a.png", mime="image/png"),
+                uc.UploadFile(data=PNG + b"x", filename="b.png", mime="image/png"),
+                uc.UploadFile(data=b"RIFF....WAVEfmt ", filename="note.wav", mime="audio/wav"),
+            ),
+        )
+    )
+    assert again.created is False and again.id == view.id
+
+    # deleting it takes every blob that nothing else uses
+    uc.DeleteCapture(factory, alice, blobs).execute(view.id)
+    assert blobs.blobs == {}
