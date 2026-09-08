@@ -1,13 +1,13 @@
 import { Injectable, effect, signal } from '@angular/core';
 
 /** Where the app opens after sign-in (and when the brand is clicked). */
-export type Landing = 'today' | 'days' | 'drafts' | 'captures';
+export type Landing = 'today' | 'days' | 'inbox' | 'reports';
 
 export const LANDINGS: readonly { id: Landing; label: string }[] = [
   { id: 'today', label: 'Today' },
   { id: 'days', label: 'Days list' },
-  { id: 'drafts', label: 'Drafts' },
-  { id: 'captures', label: 'Captures' },
+  { id: 'inbox', label: 'Inbox' },
+  { id: 'reports', label: 'Reports' },
 ];
 
 const LANDING_KEY = 'victus.landing';
@@ -45,10 +45,10 @@ export class PrefsService {
     switch (this.landing()) {
       case 'days':
         return '/days';
-      case 'drafts':
-        return '/drafts';
-      case 'captures':
-        return '/captures';
+      case 'inbox':
+        return '/inbox';
+      case 'reports':
+        return '/reports';
       default:
         return `/days/${new Date().toISOString().slice(0, 10)}`;
     }

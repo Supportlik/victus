@@ -165,6 +165,11 @@ export interface LineItem extends Macros {
   rationale?: string | null;
   alternatives?: MatchCandidate[] | null;
   raw_text?: string | null;
+  /** The capture this item came from, so a draft can be shown next to its source. */
+  source_capture_id?: string | null;
+  source_kind?: 'transcript' | 'image' | 'text' | null;
+  /** Product category name; drives the small icon in front of the item. */
+  category?: string | null;
 }
 
 export interface Meal {

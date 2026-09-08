@@ -106,6 +106,7 @@ class ProposalOut(Out):
 
 
 class ProposalDecisionIn(BaseModel):
-    """Optional corrections applied on approval (e.g. a misread digit)."""
+    """Corrections and/or a subset of the proposed fields to apply."""
 
     changes: dict[str, Any] | None = None
+    fields: list[str] | None = None

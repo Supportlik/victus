@@ -45,6 +45,7 @@ EXPECTED = {
     "line_item_create",
     "line_item_update",
     "line_item_delete",
+    "line_item_approve",
     "meal_update",
     "meal_delete",
     "product_update",

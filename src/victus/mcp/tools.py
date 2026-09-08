@@ -226,6 +226,13 @@ class CaptureMarkIn(_In):
     product_id: int | None = None
 
 
+class LineItemApproveIn(_In):
+    line_item_id: int
+    amount: float | None = None
+    unit_code: str | None = None
+    consumable_id: int | None = None
+
+
 class MealUpdateIn(_In):
     meal_id: int
     name: str | None = None
@@ -636,6 +643,16 @@ def _line_item_delete(tc: ToolContext, inp: LineItemDeleteIn) -> ToolResult:
     return {"deleted": inp.line_item_id}
 
 
+def _line_item_approve(tc: ToolContext, inp: LineItemApproveIn) -> ToolResult:
+    fields = inp.model_dump(exclude_none=True)
+    fields.pop("line_item_id", None)
+    correction = (
+        draft_uc.DraftCorrection(line_item_id=inp.line_item_id, **fields) if fields else None
+    )
+    view = draft_uc.ApproveLineItem(tc.uow_factory, tc.ctx).execute(inp.line_item_id, correction)
+    return cast(dict[str, Any], jsonable(view))
+
+
 def _meal_update(tc: ToolContext, inp: MealUpdateIn) -> ToolResult:
     changes = {k: v for k, v in inp.model_dump().items() if k != "meal_id" and v is not None}
     view = day_uc.UpdateMeal(tc.uow_factory, tc.ctx).execute(inp.meal_id, changes)
@@ -881,6 +898,15 @@ TOOLS: tuple[ToolSpec, ...] = (
         SCOPE_WRITE,
         LineItemDeleteIn,
         _line_item_delete,
+        read_only=False,
+    ),
+    _spec(
+        "line_item_approve",
+        "Accept one drafted line item (optionally correcting amount, unit or product). "
+        "The rest of the day stays a draft.",
+        SCOPE_APPROVE,
+        LineItemApproveIn,
+        _line_item_approve,
         read_only=False,
     ),
     _spec(

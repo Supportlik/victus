@@ -164,7 +164,10 @@ def target_band_view(tb: orm.TargetBand) -> dto.TargetBandView:
 
 
 def line_item_view(
-    li: orm.LineItem, macros: Macros | None, consumable: orm.Consumable | None
+    li: orm.LineItem,
+    macros: Macros | None,
+    consumable: orm.Consumable | None,
+    category: str | None = None,
 ) -> dto.LineItemView:
     m = macros or Macros()
     return dto.LineItemView(
@@ -185,6 +188,9 @@ def line_item_view(
         rationale=li.rationale,
         alternatives=li.alternatives,
         raw_text=li.raw_text,
+        source_capture_id=li.source_capture_id,
+        source_kind=li.source_kind,
+        category=category,
         kcal=m.kcal,
         protein=m.protein,
         carbs=m.carbs,

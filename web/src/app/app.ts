@@ -12,7 +12,7 @@ interface NavItem {
   label: string;
   glyph: string;
   /** Which badge counter to show next to the label. */
-  badge?: 'captures' | 'drafts' | 'days' | 'products';
+  badge?: 'inbox' | 'days' | 'products';
 }
 
 const NUDGE_KEY = 'victus.passkeyNudgeDismissed';
@@ -39,14 +39,14 @@ export class App {
   protected readonly apiError = signal<string | null>(null);
   protected readonly nudgeDismissed = signal(App.readDismissed());
 
+  /** Nine entries before Inbox merged captures and drafts. */
   protected readonly nav: NavItem[] = [
     { path: '/days', label: 'Days', glyph: '▤', badge: 'days' },
-    { path: '/drafts', label: 'Drafts', glyph: '✎', badge: 'drafts' },
+    { path: '/inbox', label: 'Inbox', glyph: '⏺', badge: 'inbox' },
     { path: '/products', label: 'Products', glyph: '◆', badge: 'products' },
     { path: '/recipes', label: 'Recipes', glyph: '❖' },
     { path: '/weight', label: 'Weight', glyph: '⚖' },
     { path: '/reports', label: 'Reports', glyph: '▥' },
-    { path: '/captures', label: 'Captures', glyph: '⏺', badge: 'captures' },
     { path: '/agent', label: 'Agent', glyph: '✦' },
     { path: '/settings', label: 'Settings', glyph: '⚙' },
   ];
@@ -70,10 +70,8 @@ export class App {
 
   protected badge(item: NavItem): number {
     switch (item.badge) {
-      case 'captures':
-        return this.badges.newCaptures();
-      case 'drafts':
-        return this.badges.draftDays();
+      case 'inbox':
+        return this.badges.newCaptures() + this.badges.draftDays();
       case 'days':
         return this.badges.openDays();
       case 'products':

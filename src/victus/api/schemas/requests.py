@@ -168,6 +168,14 @@ class ApproveIn(BaseModel):
     close: bool = True
 
 
+class ApproveItemIn(BaseModel):
+    """Optional correction applied while accepting a single drafted item."""
+
+    amount: float | None = Field(default=None, ge=0)
+    unit_code: str | None = None
+    consumable_id: int | None = None
+
+
 class WeightIn(BaseModel):
     measured_at: datetime
     kg: float = Field(gt=0)

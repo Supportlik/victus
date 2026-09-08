@@ -2,59 +2,103 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
-import { Logo } from '../../shared/logo';
 import { PrefsService } from '../../core/prefs.service';
 import { describeError } from '../../core/problem';
+import { Logo } from '../../shared/logo';
 
+/**
+ * Sign-in: a passkey and nothing else. Recovery stays behind a disclosure so the
+ * normal path is one button.
+ */
 @Component({
   selector: 'v-login-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [FormsModule, Logo],
   template: `
-    <section class="login">
-      <div class="brand"><v-logo [size]="44" /><h1>Victus</h1></div>
-      <p class="lead">Sign in with the passkey stored on this device. There is no password.</p>
+    <div class="wrap">
+      <section class="pitch">
+        <div class="mark"><v-logo [size]="56" /><span class="word">Victus</span></div>
+        <p class="tag">Your food log, on your own server.</p>
+        <ul class="points">
+          <li><span aria-hidden="true">🎙</span> Say or photograph what you ate</li>
+          <li><span aria-hidden="true">✎</span> The agent drafts, you accept</li>
+          <li><span aria-hidden="true">▥</span> Weight, TDEE and target bands in one check-up</li>
+        </ul>
+      </section>
 
-      @if (error(); as e) {
-        <div class="v-error" role="alert">{{ e }}</div>
-      }
+      <section class="card">
+        <h1>Sign in</h1>
+        <p class="v-small v-muted">With the passkey on this device. There is no password.</p>
 
-      <button type="button" class="v-btn primary big" (click)="signIn()" [disabled]="busy()">
-        {{ busy() ? 'Waiting for your passkey…' : 'Sign in with passkey' }}
-      </button>
+        @if (error(); as e) { <div class="v-error" role="alert">{{ e }}</div> }
 
-      <details class="recovery" [open]="showRecovery()">
-        <summary (click)="showRecovery.set(!showRecovery())">Lost your passkey?</summary>
-        <p class="v-small v-muted">
-          Enter your e-mail and recovery code. You get a short session that only lets you register a new passkey; afterwards sign in with that passkey.
-        </p>
-        <form (ngSubmit)="recover()" class="v-form-row">
-          <label class="v-field"><span>E-mail</span><input name="email" type="email" [(ngModel)]="email" required autocomplete="username" /></label>
-          <label class="v-field"><span>Recovery code</span><input name="code" [(ngModel)]="code" required autocomplete="one-time-code" /></label>
-          <button type="submit" class="v-btn" [disabled]="busy() || !email || !code">Use recovery code</button>
-        </form>
-      </details>
+        <button type="button" class="v-btn primary big" (click)="signIn()" [disabled]="busy()">
+          <span aria-hidden="true">🔑</span> {{ busy() ? 'Waiting for your passkey…' : 'Sign in with passkey' }}
+        </button>
 
-      <p class="v-small v-muted hint">
-        Tip: register at least two passkeys (phone and computer). You can add one under Settings after signing in.
-      </p>
-    </section>
+        <details class="recovery" [open]="showRecovery()">
+          <summary (click)="showRecovery.set(!showRecovery())">Lost your passkey?</summary>
+          <p class="v-small v-muted">
+            Enter your e-mail and recovery code. You get a short session that only lets you register a new
+            passkey; afterwards sign in with that passkey.
+          </p>
+          <form (ngSubmit)="recover()" class="rec-form">
+            <label class="v-field"><span>E-mail</span><input name="email" type="email" [(ngModel)]="email" required autocomplete="username" /></label>
+            <label class="v-field"><span>Recovery code</span><input name="code" [(ngModel)]="code" required autocomplete="one-time-code" /></label>
+            <button type="submit" class="v-btn" [disabled]="busy() || !email || !code">Use recovery code</button>
+          </form>
+        </details>
+
+        <p class="v-small v-muted hint">Keep two passkeys, on two devices. You can add one under Settings.</p>
+      </section>
+    </div>
   `,
   styles: `
-    .login { width: min(26rem, 100%); display: grid; gap: 1rem; }
-    h1 { font-size: var(--v-fs-xxl); }
-    .lead { color: var(--v-ink-2); }
-    .big { justify-content: center; padding: 0.8rem 1rem; font-size: var(--v-fs-m); }
-    .recovery summary { cursor: pointer; color: var(--v-primary); }
-    .recovery form { margin-top: 0.75rem; align-items: end; }
+    .wrap {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(20rem, 26rem);
+      gap: 3rem;
+      align-items: center;
+      width: 100%;
+      max-width: 64rem;
+      margin: 0 auto;
+      padding: 2rem 1.5rem;
+    }
+    .pitch { display: grid; gap: 1rem; }
+    .mark { display: flex; align-items: center; gap: 0.75rem; }
+    .word { font-size: 2.5rem; font-weight: 600; letter-spacing: -0.01em; }
+    .tag { font-size: var(--v-fs-l); color: var(--v-ink-2); margin: 0; max-width: 26ch; }
+    .points { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.6rem; color: var(--v-ink-2); font-size: var(--v-fs-s); }
+    .points li { display: flex; gap: 0.6rem; align-items: center; }
+    .points span { width: 1.4rem; text-align: center; color: var(--v-primary); }
+
+    .card {
+      display: grid;
+      gap: 0.75rem;
+      padding: 1.75rem;
+      background: var(--v-surface);
+      border: 1px solid var(--v-line);
+      border-radius: var(--v-radius-l);
+      box-shadow: 0 8px 30px light-dark(rgb(0 0 0 / 0.07), rgb(0 0 0 / 0.5));
+    }
+    .card h1 { font-size: var(--v-fs-xl); }
+    .big { justify-content: center; padding: 0.7rem 1rem; font-size: var(--v-fs-m); }
+    .recovery summary { cursor: pointer; color: var(--v-ink-2); font-size: var(--v-fs-s); }
+    .rec-form { display: grid; gap: 0.6rem; margin-top: 0.6rem; }
     .hint { margin: 0; }
+
+    @media (max-width: 52rem) {
+      .wrap { grid-template-columns: 1fr; gap: 1.5rem; padding: 1.5rem 1rem 2.5rem; }
+      .word { font-size: 2rem; }
+      .points { display: none; }
+      .card { padding: 1.25rem; }
+    }
   `,
 })
 export class LoginPage {
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
-
   private readonly prefs = inject(PrefsService);
   readonly busy = signal(false);
   readonly error = signal<string | null>(null);

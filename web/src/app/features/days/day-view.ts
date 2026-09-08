@@ -8,6 +8,7 @@ import { BandGauge } from '../../shared/band-gauge';
 import { DayNamePipe, MacroPipe, shiftDate } from '../../shared/format';
 import { ProductSearch } from '../../shared/product-search';
 import { StatusTag } from '../../shared/status-tag';
+import { FoodIcon } from '../../shared/food-icon';
 import { DayThread } from './day-thread';
 
 /**
@@ -17,7 +18,7 @@ import { DayThread } from './day-thread';
 @Component({
   selector: 'v-day-view',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, FormsModule, BandGauge, StatusTag, MacroPipe, DayNamePipe, ProductSearch, DayThread],
+  imports: [RouterLink, FormsModule, BandGauge, StatusTag, MacroPipe, DayNamePipe, ProductSearch, DayThread, FoodIcon],
   template: `
     <div class="v-page">
       <header class="v-page-head">
@@ -96,6 +97,15 @@ import { DayThread } from './day-thread';
 
         <div class="columns">
           <section class="ledger">
+            @if (d.has_drafts) {
+              <div class="v-notice drafts-bar">
+                <span>This day has draft items from the agent. Accept them one by one below, or all at once.</span>
+                <span class="v-actions">
+                  <button type="button" class="v-btn small primary" (click)="acceptAll()">Accept all</button>
+                  <a class="v-btn small" routerLink="/inbox">Open the inbox</a>
+                </span>
+              </div>
+            }
             @for (meal of d.meals; track meal.id) {
               <article class="meal">
                 <header>
@@ -145,8 +155,9 @@ import { DayThread } from './day-thread';
                     <thead><tr><th>Item</th><th class="num">Amount</th><th class="num">kcal</th><th class="num">P</th><th class="num v-hide-m">C</th><th class="num v-hide-m">F</th><th class="num v-hide-m">Fi</th><th class="num v-hide-m">S</th><th></th></tr></thead>
                     <tbody>
                       @for (it of meal.line_items; track it.id) {
-                        <tr [class.draft]="it.is_draft" [class.estimated]="it.estimated || it.amount_estimated">
+                        <tr [class.draft]="it.is_draft" [class.estimated]="it.estimated || it.amount_estimated" [attr.data-item]="it.id">
                           <td>
+                            <v-food-icon [name]="it.consumable_name" [category]="it.category" [kind]="it.consumable_kind" />
                             {{ it.consumable_name }}
                             @if (it.is_draft) { <span class="v-tag draft">draft</span> }
                             @if (it.estimated || it.amount_estimated) { <span class="warn-mark" title="estimated">⚠️</span> }
@@ -160,6 +171,7 @@ import { DayThread } from './day-thread';
                           <td class="num">{{ it.fiber | macro: 'fiber' }}</td>
                           <td class="num">{{ it.salt | macro: 'salt' }}</td>
                           <td class="row-actions">
+                            @if (it.is_draft) { <button type="button" class="v-btn small primary" (click)="acceptItem(it)" title="Accept this drafted item">Accept</button> }
                             <button type="button" class="v-btn quiet small" (click)="editAmount(it)">edit</button>
                             <button type="button" class="v-btn quiet small danger" (click)="remove(it)">remove</button>
                           </td>
@@ -201,6 +213,7 @@ import { DayThread } from './day-thread';
     .gauges { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: 1rem 1.5rem; padding: 1rem 1.25rem; margin-bottom: 1.25rem; background: var(--v-surface); border: 1px solid var(--v-line); border-radius: var(--v-radius-l); }
     .columns { display: grid; grid-template-columns: minmax(0, 2fr) minmax(16rem, 1fr); gap: 1.5rem; align-items: start; }
     .ledger { display: grid; gap: 1.25rem; }
+    .drafts-bar { display: flex; justify-content: space-between; gap: 1rem; align-items: center; flex-wrap: wrap; }
     .meal header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.25rem; }
     .meal h3 { font-size: var(--v-fs-m); }
     .meal-name { all: unset; cursor: text; border-bottom: 1px dashed transparent; } .meal-name:hover { border-bottom-color: var(--v-line-strong); }
@@ -321,6 +334,20 @@ export class DayView {
   deleteMeal(meal: Meal): void {
     if (meal.line_items.length) return;
     this.api.deleteMeal(meal.id).subscribe({
+      next: () => this.reload(),
+      error: (e: unknown) => this.error.set(describeError(e)),
+    });
+  }
+
+  acceptItem(it: LineItem): void {
+    this.api.approveLineItem(it.id).subscribe({
+      next: () => this.reload(),
+      error: (e: unknown) => this.error.set(describeError(e)),
+    });
+  }
+
+  acceptAll(): void {
+    this.api.approveDraft(this.date(), { corrections: [], close: false }).subscribe({
       next: () => this.reload(),
       error: (e: unknown) => this.error.set(describeError(e)),
     });

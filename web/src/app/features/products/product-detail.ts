@@ -53,17 +53,24 @@ import { ProductForm } from './product-form';
             @for (pr of proposals(); track pr.id) {
               <div class="proposal">
                 <table class="v-table diff">
-                  <thead><tr><th>Field</th><th class="num">Now</th><th class="num">Proposed</th></tr></thead>
+                  <thead><tr><th>Apply</th><th>Field</th><th class="num">Now</th><th class="num">Proposed</th></tr></thead>
                   <tbody>
                     @for (k of keys(pr); track k) {
-                      <tr><td>{{ k }}</td><td class="num v-muted">{{ pr.current[k] ?? '–' }}</td><td class="num"><strong>{{ pr.changes[k] }}</strong></td></tr>
+                      <tr>
+                        <td><input type="checkbox" [checked]="isSelected(pr, k)" (change)="toggle(pr, k)" [attr.aria-label]="'apply ' + k" /></td>
+                        <td>{{ k }}</td>
+                        <td class="num v-muted">{{ pr.current[k] ?? '–' }}</td>
+                        <td class="num"><strong>{{ pr.changes[k] }}</strong></td>
+                      </tr>
                     }
                   </tbody>
                 </table>
                 @if (pr.rationale) { <p class="v-small">{{ pr.rationale }}</p> }
                 <p class="v-small v-muted">{{ pr.source }} · {{ pr.created_at.replace('T', ' ').slice(0, 16) }}</p>
                 <div class="v-actions">
-                  <button type="button" class="v-btn primary" (click)="decide(pr, true)" [disabled]="deciding()">Approve</button>
+                  <button type="button" class="v-btn primary" (click)="decide(pr, true)" [disabled]="deciding() || !selectedCount(pr)">
+                    {{ selectedCount(pr) === keys(pr).length ? 'Apply all' : 'Apply ' + selectedCount(pr) + ' of ' + keys(pr).length }}
+                  </button>
                   <button type="button" class="v-btn" (click)="decide(pr, false)" [disabled]="deciding()">Reject</button>
                 </div>
               </div>
@@ -132,6 +139,7 @@ export class ProductDetail {
   readonly captures = signal<Capture[]>([]);
   readonly proposals = signal<ProductProposal[]>([]);
   readonly deciding = signal(false);
+  readonly unselected = signal<Set<string>>(new Set());
   np: Omit<Portion, 'id' | 'product_id'> = { label: '', unit_code: 'piece', amount: 0, amount_unit: 'g', is_default: false, weight_source: 'weighed' };
 
   constructor() {
@@ -154,9 +162,28 @@ export class ProductDetail {
   keys(pr: ProductProposal): string[] {
     return Object.keys(pr.changes);
   }
+  /** Every field is selected until it is explicitly unticked. */
+  isSelected(pr: ProductProposal, key: string): boolean {
+    return !this.unselected().has(pr.id + '|' + key);
+  }
+  toggle(pr: ProductProposal, key: string): void {
+    const id = pr.id + '|' + key;
+    this.unselected.update((set) => {
+      const next = new Set(set);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  selectedCount(pr: ProductProposal): number {
+    return this.keys(pr).filter((k) => this.isSelected(pr, k)).length;
+  }
   decide(pr: ProductProposal, approve: boolean): void {
     this.deciding.set(true);
-    const call = approve ? this.api.approveProposal(pr.id) : this.api.rejectProposal(pr.id);
+    const fields = this.keys(pr).filter((k) => this.isSelected(pr, k));
+    const call = approve
+      ? this.api.approveProposal(pr.id, fields.length === this.keys(pr).length ? {} : { fields })
+      : this.api.rejectProposal(pr.id);
     call.subscribe({
       next: () => {
         this.deciding.set(false);

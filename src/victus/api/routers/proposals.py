@@ -37,7 +37,10 @@ def approve_proposal(
     proposal_id: str, ctx: Ctx, uow: Uow, body: ProposalDecisionIn | None = None
 ) -> ProposalOut:
     view = uc.DecideProposal(uow, ctx).execute(
-        proposal_id, approve=True, changes=body.changes if body else None
+        proposal_id,
+        approve=True,
+        changes=body.changes if body else None,
+        fields=body.fields if body else None,
     )
     return ProposalOut.model_validate(view)
 

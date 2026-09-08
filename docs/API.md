@@ -91,6 +91,7 @@ The tenant is always derived from the principal (session or token); it never app
 |---|---|---|
 | GET | `/drafts` | Days in `draft` or with draft line items, compact |
 | GET | `/drafts/{date}/summary` | Summary as Markdown and JSON |
+| POST | `/line-items/{id}/approve` | Accept **one** drafted item, optionally correcting `amount`, `unit_code` or `consumable_id`; the rest of the day stays a draft (R56) |
 | POST | `/drafts/{date}/approve` | Body: corrections, `close` flag → `ApproveDay` |
 | POST | `/drafts/{date}/discard` | Discard draft line items |
 

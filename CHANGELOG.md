@@ -51,6 +51,14 @@ All notable changes to Victus are documented here. The format follows
 - Web: Victus logo and favicon, collapsible navigation rail, configurable landing page after sign-in, pages
   centred on wide screens, badge for pending product proposals.
 
+- Drafts can be accepted item by item (`POST /line-items/{id}/approve`, MCP `line_item_approve`) or as a whole (R56);
+  a capture stays reviewable until every item it produced has been decided.
+- One inbox screen replaces the separate capture and draft pages: each drafted item sits next to the capture it
+  came from, with per-item and whole-day accept.
+- Product proposals let you tick the fields to apply; line items carry their source capture and product category.
+- Small category icons in front of every logged item, a redesigned sign-in page and readable agent summaries
+  (wide markdown tables scroll instead of breaking).
+
 ### Changed
 - No importer in the product (ADR 0011): existing data enters through the backup archive format, REST or MCP.
 - One model session per day (ADR 0009) and a resumable per-day thread (ADR 0010); lock TTL 5 minutes;

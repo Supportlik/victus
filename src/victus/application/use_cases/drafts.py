@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 
 from victus.application import dto
-from victus.application.errors import NotFound, ValidationFailed
+from victus.application.errors import Conflict, NotFound, ValidationFailed
 from victus.application.ports.unit_of_work import UnitOfWork
 from victus.application.tenant_context import SCOPE_APPROVE, SCOPE_READ
 from victus.application.use_cases._base import UseCase, now
+from victus.application.use_cases._mappers import line_item_view
 from victus.application.use_cases.day_logs import (
     LineItemInput,
     build_day_view,
@@ -154,12 +155,9 @@ class ApproveDay(UseCase):
                 raise NotFound(f"no day log for {day.isoformat()}")
             applied = _apply_corrections(uow, d, corrections)
             uow.flush()
-            capture_ids: set[str] = set()
             for m in d.meals:
                 for li in m.line_items:
                     li.is_draft = False  # `estimated` stays: the estimate was checked, not removed
-                    if li.source_capture_id:
-                        capture_ids.add(li.source_capture_id)
             if d.reliable is None:
                 d.reliable = True
             d.status = DayStatus.CLOSED.value if close else DayStatus.OPEN.value
@@ -167,20 +165,85 @@ class ApproveDay(UseCase):
                 freeze_band(uow, d)
             d.approved_at = now()
             d.approved_by = self.ctx.actor_id
-            for cid in capture_ids:
-                cap = uow.captures.get(cid)
-                if cap is not None:
-                    cap.status = CaptureStatus.PROCESSED.value
-                    cap.processed_at = d.approved_at
-            for cap in uow.captures.list(target_date=day):
-                if cap.status in (CaptureStatus.ASSIGNED.value, CaptureStatus.IN_PROGRESS.value):
-                    cap.status = CaptureStatus.PROCESSED.value
-                    cap.processed_at = d.approved_at
+            _settle_captures(uow, d, d.approved_at)
             uow.audit.record(
                 "day.approve", "day_log", str(d.id), {"corrections": applied, "close": close}
             )
             uow.flush()
             view = build_day_view(uow, d)
+            uow.commit()
+            return view
+
+
+def _settle_captures(uow: UnitOfWork, d: orm.DayLog, at: datetime) -> int:
+    """Mark captures processed once none of their draft items are left."""
+    remaining = {
+        li.source_capture_id
+        for m in d.meals
+        for li in m.line_items
+        if li.is_draft and li.source_capture_id
+    }
+    settled = 0
+    for cap in uow.captures.list(target_date=d.date):
+        if cap.product_id is not None or cap.id in remaining:
+            continue
+        if cap.status in (CaptureStatus.ASSIGNED.value, CaptureStatus.IN_PROGRESS.value):
+            cap.status = CaptureStatus.PROCESSED.value
+            cap.processed_at = at
+            settled += 1
+    return settled
+
+
+def _leave_draft_status(uow: UnitOfWork, d: orm.DayLog) -> None:
+    """A day whose last draft item was approved is an ordinary open day."""
+    if any(li.is_draft for m in d.meals for li in m.line_items):
+        return
+    if d.status == DayStatus.DRAFT.value:
+        d.status = DayStatus.OPEN.value
+    if d.reliable is None:
+        d.reliable = True
+
+
+class ApproveLineItem(UseCase):
+    """Accept one drafted item, optionally with a correction (SPEC R56).
+
+    The rest of the day stays a draft; the day leaves ``draft`` status once its
+    last drafted item is accepted.
+    """
+
+    def execute(self, item_id: int, correction: DraftCorrection | None = None) -> dto.LineItemView:
+        self.ctx.require(SCOPE_APPROVE)
+        with self._uow() as uow:
+            li = uow.day_logs.get_line_item(item_id)
+            if li is None:
+                raise NotFound(f"line item {item_id} not found")
+            if not li.is_draft:
+                raise Conflict(f"line item {item_id} is not a draft")
+            d = li.meal.day_log
+            if correction is not None:
+                if correction.delete:
+                    raise ValidationFailed("use DELETE on the line item to drop it")
+                fixed = DraftCorrection(
+                    line_item_id=li.id,
+                    amount=correction.amount,
+                    unit_code=correction.unit_code,
+                    consumable_id=correction.consumable_id,
+                )
+                _apply_corrections(uow, d, [fixed])
+            li.is_draft = False
+            uow.flush()
+            settled = _settle_captures(uow, d, now())
+            _leave_draft_status(uow, d)
+            uow.audit.record(
+                "line_item.approve",
+                "line_item",
+                str(li.id),
+                {"date": d.date.isoformat(), "captures_processed": settled},
+            )
+            uow.flush()
+            macros = uow.day_logs.line_item_macros(d.date).get(li.id)
+            category = uow.products.category_names_for([li.consumable_id]).get(li.consumable_id)
+            view = line_item_view(li, macros, li.consumable, category)
             uow.commit()
             return view
 

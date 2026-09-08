@@ -124,6 +124,9 @@ class LineItemView:
     rationale: str | None
     alternatives: list[dict[str, Any]] | None
     raw_text: str | None
+    source_capture_id: str | None
+    source_kind: str | None
+    category: str | None
     kcal: float | None
     protein: float | None
     carbs: float | None

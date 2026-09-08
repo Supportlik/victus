@@ -127,6 +127,9 @@ class LineItemOut(MacrosOut):
     rationale: str | None = None
     alternatives: list[dict[str, Any]] | None = None
     raw_text: str | None = None
+    source_capture_id: str | None = None
+    source_kind: str | None = None
+    category: str | None = None
 
 
 class MealOut(Out):

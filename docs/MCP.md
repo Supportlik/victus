@@ -44,6 +44,7 @@ HTTP responses: missing or invalid token → `401`; token lacks the tool's scope
 | `agent_run_finish(run_id, status, summary_md?)` | `agent:write` | `FinishAgentRun` | run record; releases every lock of the run |
 | `draft_create(draft)` | `agent:write` | `CreateDraft` | created items; **requires a live lock held by the draft's `run_id`** |
 | `draft_discard(date)` | `approve` | `DiscardDraft` | discarded count |
+| `line_item_approve(line_item_id, amount?, unit_code?, consumable_id?)` | `approve` | `ApproveLineItem` | the accepted item; the rest of the day stays a draft |
 | `day_approve(date, corrections[], close)` | `approve` | `ApproveDay` | approved day + warnings |
 | `meal_update(meal_id, name?, time?)`, `meal_delete(meal_id)` | `write` | `UpdateMeal` / `DeleteMeal` | meal; delete fails while items remain |
 | `product_propose(product_id, changes, capture_id?, source?, rationale?)` | `agent:write` | `ProposeProductChange` | proposal awaiting a person's approval; the way to act on a product capture |

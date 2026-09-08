@@ -134,7 +134,12 @@ class DecideProposal(UseCase):
     """Approve (apply + verify) or reject a pending proposal; a human decision (``write``)."""
 
     def execute(
-        self, proposal_id: str, *, approve: bool, changes: dict[str, Any] | None = None
+        self,
+        proposal_id: str,
+        *,
+        approve: bool,
+        changes: dict[str, Any] | None = None,
+        fields: list[str] | None = None,
     ) -> dto.ProductProposalView:
         self.ctx.require(SCOPE_WRITE)
         with self._uow() as uow:
@@ -144,6 +149,13 @@ class DecideProposal(UseCase):
             if pr.status != PENDING:
                 raise Conflict(f"proposal {proposal_id} is already {pr.status}")
             applied: dict[str, Any] = dict(pr.changes or {})
+            if fields is not None:
+                unknown = sorted(set(fields) - set(applied))
+                if unknown:
+                    raise ValidationFailed(f"not part of this proposal: {', '.join(unknown)}")
+                if not fields:
+                    raise ValidationFailed("select at least one field, or reject the proposal")
+                applied = {k: v for k, v in applied.items() if k in fields}
             if changes:
                 unknown = sorted(set(changes) - PROPOSABLE_FIELDS)
                 if unknown:
@@ -152,7 +164,7 @@ class DecideProposal(UseCase):
             pr.status = APPROVED if approve else REJECTED
             pr.decided_at = now()
             pr.decided_by = self.ctx.actor_id
-            if changes and approve:
+            if approve and (changes or fields is not None):
                 pr.changes = applied
             cap = uow.captures.get(pr.capture_id) if pr.capture_id else None
             if cap is not None:

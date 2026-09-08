@@ -276,10 +276,36 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 
 .v-md {
-  h1, h2, h3 { font-size: var(--v-fs-m); margin: 0.75rem 0 0.25rem; }
-  table { border-collapse: collapse; font-size: var(--v-fs-s); margin: 0.5rem 0; }
-  th, td { padding: 0.25rem 0.5rem; border-bottom: 1px solid var(--v-line); text-align: left; }
+  overflow-wrap: anywhere;
+
+  > :first-child { margin-top: 0; }
+  h1, h2 { font-size: var(--v-fs-l); margin: 1rem 0 0.35rem; }
+  h3, h4 { font-size: var(--v-fs-m); margin: 0.9rem 0 0.3rem; color: var(--v-ink); }
+  p { margin: 0 0 0.5rem; max-width: none; }
+  ul, ol { margin: 0.25rem 0 0.6rem; padding-left: 1.2rem; }
+  li { margin: 0.15rem 0; }
+  hr { border: 0; border-top: 1px solid var(--v-line); margin: 0.9rem 0; }
+  blockquote { margin: 0.5rem 0; padding-left: 0.75rem; border-left: 3px solid var(--v-line-strong); color: var(--v-ink-2); }
+  strong { font-weight: 600; }
+
+  table {
+    display: block;
+    width: max-content;
+    max-width: 100%;
+    overflow-x: auto;
+    border-collapse: collapse;
+    font-size: var(--v-fs-s);
+    margin: 0.5rem 0 0.75rem;
+    font-variant-numeric: tabular-nums;
+  }
+  thead th { position: sticky; top: 0; background: var(--v-surface); }
+  th, td { padding: 0.35rem 0.6rem; border-bottom: 1px solid var(--v-line); text-align: left; white-space: nowrap; }
+  th { color: var(--v-ink-2); font-weight: 500; }
+  tbody tr:nth-child(even) td { background: var(--v-surface-2); }
+  td:not(:first-child):not(:nth-child(2)) { text-align: right; }
+
   code { font-size: 0.9em; background: var(--v-surface-2); padding: 0 0.25rem; border-radius: 3px; }
+  pre { overflow-x: auto; background: var(--v-surface-2); padding: 0.6rem; border-radius: var(--v-radius); }
 }
 
 // ── Phones: tighter page padding, larger touch targets, scrollable tables ──
@@ -293,7 +319,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
   .v-table th, .v-table td { padding: 0.45rem 0.5rem; }
   .v-hide-m { display: none !important; }
   .v-panel { padding: 0.85rem 0.9rem; }
-  .v-md table { display: block; overflow-x: auto; }
+  .v-md table { width: 100%; }
+  .v-md th, .v-md td { white-space: normal; }
   p { max-width: none; }
 }
 

@@ -184,6 +184,9 @@ export class ApiClient {
   updateLineItem(id: number, body: Partial<LineItemInput>): Observable<LineItem> {
     return this.http.patch<LineItem>(`${API_BASE}/line-items/${id}`, body);
   }
+  approveLineItem(id: number, body: Record<string, unknown> = {}): Observable<LineItem> {
+    return this.http.post<LineItem>(`${API_BASE}/line-items/${id}/approve`, body);
+  }
   deleteLineItem(id: number): Observable<void> {
     return this.http.delete<void>(`${API_BASE}/line-items/${id}`);
   }
@@ -256,8 +259,8 @@ export class ApiClient {
   proposals(params_: { status?: string; product_id?: number } = {}): Observable<ProductProposal[]> {
     return this.http.get<ProductProposal[]>(`${API_BASE}/proposals`, { params: params({ status: params_.status ?? 'pending', product_id: params_.product_id }) });
   }
-  approveProposal(id: string, changes?: Record<string, unknown>): Observable<ProductProposal> {
-    return this.http.post<ProductProposal>(`${API_BASE}/proposals/${id}/approve`, changes ? { changes } : {});
+  approveProposal(id: string, body: { changes?: Record<string, unknown>; fields?: string[] } = {}): Observable<ProductProposal> {
+    return this.http.post<ProductProposal>(`${API_BASE}/proposals/${id}/approve`, body);
   }
   rejectProposal(id: string): Observable<ProductProposal> {
     return this.http.post<ProductProposal>(`${API_BASE}/proposals/${id}/reject`, {});

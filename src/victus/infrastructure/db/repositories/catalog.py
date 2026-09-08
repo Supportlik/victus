@@ -148,6 +148,18 @@ class ProductRepo(Repo):
         self.session.flush()
 
     # ── categories ──
+    def category_names_for(self, product_ids: Sequence[int]) -> dict[int, str]:
+        """{product id: category name} for the given products, in one query."""
+        if not product_ids:
+            return {}
+        stmt = (
+            select(orm.Product.id, orm.Category.name)
+            .join(orm.Consumable, orm.Consumable.id == orm.Product.id)
+            .join(orm.Category, orm.Category.id == orm.Product.category_id)
+            .where(orm.Consumable.tenant_id == self.tenant_id, orm.Product.id.in_(product_ids))
+        )
+        return {int(i): str(n) for i, n in self.session.execute(stmt).all()}
+
     def categories(self) -> Sequence[orm.Category]:
         return self.session.scalars(
             self.scoped(select(orm.Category), orm.Category).order_by(

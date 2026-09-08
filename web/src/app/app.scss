@@ -109,7 +109,7 @@
 }
 
 .content { min-width: 0; }
-.bare { min-height: 100vh; display: grid; place-items: center; padding: 1.5rem; }
+.bare { min-height: 100vh; display: grid; place-items: center; }
 .passkey-nudge, .recovery-notice { margin: 1rem auto 0; max-width: 76rem; padding-inline: 1rem; }
 .passkey-nudge { display: flex; justify-content: space-between; gap: 1rem; align-items: start; }
 

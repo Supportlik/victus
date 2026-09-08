@@ -7,9 +7,9 @@ from datetime import date
 from fastapi import APIRouter
 
 from victus.api.deps import Ctx, Uow
-from victus.api.routers._convert import day_out
-from victus.api.schemas.common import DayOut, Out
-from victus.api.schemas.requests import ApproveIn
+from victus.api.routers._convert import day_out, line_item_out
+from victus.api.schemas.common import DayOut, LineItemOut, Out
+from victus.api.schemas.requests import ApproveIn, ApproveItemIn
 from victus.application.use_cases import drafts as uc
 
 router = APIRouter(tags=["drafts"])
@@ -49,6 +49,16 @@ def draft_summary(day: date, ctx: Ctx, uow: Uow) -> DraftSummaryOut:
 def approve(day: date, body: ApproveIn, ctx: Ctx, uow: Uow) -> DayOut:
     corrections = [uc.DraftCorrection(**c.model_dump()) for c in body.corrections]
     return day_out(uc.ApproveDay(uow, ctx).execute(day, corrections, close=body.close))
+
+
+@router.post("/line-items/{item_id}/approve", response_model=LineItemOut)
+def approve_line_item(
+    item_id: int, ctx: Ctx, uow: Uow, body: ApproveItemIn | None = None
+) -> LineItemOut:
+    correction = None
+    if body is not None and body.model_dump(exclude_none=True):
+        correction = uc.DraftCorrection(line_item_id=item_id, **body.model_dump(exclude_none=True))
+    return line_item_out(uc.ApproveLineItem(uow, ctx).execute(item_id, correction))
 
 
 @router.post("/drafts/{day}/discard", response_model=DiscardOut)

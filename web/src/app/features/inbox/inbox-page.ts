@@ -1,46 +1,38 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { AgentRun, ApiClient, Capture } from '../../api';
+import { AgentRun, ApiClient, Capture, DraftListEntry } from '../../api';
 import { BadgesService } from '../../core/badges.service';
 import { describeError } from '../../core/problem';
 import { CaptureCard } from '../../shared/capture-card';
 import { CaptureInput } from '../../shared/capture-input';
 import { MarkdownPipe } from '../../shared/markdown.pipe';
+import { DraftDayCard } from './draft-day-card';
 
-type Filter = 'open' | 'all' | 'assigned' | 'processed' | 'discarded' | 'failed';
+type Filter = 'open' | 'assigned' | 'processed' | 'discarded' | 'failed' | 'all';
 
 /**
- * Inbox: everything you noted about food that the agent has not turned into a draft yet.
- * Record, photograph, pick files or type; then "Process now" (or let the hourly run take it).
+ * One screen for the whole loop: drop a capture, let the agent draft it, accept the
+ * result item by item or all at once. Each drafted item shows the capture it came from,
+ * and that capture stays here until the item is accepted.
  */
 @Component({
-  selector: 'v-captures-page',
+  selector: 'v-inbox-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, RouterLink, MarkdownPipe, CaptureInput, CaptureCard],
+  imports: [FormsModule, RouterLink, MarkdownPipe, CaptureInput, CaptureCard, DraftDayCard],
   template: `
     <div class="v-page">
       <header class="v-page-head">
-        <div><h2>Captures</h2><p class="sub">Voice, photo or text about what you ate. The agent turns it into drafts you approve.</p></div>
+        <div><h2>Inbox</h2><p class="sub">Voice, photo or text goes in; drafts come back. Nothing counts until you accept it.</p></div>
         <div class="v-actions">
           <a class="v-btn" routerLink="/agent">Agent runs</a>
-          <button type="button" class="v-btn primary" (click)="processNow()" [disabled]="run() && !finished(run()!)">
-            {{ run() && !finished(run()!) ? 'Processing…' : 'Process now' }}
+          <button type="button" class="v-btn primary" (click)="processNow()" [disabled]="running()">
+            {{ running() ? 'Processing…' : 'Process now' }}
           </button>
         </div>
       </header>
       @if (error(); as e) { <div class="v-error">{{ e }}</div> }
       @if (notice(); as n) { <div class="v-notice">{{ n }}</div> }
-
-      @if (run(); as r) {
-        <section class="v-panel run" [class.active]="!finished(r)" aria-live="polite">
-          <h3>Run {{ r.id.slice(0, 8) }} · {{ r.status.replace('_', ' ') }}</h3>
-          @if (r.days.length) { <p class="v-small v-muted">Days: {{ r.days.join(', ') }}@if (r.cost_usd != null) { · {{ r.cost_usd.toFixed(2) }} USD }</p> }
-          @if (!finished(r)) { <p class="v-small v-muted">Waiting for the worker; this page polls until the run is done.</p> }
-          @if (r.error) { <div class="v-error">{{ r.error }}</div> }
-          @if (r.summary_md) { <div class="v-md" [innerHTML]="r.summary_md | markdown"></div> <a class="v-btn" routerLink="/drafts">Review drafts</a> }
-        </section>
-      }
 
       <section class="v-panel add">
         <div class="add-head">
@@ -54,13 +46,34 @@ type Filter = 'open' | 'all' | 'assigned' | 'processed' | 'discarded' | 'failed'
         </form>
       </section>
 
-      <section class="list">
-        <div class="filters" role="tablist">
-          @for (f of filters; track f.id) {
-            <button type="button" class="chip" [class.active]="filter() === f.id" (click)="filter.set(f.id)">{{ f.label }}@if (count(f.id); as n) { <span class="n">{{ n }}</span> }</button>
-          }
+      @if (run(); as r) {
+        <section class="v-panel run" [class.active]="!finished(r)" aria-live="polite">
+          <h3>Run {{ r.id.slice(0, 8) }} · {{ r.status.replace('_', ' ') }}</h3>
+          @if (r.days.length) { <p class="v-small v-muted">Days: {{ r.days.join(', ') }}@if (r.cost_usd != null) { · {{ r.cost_usd.toFixed(2) }} USD }</p> }
+          @if (r.error) { <div class="v-error">{{ r.error }}</div> }
+          @if (r.summary_md) { <div class="v-md" [innerHTML]="r.summary_md | markdown"></div> }
+        </section>
+      }
+
+      <section class="drafts">
+        <h3>Waiting for your decision @if (drafts().length) { <span class="v-tag draft">{{ drafts().length }}</span> }</h3>
+        @for (d of drafts(); track d.date) {
+          <v-draft-day-card [entry]="d" [captures]="capturesFor(d.date)" (changed)="reload()" />
+        } @empty {
+          <div class="v-empty">No drafts. Add a capture above and press “Process now”.</div>
+        }
+      </section>
+
+      <section class="captures">
+        <div class="head">
+          <h3>Captures</h3>
+          <div class="filters">
+            @for (f of filters; track f.id) {
+              <button type="button" class="chip" [class.active]="filter() === f.id" (click)="filter.set(f.id)">{{ f.label }}@if (count(f.id); as n) { <span class="n">{{ n }}</span> }</button>
+            }
+          </div>
         </div>
-        <p class="v-small v-muted">New captures wait for the next agent run. Discarded ones are deleted automatically after one day.</p>
+        <p class="v-small v-muted">A capture stays here until its drafted item is accepted. Discarded ones are deleted automatically after one day.</p>
         <div class="cards">
           @for (c of visible(); track c.id) {
             <v-capture-card [capture]="c" (changed)="replace($event)" (deleted)="removed($event)" />
@@ -72,13 +85,16 @@ type Filter = 'open' | 'all' | 'assigned' | 'processed' | 'discarded' | 'failed'
     </div>
   `,
   styles: `
-    .run { margin-bottom: 1rem; } .run.active { border-color: var(--v-agent); }
-    .add { display: grid; gap: 0.75rem; margin-bottom: 1.25rem; }
+    .add { display: grid; gap: 0.75rem; }
     .add-head { display: flex; justify-content: space-between; align-items: end; gap: 1rem; flex-wrap: wrap; }
     .day { min-width: 11rem; }
     .typed { display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; align-items: start; }
     .typed textarea { padding: 0.5rem; border: 1px solid var(--v-line-strong); border-radius: var(--v-radius); background: var(--v-surface); resize: vertical; }
-    .filters { display: flex; gap: 0.35rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+    .run { margin-top: 1rem; } .run.active { border-color: var(--v-agent); }
+    .drafts, .captures { margin-top: 1.5rem; display: grid; gap: 0.75rem; }
+    .drafts h3, .captures h3 { font-size: var(--v-fs-l); }
+    .captures .head { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; align-items: baseline; }
+    .filters { display: flex; gap: 0.35rem; flex-wrap: wrap; }
     .chip { border: 1px solid var(--v-line-strong); background: var(--v-surface); border-radius: 999px; padding: 0.3rem 0.8rem; cursor: pointer; font-size: var(--v-fs-s); display: inline-flex; gap: 0.4rem; align-items: center; }
     .chip.active { background: var(--v-primary-soft); border-color: var(--v-primary); color: var(--v-primary); }
     .chip .n { font-size: var(--v-fs-xs); color: var(--v-ink-3); }
@@ -86,10 +102,11 @@ type Filter = 'open' | 'all' | 'assigned' | 'processed' | 'discarded' | 'failed'
     @media (max-width: 40rem) { .typed { grid-template-columns: 1fr; } }
   `,
 })
-export class CapturesPage {
+export class InboxPage {
   readonly api = inject(ApiClient);
   private readonly badges = inject(BadgesService);
   readonly captures = signal<Capture[]>([]);
+  readonly drafts = signal<DraftListEntry[]>([]);
   readonly filter = signal<Filter>('open');
   readonly run = signal<AgentRun | null>(null);
   readonly busy = signal(false);
@@ -108,9 +125,31 @@ export class CapturesPage {
   private timer: ReturnType<typeof setTimeout> | null = null;
 
   readonly visible = computed(() => this.captures().filter((c) => this.matches(c, this.filter())));
+  readonly running = computed(() => {
+    const r = this.run();
+    return !!r && !this.finished(r);
+  });
 
   constructor() {
-    this.load();
+    this.reload();
+  }
+
+  reload(): void {
+    this.api.captures().subscribe({
+      next: (c) => {
+        this.captures.set(c);
+        this.badges.refresh();
+      },
+      error: (e: unknown) => this.error.set(describeError(e)),
+    });
+    this.api.drafts().subscribe({
+      next: (d) => this.drafts.set(d),
+      error: (e: unknown) => this.error.set(describeError(e)),
+    });
+  }
+
+  capturesFor(date: string): Capture[] {
+    return this.captures().filter((c) => c.target_date === date);
   }
 
   count(f: Filter): number {
@@ -121,16 +160,6 @@ export class CapturesPage {
     if (f === 'all') return true;
     if (f === 'open') return c.status === 'new' || c.status === 'in_progress';
     return c.status === f;
-  }
-
-  load(): void {
-    this.api.captures().subscribe({
-      next: (c) => {
-        this.captures.set(c);
-        this.badges.refresh();
-      },
-      error: (e: unknown) => this.error.set(describeError(e)),
-    });
   }
 
   onUploaded(c: Capture): void {
@@ -191,7 +220,7 @@ export class CapturesPage {
       this.api.agentRun(id).subscribe({
         next: (r) => {
           this.run.set(r);
-          if (this.finished(r)) this.load();
+          if (this.finished(r)) this.reload();
           else this.poll(id);
         },
         error: (e: unknown) => this.error.set(describeError(e)),
