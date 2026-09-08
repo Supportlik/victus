@@ -35,6 +35,7 @@ export class App {
     { path: '/weight', label: 'Weight', glyph: '⚖' },
     { path: '/reports', label: 'Reports', glyph: '▥' },
     { path: '/captures', label: 'Captures', glyph: '⏺' },
+    { path: '/agent', label: 'Agent', glyph: '✦' },
     { path: '/settings', label: 'Settings', glyph: '⚙' },
   ];
 

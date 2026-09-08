@@ -318,3 +318,106 @@ class HealthView:
 @dataclass(frozen=True, slots=True)
 class MatchResult:
     candidates: list[MatchCandidate]
+
+
+# ── captures, attachments, agent runs (Stage 3) ─────────────────────────────
+
+
+@dataclass(frozen=True, slots=True)
+class CaptureView:
+    id: str
+    kind: str
+    captured_at: datetime
+    target_date: date | None
+    text: str | None
+    status: str
+    transcript: str | None
+    attachment_id: str | None
+    attachment_mime: str | None
+    content_hash: str
+    processed_at: datetime | None
+    agent_run_id: str | None
+    created: bool = True  # False when the upload was a duplicate (content hash)
+
+
+@dataclass(frozen=True, slots=True)
+class AttachmentContent:
+    id: str
+    mime: str
+    size: int
+    original_name: str | None
+    sha256: str
+    data: bytes
+
+
+@dataclass(frozen=True, slots=True)
+class AgentSessionView:
+    date: date
+    model: str | None
+    prompt_version: str | None
+    input_tokens: int
+    output_tokens: int
+    cost_usd: float
+    outcome: str | None
+    started_at: datetime | None
+    finished_at: datetime | None
+
+
+@dataclass(frozen=True, slots=True)
+class AgentRunView:
+    id: str
+    runner: str
+    mode: str
+    status: str
+    created_at: datetime
+    started_at: datetime | None
+    finished_at: datetime | None
+    captures: list[str]
+    days: list[date]
+    input_tokens: int
+    output_tokens: int
+    cost_usd: float
+    model: str | None
+    prompt_version: str | None
+    summary_md: str | None
+    error: str | None
+    sessions: list[AgentSessionView] = field(default_factory=list)
+
+
+@dataclass(frozen=True, slots=True)
+class AgentLockView:
+    date: date
+    runner: str
+    run_id: str
+    locked_until: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class RunStartView:
+    """Result of taking a run from ``queued`` to ``running``: which days it holds."""
+
+    run: AgentRunView
+    locked_days: list[date]
+    skipped_days: dict[date, str]
+
+
+@dataclass(frozen=True, slots=True)
+class DayContextView:
+    """Everything one drafting session may see for its day (ADR 0009/0010)."""
+
+    date: date
+    day: DayView | None
+    thread: list[DayMessageView]
+    captures: list[CaptureView]
+    locked_by_run_id: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class DraftCreateView:
+    date: date
+    day: DayView
+    created_items: int
+    created_ad_hoc: int
+    captures_assigned: int
+    questions: int
+    markdown: str

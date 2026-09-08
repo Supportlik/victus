@@ -27,15 +27,19 @@ df -h /var/lib/docker $BACKUP_DIR                  # disk
 
 | Check | Action |
 |---|---|
-| `GET /agent/runs` shows `status=running` for > 1 h | `docker compose exec api victus agent cancel <run_id>` → sets status `cancelled`, releases locks |
-| `GET /agent/locks` shows expired `locked_until` | Locks expire on their own; force: `victus agent unlock --tenant alice --date 2026-09-07` |
+| A run stays `queued` for minutes | The worker is not running or not polling: `docker compose ps worker`, `docker compose logs worker`. The heartbeat file `/tmp/victus-worker.alive` older than 15 min makes the container unhealthy → `docker compose restart worker`. Runs are picked up on the next tick |
+| A run finishes as `failed` with "anthropic_api_key" in `error` | The worker has no key: set `VICTUS_PROVIDERS__ANTHROPIC_API_KEY` in `.env`, `docker compose up -d worker`. Until then use the external runner (Claude Code / claude.ai over MCP) |
+| `GET /agent/runs` shows `status=running` for > 10 min | The worker died mid-run. Cancel it in the app (Agent → Cancel) or `POST /agent/runs/{id}/cancel`; the locks are released with it. Days keep their captures and are drafted by the next run |
+| `GET /agent/locks` shows a lock whose run is gone | Locks expire after `agent.lock_ttl_minutes` (5). Force: **Force unlock** on the Agent page or `victus agent unlock --tenant alice --date 2026-09-07` |
 | Anthropic/OpenAI 401/429 in logs | Key invalid or quota → rotate key in `.env`, `docker compose up -d worker`; runs resume next tick |
-| Budget exceeded every run | Raise `agent.budget.*` or lower `max_images`; check for a capture with many photos |
+| Session outcome `refused` | The model declined a day (see the run summary). Check the captures of that day for content unrelated to food, discard or re-phrase them, run again. With `agent.fallbacks: false` refusals are more frequent |
+| Session outcome `stuck` | The model looped over tools for `agent.max_turns_per_day` turns. Look at the day's captures for ambiguous items, add a note to the day thread, run again |
+| Budget exceeded every run | Raise `agent.budget.*` or lower `max_images_per_run`; check for a capture with many photos or a weeks-long backlog (`historical` drafts the oldest day first, so the run makes progress anyway) |
 
 ### Lock held by another run
 
 `draft_create` returns `LockHeldByOtherRun`. This is the two-runner protection working. Either wait for
-`locked_until` (default 5 min) or `victus agent unlock` if you are sure the other run is dead.
+`locked_until` (default 5 min) or `victus agent unlock` / **Force unlock** if you are sure the other run is dead.
 
 ### Migration failed / roll back
 
@@ -93,14 +97,16 @@ entered manually meanwhile (`POST /weight`, `source=manual`).
 
 | Log | Action |
 |---|---|
-| `413` / file too large | Lower the recording length on the phone or set `transcription.ffmpeg_path` for conversion |
+| `502` on `/captures/{id}/transcribe`, capture `failed` | Provider or ffmpeg error — see the API log. Fix the cause, then **Re-transcribe** in the app or `POST /captures/{id}/transcribe?force=true` |
+| file too large | Lower the recording length on the phone or raise `transcription.max_file_mb`; `.oga`/`.webm` are converted with `transcription.ffmpeg_path` first |
 | `openai: 401` | Rotate `VICTUS_PROVIDERS__OPENAI_API_KEY` |
 | Numbers transcribed wrongly (`1325` instead of `132.5`) | Extend `transcription.vocabulary_prompt` in tenant settings |
 
 ### High agent cost
 
-`GET /agent/runs` sorted by `cost_usd`. Usual causes: many photos per capture, `batch` mode over weeks of backlog, a
-prompt loop. Lower `agent.budget.max_usd`, switch to `historical`, and inspect the run's tool-call count.
+Agent page or `GET /agent/runs` sorted by `cost_usd`; `agent_session` rows show which day was expensive. Usual causes:
+many photos per capture, `batch` mode over weeks of backlog, a tool loop. Lower `agent.budget.max_usd_per_run`, switch
+to `historical`, lower `agent.effort`, or pick a cheaper `agent.model` (add its rates to `agent.pricing`).
 
 ## Reading logs
 

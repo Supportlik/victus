@@ -16,7 +16,7 @@ The tenant is always derived from the principal (session or token); it never app
 
 | Scope | Grants |
 |---|---|
-| `read` | All GET endpoints except captures and agent runs |
+| `read` | All GET endpoints except captures and attachments (agent runs and locks are readable) |
 | `write` | Create/update/delete products, portions, recipes, batches, day logs, meals, line items, manual weight |
 | `approve` | Approve or discard drafts, close/reopen days |
 | `capture:read` / `capture:write` | Read captures and attachments / upload and change capture status |
@@ -111,24 +111,26 @@ The tenant is always derived from the principal (session or token); it never app
 | GET / PUT | `/settings` | Current tenant settings / new version |
 | GET | `/settings/versions` | History |
 
-### Captures (Stage 3)
+### Captures
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/captures` | Multipart: `text` and/or file (audio, image), optional `target_date` |
-| GET | `/captures?status=` | List |
-| GET / PATCH | `/captures/{id}` | Detail incl. transcript / change status or target day |
-| POST | `/captures/{id}/transcribe` | Force (re-)transcription |
-| GET | `/attachments/{id}` | Stream attachment (tenant-checked) |
+| POST | `/captures` | Multipart: `text` and/or `file` (audio, image), optional `target_date`. `201` with the capture; an upload whose content hash already exists returns `200` with the existing capture and `created: false` (no-op, R35). Audio is transcribed right away when a transcription provider is configured; a failed transcription leaves the capture `failed` and the upload still succeeds |
+| GET | `/captures?status=&date=&limit=` | List (newest first) |
+| GET / PATCH | `/captures/{id}` | Detail incl. `transcript`, `attachment_id`, `attachment_mime` / change `status` (e.g. `discarded`) or `target_date`. Re-targeting a `new` capture to a drafted or locked day queues a `follow_up` run |
+| POST | `/captures/{id}/transcribe?force=` | (Re-)transcribe an audio capture; `502` with problem details when the provider fails or none is configured |
+| GET | `/attachments/{id}` | The attachment bytes (image, audio) inline, tenant-checked; `Cache-Control: private` |
 
-### Agent (Stage 3)
+### Agent
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/agent/runs` | Start a run on demand `{mode, captures[], from, to}` — the app's **Process now** button; `202 Accepted` with `run_id`, the worker picks it up immediately (no cron needed) |
-| GET | `/agent/runs[/{id}]` | Runs with tokens, cost, summary |
-| POST | `/agent/runs/{id}/cancel` | Cancel |
-| GET | `/agent/locks` | Current per-day locks |
+| POST | `/agent/runs` | Queue a run on demand `{mode, captures[], from, to}` — the app's **Process now** button; `202 Accepted` with the run (`status: queued`); the worker picks it up within `agent.poll_seconds` (no cron needed) |
+| GET | `/agent/runs?limit=&status=` | Runs with tokens, cost, summary |
+| GET | `/agent/runs/{id}` | One run incl. `sessions[]` (one per drafted day) |
+| POST | `/agent/runs/{id}/cancel` | Cancel a queued or running run; releases its locks |
+| GET | `/agent/locks` | Current per-day locks (`date`, `runner`, `run_id`, `locked_until`) |
+| DELETE | `/agent/locks/{date}` | Force-release a lock regardless of holder (operator escape hatch; scope `agent:write` or `admin`) |
 
 ### Reports (Stage 2)
 

@@ -22,10 +22,12 @@ import { MarkdownPipe } from '../../shared/markdown.pipe';
           <li class="msg" [class]="m.role + ' ' + m.kind">
             <div class="meta">
               <span class="who">{{ m.role === 'agent' ? 'Agent' : m.role === 'system' ? 'System' : 'You' }}</span>
-              @if (m.kind === 'question') { <span class="v-tag draft">question</span> }
+              @if (m.role === 'agent' && m.kind !== 'text') { <span class="v-tag" [class]="'v-tag ' + kindClass(m.kind)">{{ m.kind }}</span> }
               <time [attr.datetime]="m.created_at">{{ m.created_at.slice(11, 16) }}</time>
               @if (m.processing_state === 'new' || m.processing_state === 'in_progress') {
-                <span class="v-tag warn">{{ m.processing_state === 'new' ? 'waiting' : 'processing' }}</span>
+                <span class="v-tag warn" title="The agent has not processed this note yet">{{ m.processing_state === 'new' ? 'waiting for the agent' : 'processing' }}</span>
+              } @else if (m.processing_state === 'assigned') {
+                <span class="v-tag draft" title="Part of the current draft; approve the day to finish">in draft</span>
               }
             </div>
             @if (m.role === 'agent') {
@@ -50,6 +52,8 @@ import { MarkdownPipe } from '../../shared/markdown.pipe';
     .msg { padding: 0.5rem 0.7rem; border-radius: var(--v-radius-l); background: var(--v-surface-2); }
     .msg.agent { background: var(--v-agent-soft); border-left: 3px solid var(--v-agent); }
     .msg.question { border-left-color: var(--v-warn); }
+    .msg.summary { border-left-color: var(--v-ok); }
+    .msg.note { border-left-style: dashed; }
     .meta { display: flex; gap: 0.5rem; align-items: center; font-size: var(--v-fs-xs); color: var(--v-ink-3); margin-bottom: 0.2rem; }
     .who { color: var(--v-ink-2); font-weight: 500; }
     .body { white-space: pre-wrap; font-size: var(--v-fs-s); }
@@ -73,6 +77,10 @@ export class DayThread {
         error: (e: unknown) => this.error.set(describeError(e)),
       });
     });
+  }
+
+  kindClass(kind: DayMessage['kind']): string {
+    return kind === 'question' ? 'warn' : kind === 'summary' ? 'closed' : kind === 'correction' ? 'draft' : '';
   }
 
   send(): void {

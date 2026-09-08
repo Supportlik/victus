@@ -12,6 +12,8 @@ the code is the source of truth for *how*.
 | **Importer** (`T-IMP`) | Markdown parsers, matching driver, round-trip gate | pytest, in-memory SQLite | anonymised sample logs in `tests/fixtures/vault_sample/` | ms–s |
 | **Service** (`T-SVC`) | Use cases with in-memory SQLite (FK pragma on), in-memory ports | pytest | factories | s |
 | **API** (`T-API`) | FastAPI `TestClient`, two tenants, session and token auth | pytest | factories | s |
+| **Agent** (`T-AGT`) | Tool registry, runner and worker with a scripted model client (no network) | pytest, in-memory SQLite | scripted model | s |
+| **MCP** (`T-MCP`) | MCP server over the in-memory transport and `/mcp` over HTTP (auth, CIDR, rate limit) | pytest | client | s |
 | **Web** (`T-WEB`) | Angular unit tests (Vitest), component and service tests | `npm test` | mocked API | s |
 | **E2E** (`T-E2E`) | Playwright against `docker compose --profile dev`, virtual authenticator | `npx playwright test` | seeded tenant `alice` | min |
 | **Migration** (`T-MIG`) | Full vault import on the sample vault, gate and report | pytest, file SQLite | `tests/fixtures/vault_sample/` | s |
@@ -25,7 +27,7 @@ The pyramid is deliberate: most cases are `T-DOM`/`T-SVC`; E2E covers the two fl
 | Item | Rule |
 |---|---|
 | ID | `T-<LEVEL>-<3 digits>`, stable; retired cases are marked *retired*, never renumbered |
-| pytest marker | `@pytest.mark.<level>` (`domain`, `importer`, `service`, `api`, `migration`, `ops`) |
+| pytest marker | `@pytest.mark.<level>` (`domain`, `importer`, `service`, `api`, `agent`, `mcp`, `migration`, `ops`) |
 | DB matrix | `--db sqlite` (default) and `--db postgres` (service container in CI) for `T-SVC`, `T-API`, `T-MIG` |
 | Fixtures | Synthetic or anonymised; no real personal or health data (SPEC R48) |
 | Tolerances | kcal ±1, macros ±0.1 g, salt ±0.01 g, weight ±0.01 kg, TDEE ±1 kcal unless stated |
@@ -109,6 +111,20 @@ The pyramid is deliberate: most cases are `T-DOM`/`T-SVC`; E2E covers the two fl
 | T-SVC-022 | Follow-up after draft | day with pending draft; new text message | `AddDayMessage` | `follow_up` run queued for that day only; session input contains current draft + thread + new message | fake LLM | yes | 3 |
 | T-SVC-023 | Message during a locked run | day locked by run A; message arrives | run A finishes | message still `new`; a `follow_up` run is queued automatically; no second draft of the same items | fake LLM | yes | 3 |
 | T-SVC-024 | Agent question round-trip | draft with `open_questions` | run finishes; user replies via message | question stored as `day_message(kind=question)`; reply queues follow-up; draft updated incrementally | fake LLM | yes | 3 |
+| T-SVC-030 | Capture dedupe | text capture uploaded | `UploadCapture` twice with the same text | second call returns the existing capture with `created=False`; one row | in-memory blobs | yes | 3 |
+| T-SVC-031 | MIME sniffing | `.oga` upload with `application/octet-stream` | `UploadCapture` | kind `audio`, attachment `audio/ogg`; unsupported type → 422 | in-memory blobs | yes | 3 |
+| T-SVC-032 | Follow-up queueing and merging | day with draft items | `AddDayMessage` twice | exactly one queued `follow_up` run for the day; the second message merges into it (`captures` list grows) | factories | yes | 3 |
+| T-SVC-033 | Transcription stored | audio capture, fake `TranscriptionPort` | `TranscribeCapture` | `transcript` row with provider/model/text; second call without `force` returns the stored text | fake port | yes | 3 |
+| T-SVC-034 | Transcription failure | fake port raising `TranscriptionError` | `TranscribeCapture` | capture `failed`, `ExternalServiceError` raised, audit row written | fake port | yes | 3 |
+| T-SVC-035 | Run begin locks days | two new captures for two days | `QueueAgentRun` → `BeginAgentRun` | run `running`, both days locked, `days` sorted oldest first | factories | yes | 3 |
+| T-SVC-036 | Lock conflict skipped | day locked by run A | `BeginAgentRun` for run B on the same day | day in `skipped_days` with the holder's id; run B still runs for its other days | factories | yes | 3 |
+| T-SVC-037 | Draft schema validation | running run holding the lock | `CreateDraft` with a draft missing `confidence` | 422 with the failing path; nothing written | factories | yes | 3 |
+| T-SVC-038 | Draft creation | valid draft (product item + ad-hoc item, notes, open question) | `CreateDraft` | `day_log` status `draft`, items `is_draft=1` with confidence/rationale/alternatives, `ad_hoc_item` created, captures `assigned`, note + question in the thread | factories | yes | 3 |
+| T-SVC-039 | Draft needs the lock | run B without the day's lock | `CreateDraft` | `LockHeldByOtherRun`; nothing written | factories | yes | 3 |
+| T-SVC-040 | Finish releases locks | running run with locks | `FinishAgentRun` | status final, `finished_at` set, zero locks left; finishing again is a no-op | factories | yes | 3 |
+| T-SVC-041 | Session roll-up | run with two `RecordAgentSession` calls | read run | run tokens and cost equal the sum of the sessions | factories | yes | 3 |
+| T-SVC-042 | Approval processes captures | drafted day with assigned captures | `ApproveDay` | captures `processed`, `processed_at` set, items no longer draft | factories | yes | 3 |
+| T-SVC-043 | Cancel run | queued and running runs | `CancelAgentRun` | status `cancelled`, locks released; cancelling a finished run → 409 | factories | yes | 3 |
 
 ## Reports (`T-RPT`)
 
@@ -154,6 +170,11 @@ The pyramid is deliberate: most cases are `T-DOM`/`T-SVC`; E2E covers the two fl
 | T-API-018 | MCP HTTP auth | `/mcp` without token / with `read` token | tool call `day_approve` | 401 / 403 | client | yes | 3 |
 | T-API-019 | MCP CIDR allow-list | request from outside `mcp.allowed_cidrs` | any `/mcp` call | 403 | client | yes | 3 |
 | T-API-020 | Rate limit | > `rate_limit_per_minute` calls | `/mcp` | 429 | client | yes | 3 |
+| T-API-021 | Capture list, detail, patch | two tenants, captures for A | `GET /captures`, `PATCH /captures/{id}` as A and as B | A sees and edits; B gets 404 on every capture route | client | yes | 3 |
+| T-API-022 | Attachment download | image capture | `GET /attachments/{id}` | bytes identical, `Content-Type` of the upload, `Cache-Control: private`; other tenant 404 | client | yes | 3 |
+| T-API-023 | Audio upload transcribes | fake transcription | `POST /captures` with an audio file | 201, `transcript` filled; with a failing provider the capture is `failed` and the upload still 201 | client | yes | 3 |
+| T-API-024 | Agent run lifecycle | signed-in owner | `POST /agent/runs` → `GET /agent/runs/{id}` → `POST …/cancel` | 202 `queued`; detail with `sessions: []`; cancel → `cancelled`; other tenant 404 | client | yes | 3 |
+| T-API-025 | Locks | running run | `GET /agent/locks`, `DELETE /agent/locks/{date}` | lock listed with `run_id`; delete removes it; `read`-only token → 403 on delete | client | yes | 3 |
 
 ## Web (`T-WEB`)
 
@@ -164,9 +185,42 @@ The pyramid is deliberate: most cases are `T-DOM`/`T-SVC`; E2E covers the two fl
 | T-WEB-003 | Draft approval form | mocked drafts | edit quantity, approve | request body contains corrections and `close` | mock | yes | 3 |
 | T-WEB-004 | Report dashboard blocks | mocked `ReportResult` | render | every block type has a component; unknown type shows a placeholder | mock | yes | 2 |
 | T-WEB-005 | Passkey nudge | `passkeys.length < 2` | login | banner shown; hidden at 2 | mock | yes | 1 |
-| T-WEB-006 | App shell | signed out / signed in (`AuthService.me`) | render `App` | bare layout when signed out; rail with 8 entries, tenant name and API version when signed in; unreachable API shows an error dot | mock | yes | 1 |
+| T-WEB-006 | App shell | signed out / signed in (`AuthService.me`) | render `App` | bare layout when signed out; rail with 9 entries, tenant name and API version when signed in; unreachable API shows an error dot | mock | yes | 1 |
 | T-WEB-007 | AuthService and interceptor | mocked `/auth/me`, WebAuthn options with `ceremony_id`, writes, 401 | load, login, register, recover, post, logout | 401 on `/auth/me` = signed out without redirect; options minus `ceremony_id` go to the browser, `ceremony_id` (and passkey `name`) echoed on verify; recovery login sets `recovery_session`; `X-CSRF-Token` on writes; 401 on protected route → `/login`; logout clears session even on 500 | mock | yes | 1 |
 | T-WEB-008 | ApiClient contract | – | call each method group | paths, query params and bodies match `docs/API.md` (days, products, line items, reports, messages, agent runs) | mock | yes | 1 |
+| T-WEB-030 | ApiClient capture/agent methods | – | call `updateCapture`, `transcribeCapture`, `captures(status,date)`, `attachmentUrl`, `agentRuns`, `cancelAgentRun`, `agentLocks`, `forceUnlock` | paths, methods, params and bodies match `docs/API.md` | mock | yes | 3 |
+| T-WEB-031 | Agent page | mocked runs and locks | render; select a run; cancel; force unlock | runs with status/tokens/cost; detail with sessions and rendered summary; cancel posts `/cancel`; unlock only after inline confirmation, `DELETE /agent/locks/{date}` | mock | yes | 3 |
+| T-WEB-032 | Captures page | mocked captures (audio with transcript, image) | render; set day; discard; duplicate upload | transcript and audio element, image thumbnail via `/attachments/{id}`; `PATCH` bodies; `created: false` shows a notice, no new row | mock | yes | 3 |
+| T-WEB-033 | Day thread states | mocked messages with `processing_state` and agent kinds | render `DayThread` | user captures show "waiting for the agent" / "in draft"; agent messages tagged summary/question/note; composer enabled while a run is active | mock | partly (manual) | 3 |
+
+## Agent (`T-AGT`)
+
+| ID | Title | Precondition | Steps | Expected | Fixture | Automated | Stage |
+|---|---|---|---|---|---|---|---|
+| T-AGT-001 | Registry schemas | – | build Anthropic tool definitions from `mcp/tools.py` | every tool has a name, description and a valid JSON schema; scopes assigned | inline | yes | 3 |
+| T-AGT-002 | Dispatch and scopes | tool context with `read` only | dispatch `product_search`, then `draft_create` | first returns candidates; second rejected with a scope error before the use case runs | in-memory SQLite | yes | 3 |
+| T-AGT-003 | Worker end to end | tenant, product with portion, text capture for a day, `ScriptedModelClient` (product_search → draft_create → end_turn) | `QueueAgentRun`, `Worker.run_once()` | `day_log` draft with `is_draft` items, one `agent_session` row, run `finished` with a summary containing the day header, capture `assigned`; afterwards `day_approve` → capture `processed` | scripted model | yes | 3 |
+| T-AGT-004 | One session per day | captures for three days | `Worker.run_once()` | three `agent_session` rows; each session's messages contain only that day's captures | scripted model | yes | 3 |
+| T-AGT-005 | Budget exceeded | `max_usd_per_run` below the first session's cost | run | run `budget_exceeded`, remaining days unlocked, summary explains | scripted model | yes | 3 |
+| T-AGT-006 | Refusal | scripted `stop_reason=refusal` | run | session outcome `refused`, day not drafted, run `finished` with the note in the summary | scripted model | yes | 3 |
+| T-AGT-007 | Stuck loop | model keeps calling `product_search` | run | session ends after `max_turns_per_day` with outcome `stuck`; lock released | scripted model | yes | 3 |
+| T-AGT-008 | Missing API key | `providers.anthropic_api_key` unset | `Worker.run_once()` on a queued run | run `failed` with a clear error, no exception, locks released | – | yes | 3 |
+| T-AGT-009 | Follow-up merge | drafted day, two new messages | `Worker.run_once()` | one `follow_up` run processed, the duplicate marked `cancelled` ("merged into …"), draft changed incrementally | scripted model | yes | 3 |
+| T-AGT-010 | Cron tick | `agent.enabled`, `cron` matching the fake clock | worker tick | one `historical` run queued per active tenant; no run when `cron` is `null` | fake clock | yes | 3 |
+| T-AGT-011 | Heartbeat | worker tick | inspect heartbeat path | file touched every tick (compose healthcheck contract) | temp dir | yes | 3 |
+| T-AGT-012 | Prompt version | – | compute `prompt_version` | 12 hex digits; changes when a prompt file changes | inline | yes | 3 |
+
+## MCP (`T-MCP`)
+
+| ID | Title | Precondition | Steps | Expected | Fixture | Automated | Stage |
+|---|---|---|---|---|---|---|---|
+| T-MCP-001 | Server builds | tool context | `build_server()` and list tools | every registry tool registered with its schema | in-memory | yes | 3 |
+| T-MCP-002 | Tool call in-process | in-memory MCP client | call `day_get` | result equals the use case's output as JSON | in-memory | yes | 3 |
+| T-MCP-003 | External run protocol | two clients | `agent_run_start` on both for the same day | second gets the day in `skipped_days`; `draft_create` from the second → `LockHeldByOtherRun` | in-memory | yes | 3 |
+| T-MCP-004 | HTTP auth | `mcp.http_enabled`, no token / `read` token | `POST /mcp` | 401 / tool with `approve` scope → 403 | client | yes | 3 |
+| T-MCP-005 | HTTP CIDR | client address outside `allowed_cidrs` | `POST /mcp` with a valid token | 403 | client | yes | 3 |
+| T-MCP-006 | HTTP rate limit | more than `rate_limit_per_minute` calls | `POST /mcp` | 429 | client | yes | 3 |
+| T-MCP-007 | stdio smoke | installed CLI | `victus mcp --help`, `victus agent --help` | commands and flags listed; exit 0 | – | yes | 3 |
 
 ## E2E (`T-E2E`)
 
@@ -261,4 +315,6 @@ smoke, security scans (`.github/workflows/`).
 - [ ] External runner (Claude Code over HTTP MCP) processes a day while the worker is paused; then both enabled — no double draft
 - [ ] Cost of a typical run recorded and below budget
 - [ ] Weekend catch-up (3 days) shows three `agent_session` rows; no item in day 2's draft references a product only mentioned on day 1
-- [ ] Type a correction on a drafted day in the app → follow-up run changes only that item; type a message while a run is active → shown as waiting, processed after the lock is released
+- [ ] Type a correction on a drafted day in the app → follow-up run changes only that item; type a message while a run is active → shown as "waiting for the agent", processed after the lock is released
+- [ ] Agent page: the run appears with sessions and cost; **Cancel** on a queued run works; **Force unlock** asks for confirmation first
+- [ ] Captures page: a duplicate upload shows the notice and adds no row; **Set day** on an undated voice note makes it eligible for the next run; **Re-transcribe** replaces a bad transcript

@@ -1,9 +1,9 @@
 """``victus`` command line entry point.
 
-Stage 0 ships the process-level commands (``serve``, ``version``) and registers
-the command groups that later stages fill in. A group that is not implemented
-yet exits with code 3 and says which stage delivers it, so scripts fail loudly
-instead of silently doing nothing.
+Process-level commands (``serve``, ``worker``, ``mcp``, ``migrate``) plus the
+command groups for administration, backup and agent runs. A command that is not
+implemented yet exits with code 3 and says which stage delivers it, so scripts
+fail loudly instead of silently doing nothing.
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ import typer
 
 from victus import __version__
 from victus.cli.admin_cmd import passkey_app, tenant_app, token_app, user_app
+from victus.cli.agent_cmd import agent_app, mcp_command, worker_command
 from victus.cli.backup_cmd import backup_app
 
 app = typer.Typer(
@@ -76,25 +77,22 @@ def _planned(stage: str, what: str) -> None:
     raise typer.Exit(code=NOT_IMPLEMENTED_EXIT)
 
 
-agent_app = typer.Typer(help="Run and inspect agent jobs (Stage 3).", no_args_is_help=True)
-
-
-@agent_app.command("run")
-def agent_run() -> None:
-    """Process open captures into day-log drafts."""
-    _planned("Stage 3", "agent run")
+@app.command()
+def worker(
+    once: Annotated[
+        bool, typer.Option("--once", help="Process the queue a single time and exit.")
+    ] = False,
+) -> None:
+    """Run the background worker: queued agent runs plus the optional cron trigger."""
+    worker_command(once)
 
 
 @app.command()
-def worker() -> None:
-    """Run the background worker (scheduler, agent, weight sync)."""
-    _planned("Stage 2", "worker")
-
-
-@app.command()
-def mcp() -> None:
-    """Serve the MCP tools over stdio."""
-    _planned("Stage 3", "mcp")
+def mcp(
+    tenant: Annotated[str, typer.Option("--tenant", help="Tenant slug the tools act for.")],
+) -> None:
+    """Serve the MCP tools over stdio for one tenant (trusted local process)."""
+    mcp_command(tenant)
 
 
 def _migrate_database() -> None:

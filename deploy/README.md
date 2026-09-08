@@ -32,6 +32,10 @@ docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d
 `api` listens on `127.0.0.1:8090`, `web` on `127.0.0.1:8091`; the proxy forwards
 your domain → `localhost:8091`. `/mcp` is reachable from the VPN range only.
 
+The `worker` service needs `VICTUS_PROVIDERS__ANTHROPIC_API_KEY` to draft days itself; without it, connect your
+own Claude over MCP (`docs/MCP.md`). `VICTUS_PROVIDERS__OPENAI_API_KEY` enables voice-note transcription.
+`docker compose ps worker` must show *healthy* — the worker touches a heartbeat file on every tick.
+
 **2. Standalone with bundled Caddy**
 
 ```sh

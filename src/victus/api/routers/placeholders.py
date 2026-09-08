@@ -10,8 +10,6 @@ from victus.application.errors import NotImplementedYet
 router = APIRouter(tags=["planned"])
 
 _PLANNED = {
-    "captures": "Stage 3",
-    "agent": "Stage 3",
     "backup": "Stage 1 (backup module)",
 }
 

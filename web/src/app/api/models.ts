@@ -298,22 +298,54 @@ export interface Capture {
   status: CaptureStatus;
   transcript?: string | null;
   attachment_id?: string | null;
+  attachment_mime?: string | null;
+  content_hash?: string;
+  processed_at?: string | null;
+  agent_run_id?: string | null;
+  /** False when the upload matched an existing capture by content hash (no-op). */
+  created?: boolean;
 }
 
 export type AgentRunStatus = 'queued' | 'running' | 'finished' | 'budget_exceeded' | 'failed' | 'cancelled';
+export type AgentRunMode = 'historical' | 'batch' | 'manual' | 'follow_up';
+
+export interface AgentSession {
+  date: string;
+  model: string | null;
+  prompt_version?: string | null;
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd: number;
+  outcome: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+}
 
 export interface AgentRun {
   id: string;
-  mode: 'historical' | 'batch' | 'manual' | 'follow_up';
+  runner?: 'worker' | 'external';
+  mode: AgentRunMode;
   status: AgentRunStatus;
+  created_at?: string;
   started_at: string | null;
   finished_at: string | null;
+  captures?: string[];
   days: string[];
   input_tokens?: number;
   output_tokens?: number;
   cost_usd?: number;
+  model?: string | null;
+  prompt_version?: string | null;
   summary_md?: string | null;
   error?: string | null;
+  sessions?: AgentSession[];
+}
+
+export interface AgentLock {
+  date: string;
+  runner: 'worker' | 'external';
+  run_id: string;
+  locked_until: string;
 }
 
 // ── Settings ─────────────────────────────────────────────────────────────

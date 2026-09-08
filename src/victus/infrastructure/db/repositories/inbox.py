@@ -32,14 +32,20 @@ class CaptureRepo(Repo):
         )
 
     def list(
-        self, status: str | None = None, target_date: date | None = None
+        self,
+        status: str | None = None,
+        target_date: date | None = None,
+        limit: int | None = None,
     ) -> Sequence[orm.Capture]:
         stmt = self.scoped(select(orm.Capture), orm.Capture)
         if status:
             stmt = stmt.where(orm.Capture.status == status)
         if target_date:
             stmt = stmt.where(orm.Capture.target_date == target_date)
-        return self.session.scalars(stmt.order_by(orm.Capture.captured_at)).all()
+        stmt = stmt.order_by(orm.Capture.captured_at.desc() if limit else orm.Capture.captured_at)
+        if limit:
+            stmt = stmt.limit(limit)
+        return self.session.scalars(stmt).all()
 
     def add_attachment(self, attachment: orm.Attachment) -> orm.Attachment:
         self.guard(attachment)
@@ -169,6 +175,22 @@ class AgentRepo(Repo):
         if lock.locked_until <= now:
             return None
         return lock
+
+    def extend_lock(self, day: date, run_id: str, ttl_minutes: int, now: datetime) -> bool:
+        """Push ``locked_until`` forward for a lock this run still holds."""
+        lock = self.lock_holder(day, now)
+        if lock is None or lock.run_id != run_id:
+            return False
+        lock.locked_until = now + timedelta(minutes=ttl_minutes)
+        self.session.flush()
+        return True
+
+    def list_runs_by_status(self, status: str) -> Sequence[orm.AgentRun]:
+        return self.session.scalars(
+            self.scoped(
+                select(orm.AgentRun).where(orm.AgentRun.status == status), orm.AgentRun
+            ).order_by(orm.AgentRun.created_at)
+        ).all()
 
     def release_locks(self, run_id: str) -> int:
         result = cast(

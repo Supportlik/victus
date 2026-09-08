@@ -49,3 +49,14 @@ class LockHeldByOtherRun(Conflict):
 class NotImplementedYet(ApplicationError):
     status = 501
     title = "Not implemented"
+
+
+class ExternalServiceError(ApplicationError):
+    """A provider call (transcription, model) failed; the request may be retried."""
+
+    status = 502
+    title = "External service error"
+
+
+class RunNotActive(Conflict):
+    title = "Agent run is not running"

@@ -63,30 +63,37 @@ path in upper snake case with `VICTUS_` prefix and `__` for nesting, e.g. `datab
 |---|---|---|---|---|
 | `transcription.provider` | enum | no | `openai` | `openai` / `null` (disabled) |
 | `transcription.model` | str | no | `gpt-4o-transcribe` | Provider model name |
-| `transcription.max_mb` | int | no | `25` | Files above this are rejected (convert first) |
-| `transcription.ffmpeg_path` | str | no | – | If set, `.oga`/`.opus` are converted to MP3 before upload |
+| `transcription.max_file_mb` | int | no | `25` | Files above this are rejected (`TranscriptionError`) |
+| `transcription.ffmpeg_path` | str | no | `ffmpeg` | Binary used to convert `.oga`/`.opus`/`.webm` to MP3 before upload; if it is missing, those formats fail with a clear error |
 
 ### `agent`
 
-| Key | Type | Required | Default | Meaning |
+Env prefix `VICTUS_AGENT__…` (nested keys with `__`, e.g. `VICTUS_AGENT__BUDGET__MAX_USD_PER_RUN`).
+
+| Key | Type | Required | Default | Notes |
 |---|---|---|---|---|
-| `agent.enabled` | bool | no | `false` | Run the in-house worker |
-| `agent.cron` | str \| null | no | `0 * * * *` | Optional worker schedule; `null` disables it — runs are then started only on demand (`POST /agent/runs`, app button, MCP) |
-| `agent.model` | str | no | `claude-sonnet-5` | Model for the worker runner |
-| `agent.default_mode` | enum | no | `historical` | `historical` / `batch` |
-| `agent.budget.max_input_tokens` | int | no | `200000` | Per run |
-| `agent.budget.max_output_tokens` | int | no | `20000` | Per run |
-| `agent.budget.max_usd` | float | no | `1.00` | Per run; the run stops gracefully when reached |
-| `agent.budget.max_images` | int | no | `10` | Images per run, downscaled to 1024 px |
-| `agent.lock_ttl_minutes` | int | no | `5` | `agent_lock.locked_until` horizon; a single day is drafted well within this, so a crashed run frees its day quickly |
+| `agent.enabled` | bool | no | `false` | Let the worker create **scheduled** runs (`agent.cron`). On-demand runs (`POST /agent/runs`, the app's **Process now**, MCP `agent_run_start`) work regardless — the worker only needs to be running |
+| `agent.cron` | str \| null | no | `0 * * * *` | Worker schedule; `null` disables it — runs are then started only on demand |
+| `agent.poll_seconds` | int | no | `5` | How often the worker looks for queued runs |
+| `agent.lock_ttl_minutes` | int | no | `5` | `agent_lock.locked_until` horizon; a single day is drafted well within this, so a crashed run frees its day quickly. The runner extends the lock between long turns |
+| `agent.model` | str | no | `claude-opus-5` | Model for the worker runner (Anthropic model id, no date suffix) |
+| `agent.effort` | enum | no | `medium` | `low` / `medium` / `high` / `xhigh` / `max`; sent as `output_config.effort`. Drafting is routine work — raise it only if drafts miss items |
+| `agent.max_tokens` | int | no | `16000` | `max_tokens` per model turn |
+| `agent.fallbacks` | bool | no | `true` | Server-side refusal fallbacks (beta header `server-side-fallback-2026-07-01`, `fallbacks: "default"`). With `false` a refused turn ends the day session with outcome `refused` |
+| `agent.max_turns_per_day` | int | no | `40` | Model turns per day session; beyond this the session is abandoned as stuck |
+| `agent.budget.max_input_tokens` | int | no | `400000` | Per run, summed over all day sessions |
+| `agent.budget.max_output_tokens` | int | no | `40000` | Per run |
+| `agent.budget.max_usd_per_run` | float | no | `2.0` | Per run; the run stops gracefully (`budget_exceeded`) when reached, remaining days are picked up by the next run |
+| `agent.budget.max_images_per_run` | int | no | `12` | Images per run, downscaled to 1024 px before they reach the model |
+| `agent.pricing.<model>.input_per_mtok` / `.output_per_mtok` | float | no | opus-5 5/25, sonnet-5 2/10, haiku-4-5 1/5 | USD per million tokens used to book `agent_run.cost_usd` / `agent_session.cost_usd`. Unknown model ids fall back to the opus-5 rates |
 
 ### `mcp`
 
-| Key | Type | Required | Default | Meaning |
+| Key | Type | Required | Default | Notes |
 |---|---|---|---|---|
-| `mcp.http_enabled` | bool | no | `false` | Mount Streamable HTTP at `/mcp` |
-| `mcp.allowed_cidrs` | list[str] | no | `["100.64.0.0/10"]` | Source networks allowed to reach `/mcp` (the Tailscale range by default; set your VPN range) |
-| `mcp.rate_limit_per_minute` | int | no | `120` | Per token |
+| `mcp.http_enabled` | bool | no | `false` | Mount Streamable HTTP at `/mcp` inside the API process. stdio (`victus mcp --tenant <slug>`) needs no configuration |
+| `mcp.allowed_cidrs` | list[str] | no | `["100.64.0.0/10"]` | Source networks allowed to reach `/mcp` (a VPN's CGNAT range by default; set your own). Requests from other addresses get `403` even with a valid token; an empty list `[]` disables the IP filter (token and reverse proxy remain) |
+| `mcp.rate_limit_per_minute` | int | no | `120` | Per bearer token |
 
 ### `backup`
 
@@ -142,8 +149,8 @@ Stored as one JSON document per version in `tenant_settings`; every `PUT /settin
 | `calorie_corridor.min` / `.max` | int | `1400` / `2000` | Daily kcal corridor |
 | `calorie_corridor.asymmetric` | bool | `true` | Only *above max* is a finding; below min is not |
 | `calorie_corridor.rating` | enum | `average` | `average` (over the window) / `per_day` |
-| `transcription.language` | str | `en` | Transcription language |
-| `transcription.vocabulary_prompt` | str | `""` | Vocabulary hint (product names, brands) |
+| `transcription.language` | str | `en` | Transcription language; the agent also answers in this language |
+| `transcription.vocabulary_prompt` | str | `""` | Vocabulary hint passed to the transcription model (product names, brands) so numbers and names come out right |
 | `report_defaults.period` | str | `14d` | Default report window |
 | `report_defaults.palette` | object | dataviz default | Series colours for charts |
 | `target_bands[]` | reference | – | Managed in table `target_band`, one row per `training_type` and validity range (see below) |

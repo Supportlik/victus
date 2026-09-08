@@ -41,7 +41,7 @@ describe('App', () => {
     const el = fixture.nativeElement as HTMLElement;
     expect(el.querySelector('h1')?.textContent).toContain('Victus');
     expect(el.textContent).toContain('Alice’s kitchen');
-    expect(el.querySelectorAll('nav.rail li a').length).toBe(8);
+    expect(el.querySelectorAll('nav.rail li a').length).toBe(9);
     expect(el.querySelector('.health')?.textContent).toContain('0.1.0.dev0');
   });
 

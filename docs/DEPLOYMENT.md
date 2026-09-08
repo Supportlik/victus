@@ -20,7 +20,7 @@ server behind a reverse proxy, reachable only over a VPN (Tailscale is used in t
 |---|---|---|---|---|
 | `api` | `ghcr.io/supportlik/victus-api` | `alembic upgrade head && victus serve` | `127.0.0.1:8090` | default |
 | `web` | `ghcr.io/supportlik/victus-web` | nginx serving the Angular build, proxies `/api` and `/mcp` to `api` | via `WEB_PORT` | default |
-| `worker` | `victus-api` | `victus worker` (agent cron, scale sync, backup schedule) | – | default |
+| `worker` | `victus-api` | `victus worker` — queue consumer for agent runs (**Process now**, MCP, optional cron); heartbeat file for the healthcheck | – | default |
 | `backup` | `victus-api` | `victus backup schedule --daemon`; one-shot via `docker compose run --rm backup …` | – | default |
 | `postgres` | `postgres:18.6-alpine3.24` | – | internal | `postgres` |
 | `caddy` | `deploy/Dockerfile.caddy` | standalone TLS proxy for hosts without a central Caddy | 443 | `caddy` |
@@ -37,13 +37,26 @@ disk, never a named volume.
 | `VICTUS_AUTH__RP_ID` | `victus.example.com` | **decide before the first passkey** |
 | `VICTUS_AUTH__ORIGIN` | `https://victus.example.com` | |
 | `VICTUS_DATABASE__URL` | `sqlite:////data/victus.db` | or `postgresql+psycopg://…` with the `postgres` profile |
-| `VICTUS_PROVIDERS__OPENAI_API_KEY` | `sk-…` | transcription |
-| `VICTUS_PROVIDERS__ANTHROPIC_API_KEY` | `sk-ant-…` | only for the in-house worker |
-| `VICTUS_MCP__HTTP_ENABLED` | `true` | for external agents |
+| `VICTUS_PROVIDERS__OPENAI_API_KEY` | `sk-…` | transcription of voice notes (`gpt-4o-transcribe`); without it audio captures stay untranscribed |
+| `VICTUS_PROVIDERS__ANTHROPIC_API_KEY` | `sk-ant-…` | in-house worker runner; leave empty to draft only through the external runner (Claude Code / claude.ai over MCP) |
+| `VICTUS_AGENT__ENABLED` | `true` | let the worker also queue scheduled runs (`VICTUS_AGENT__CRON`, hourly); on-demand runs work without it |
+| `VICTUS_AGENT__MODEL` / `VICTUS_AGENT__EFFORT` | `claude-opus-5` / `medium` | model and thinking depth of the worker runner |
+| `VICTUS_MCP__HTTP_ENABLED` | `true` | mount `/mcp` for external agents; keep `VICTUS_MCP__ALLOWED_CIDRS` at your VPN range |
 | `BACKUP_DIR` | `/mnt/backup/victus` | bind-mount source |
 | `WEB_PORT` | `8090` | host port bound to `127.0.0.1` |
 | `VICTUS_IMAGE_TAG` | `latest` | pin to `vX.Y.Z` in production |
 | `CF_API_TOKEN` | – | only with the `caddy` profile (zone DNS edit scope) |
+
+### Connect Claude
+
+* **Claude Code on the server or over SSH** — stdio, nothing to expose: `claude mcp add victus -- ssh … app@your-home-server`
+  with a forced command that runs `docker compose … run --rm -T api victus mcp --tenant alice` (see `docs/MCP.md`).
+* **Claude Code / claude.ai from a device in the VPN** — Streamable HTTP: set `VICTUS_MCP__HTTP_ENABLED=true`, create a
+  token (`victus token create --tenant alice --name claude --scopes read,capture:read,capture:write,agent:write,approve --days 90`),
+  add `https://victus.example.com/mcp` with `Authorization: Bearer vct_…` as an MCP server / custom connector. The Caddy
+  configuration below answers `403` to `/mcp` from outside the VPN range; the application checks `mcp.allowed_cidrs` too.
+* **Worker** — set `VICTUS_PROVIDERS__ANTHROPIC_API_KEY`; the **Process now** button and `POST /agent/runs` then work
+  without any external Claude. Check `docker compose ps worker` shows *healthy* (heartbeat file).
 
 ### Caddy snippet (central Caddy)
 

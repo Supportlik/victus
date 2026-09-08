@@ -2,11 +2,14 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
+  AgentLock,
   AgentRun,
+  AgentRunStatus,
   ApiToken,
   ApiTokenCreated,
   ApproveRequest,
   Capture,
+  CaptureStatus,
   Category,
   DayFlags,
   DayLog,
@@ -234,11 +237,26 @@ export class ApiClient {
   }
 
   // captures & agent
-  captures(status?: string): Observable<Capture[]> {
-    return this.http.get<Capture[]>(`${API_BASE}/captures`, { params: params({ status }) });
+  captures(status?: string, date?: string): Observable<Capture[]> {
+    return this.http.get<Capture[]>(`${API_BASE}/captures`, { params: params({ status, date }) });
+  }
+  capture(id: string): Observable<Capture> {
+    return this.http.get<Capture>(`${API_BASE}/captures/${id}`);
   }
   uploadCapture(form: FormData): Observable<Capture> {
     return this.http.post<Capture>(`${API_BASE}/captures`, form);
+  }
+  updateCapture(id: string, body: { status?: CaptureStatus; target_date?: string | null }): Observable<Capture> {
+    return this.http.patch<Capture>(`${API_BASE}/captures/${id}`, body);
+  }
+  transcribeCapture(id: string, force = false): Observable<Capture> {
+    return this.http.post<Capture>(`${API_BASE}/captures/${id}/transcribe`, {}, {
+      params: params({ force: force ? 'true' : undefined }),
+    });
+  }
+  /** URL of an attachment (image, audio); served inline, session cookie authenticates. */
+  attachmentUrl(id: string): string {
+    return `${API_BASE}/attachments/${id}`;
   }
   startAgentRun(body: { mode: AgentRun['mode']; captures?: string[]; from?: string; to?: string }): Observable<AgentRun> {
     return this.http.post<AgentRun>(`${API_BASE}/agent/runs`, body);
@@ -246,8 +264,19 @@ export class ApiClient {
   agentRun(id: string): Observable<AgentRun> {
     return this.http.get<AgentRun>(`${API_BASE}/agent/runs/${id}`);
   }
-  agentRuns(): Observable<AgentRun[]> {
-    return this.http.get<AgentRun[]>(`${API_BASE}/agent/runs`);
+  agentRuns(query: { limit?: number; status?: AgentRunStatus } = {}): Observable<AgentRun[]> {
+    return this.http.get<AgentRun[]>(`${API_BASE}/agent/runs`, {
+      params: params({ limit: query.limit, status: query.status }),
+    });
+  }
+  cancelAgentRun(id: string): Observable<AgentRun> {
+    return this.http.post<AgentRun>(`${API_BASE}/agent/runs/${id}/cancel`, {});
+  }
+  agentLocks(): Observable<AgentLock[]> {
+    return this.http.get<AgentLock[]>(`${API_BASE}/agent/locks`);
+  }
+  forceUnlock(date: string): Observable<void> {
+    return this.http.delete<void>(`${API_BASE}/agent/locks/${date}`);
   }
 
   // reports

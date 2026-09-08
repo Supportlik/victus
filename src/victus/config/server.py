@@ -59,14 +59,40 @@ class AgentBudget(BaseModel):
     max_images_per_run: int = 12
 
 
+class ModelPricing(BaseModel):
+    """USD per million tokens, used to book ``agent_run.cost_usd``."""
+
+    input_per_mtok: float = 5.0
+    output_per_mtok: float = 25.0
+
+
 class AgentConfig(BaseModel):
     enabled: bool = False
     # None disables the schedule; runs then start only on demand (API button, MCP).
     cron: str | None = "0 * * * *"
+    # How often the worker looks for queued runs (the "Process now" button).
+    poll_seconds: int = 5
     # A single day is drafted well within this; a crashed run frees its day quickly.
     lock_ttl_minutes: int = 5
-    model: str = "claude-sonnet-5"
+    model: str = "claude-opus-5"
+    # Thinking depth (low | medium | high | xhigh | max); drafting is routine work.
+    effort: str = "medium"
+    max_tokens: int = 16_000
+    # Server-side refusal fallbacks (beta header); set False to send plain requests.
+    fallbacks: bool = True
+    # Model turns per day session before the session is abandoned as "stuck".
+    max_turns_per_day: int = 40
     budget: AgentBudget = Field(default_factory=AgentBudget)
+    pricing: dict[str, ModelPricing] = Field(
+        default_factory=lambda: {
+            "claude-opus-5": ModelPricing(input_per_mtok=5.0, output_per_mtok=25.0),
+            "claude-sonnet-5": ModelPricing(input_per_mtok=2.0, output_per_mtok=10.0),
+            "claude-haiku-4-5": ModelPricing(input_per_mtok=1.0, output_per_mtok=5.0),
+        }
+    )
+
+    def pricing_for(self, model: str) -> ModelPricing:
+        return self.pricing.get(model, ModelPricing())
 
 
 class McpConfig(BaseModel):

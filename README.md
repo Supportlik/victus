@@ -13,9 +13,10 @@ voice notes, photos and free text into day-log drafts you approve with one comma
 
 > **Victus** (Latin *vīctus*: "nourishment, means of living, way of life").
 
-> **Status: pre-release (Stages 1 and 2 implemented, Stage 3 — captures, agent, MCP — pending).**
+> **Status: pre-release (Stages 1–3 implemented: core, reports, captures + agent + MCP).**
 > Database, REST API with passkeys and tokens, Angular web app, report engine with the built-in
-> check-up, and backup/restore are in place. See [`docs/PLAN.md`](docs/PLAN.md) for the roadmap.
+> check-up, backup/restore, the agent inbox with the in-house worker and the MCP server are in place;
+> a first release tag follows the deployment. See [`docs/PLAN.md`](docs/PLAN.md) for the roadmap.
 
 ## How it works
 
@@ -29,8 +30,13 @@ voice notes, photos and free text into day-log drafts you approve with one comma
 * **One database, one truth.** Nutrients are never stored on a meal line; they are computed from
   the product the line points to, so a corrected label fixes every historical day. Quantities,
   on the other hand, are frozen when you log them (ADR 0001, `docs/SPEC.md` R1–R4).
-* **Drafts, then approval.** The agent proposes; you approve — in the web app or by answering a
-  summary in your Claude chat. Estimated items stay marked as estimates after approval.
+* **Drafts, then approval.** Drop a voice note, photo or text into the inbox and press **Process now**
+  (or let the hourly schedule run): the agent drafts the day in its own model session — one day, one
+  context — and you approve in the web app or by answering the summary in your Claude chat. Estimated
+  items stay marked as estimates after approval.
+* **Bring your own Claude.** Either the built-in worker with an Anthropic API key, or your Claude Code /
+  claude.ai subscription connected over MCP (stdio or Streamable HTTP). Both share one lock table, so a
+  day is never drafted twice.
 * **Reports as data.** Dashboards and check-ups are declarative YAML documents rendered to JSON
   (web), Markdown (chat, Obsidian) or SVG.
 * **Multi-tenant, token-authenticated, backed up.** Every row belongs to a tenant; passkeys for
@@ -63,8 +69,9 @@ victus serve --port 8000
 victus serve                                  # API + web app + MCP endpoint
 victus backup restore victus-alice-20260908.zip   # bring existing data in via the archive format (docs/MIGRATION.md)
 victus backup create --all                    # write a verifiable backup archive
-victus mcp --tenant alice                     # MCP over stdio for Claude Code (Stage 3)
-victus agent run --mode historical            # process open captures into drafts (Stage 3)
+victus worker                                 # queue consumer for agent runs (+ optional cron)
+victus agent run --tenant alice --mode historical   # process open captures into drafts once, print the summary
+victus mcp --tenant alice                     # MCP over stdio for Claude Code
 ```
 
 ## Configuration
@@ -78,6 +85,17 @@ Two layers, documented in [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md):
 
 JSON Schemas for both live in [`schemas/`](schemas/); [`examples/`](examples/) holds complete,
 validated examples.
+
+## Connect Claude
+
+```bash
+claude mcp add victus -- victus mcp --tenant alice                      # stdio, same machine (or via SSH forced command)
+victus token create --tenant alice --name claude --scopes read,capture:read,capture:write,agent:write,approve --days 90
+claude mcp add --transport http victus https://victus.example.com/mcp --header "Authorization: Bearer vct_…"
+```
+
+The same tools drive the built-in worker (`providers.anthropic_api_key`) and an external Claude; tokens carry
+scopes, `/mcp` is meant for your VPN only. Details: [`docs/MCP.md`](docs/MCP.md), [`docs/AGENT.md`](docs/AGENT.md).
 
 ## Documentation
 

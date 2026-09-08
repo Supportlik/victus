@@ -13,7 +13,7 @@ adapters (REST, MCP, CLI, agent worker) share the same use cases and therefore t
 | **Infrastructure** | `src/victus/infrastructure/` | SQLAlchemy ORM and repositories, Alembic migrations, blob storage, transcription, LLM, scale sync, WebAuthn, tokens, sessions, locks, scheduler | Implements ports. Every port has an in-memory test double. |
 | **API** | `src/victus/api/` | FastAPI app factory, routers, Pydantic schemas, auth dependencies, middleware | Maps HTTP ↔ use case. No business logic. |
 | **MCP** | `src/victus/mcp/` | FastMCP server, tools, transports (stdio, Streamable HTTP), token auth | Calls use cases directly (see [ADR 0004](adr/0004-mcp-calls-service-layer.md)). |
-| **Agent** | `src/victus/agent/` | Worker loop, Claude Agent SDK runner, budget, prompt files | Uses MCP tools as its tool set; never touches the database directly. |
+| **Agent** | `src/victus/agent/` | Worker loop (queue consumer), Anthropic SDK tool-loop runner, budget, pricing, prompt files | Uses MCP tools as its tool set; never touches the database directly. |
 | **CLI** | `src/victus/cli/` | `victus serve | backup | mcp | agent | token | migrate | shell` | Thin Typer commands over use cases. |
 | **Reports** | `src/victus/reports/` | Report registry, engine, block implementations, renderers | Blocks call domain services; renderers are output-only. |
 | **Backup** | `src/victus/backup/` | Export, restore, verify, retention | Streams JSONL through the repositories, never raw SQL dumps. |
@@ -61,8 +61,8 @@ src/victus/
 │  ├─ locking/      db_lock
 │  └─ scheduler/    apscheduler_runner
 ├─ api/             app deps routers/ schemas/ errors middleware/
-├─ mcp/             server tools/read tools/write auth transports
-├─ agent/           worker runner_sdk budget prompts/
+├─ mcp/             server (stdio, mount_http) tools (registry)
+├─ agent/           worker runner model budget pricing prompts/
 ├─ reports/         registry engine blocks/ render/ builtin/checkup.yaml
 ├─ backup/          export restore verify retention
 └─ config/          server tenant_settings defaults
@@ -71,7 +71,7 @@ src/victus/
 ## Tenant context and isolation
 
 `TenantContext(tenant_id, principal, scopes)` is built once per request in `api/deps.py` (from a session cookie or a
-bearer token), per MCP session in `mcp/auth.py`, and per CLI invocation from `--tenant`. It is a mandatory argument of
+bearer token), per MCP session in `mcp/server.py` (stdio: `--tenant`; HTTP: bearer token), and per CLI invocation from `--tenant`. It is a mandatory argument of
 every use case and every repository method.
 
 | Line of defence | Mechanism |

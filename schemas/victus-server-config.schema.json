@@ -73,22 +73,42 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "enabled": { "type": "boolean", "default": false },
+        "enabled": { "type": "boolean", "default": false, "description": "Let the worker create scheduled runs (cron). On-demand runs work regardless." },
         "cron": { "type": ["string", "null"], "description": "Five-field cron expression for the worker runner; null disables the schedule (runs start on demand only).", "default": "0 * * * *" },
-        "model": { "type": "string", "default": "claude-sonnet-5" },
-        "prompt_dir": { "type": "string", "default": "builtin" },
+        "poll_seconds": { "type": "integer", "minimum": 1, "default": 5, "description": "How often the worker looks for queued runs (the app's Process now button)." },
+        "lock_ttl_minutes": { "type": "integer", "minimum": 1, "default": 5, "description": "Lock horizon per day; one day is drafted well within this." },
+        "model": { "type": "string", "default": "claude-opus-5" },
+        "effort": { "type": "string", "enum": ["low", "medium", "high", "xhigh", "max"], "default": "medium", "description": "Thinking depth passed as output_config.effort; drafting is routine work." },
+        "max_tokens": { "type": "integer", "minimum": 1024, "default": 16000, "description": "max_tokens per model turn." },
+        "fallbacks": { "type": "boolean", "default": true, "description": "Server-side refusal fallbacks (beta header). Set false to send plain requests." },
+        "max_turns_per_day": { "type": "integer", "minimum": 1, "default": 40, "description": "Model turns per day session before the session is abandoned as stuck." },
         "budget": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "max_input_tokens": { "type": "integer", "minimum": 1000, "default": 200000 },
-            "max_output_tokens": { "type": "integer", "minimum": 256, "default": 16000 },
-            "max_usd_per_run": { "type": "number", "minimum": 0, "default": 0.5 },
-            "max_images_per_run": { "type": "integer", "minimum": 0, "default": 12 },
-            "image_max_px": { "type": "integer", "minimum": 256, "default": 1024 }
+            "max_input_tokens": { "type": "integer", "minimum": 1000, "default": 400000 },
+            "max_output_tokens": { "type": "integer", "minimum": 256, "default": 40000 },
+            "max_usd_per_run": { "type": "number", "minimum": 0, "default": 2.0 },
+            "max_images_per_run": { "type": "integer", "minimum": 0, "default": 12 }
           }
         },
-        "lock_ttl_minutes": { "type": "integer", "minimum": 1, "default": 5, "description": "Lock horizon per day; one day is drafted well within this." }
+        "pricing": {
+          "type": "object",
+          "description": "USD per million tokens per model id, used to book agent_run.cost_usd. Unknown models fall back to the claude-opus-5 rates.",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "input_per_mtok": { "type": "number", "minimum": 0 },
+              "output_per_mtok": { "type": "number", "minimum": 0 }
+            }
+          },
+          "default": {
+            "claude-opus-5": { "input_per_mtok": 5.0, "output_per_mtok": 25.0 },
+            "claude-sonnet-5": { "input_per_mtok": 2.0, "output_per_mtok": 10.0 },
+            "claude-haiku-4-5": { "input_per_mtok": 1.0, "output_per_mtok": 5.0 }
+          }
+        }
       }
     },
     "mcp": {

@@ -47,7 +47,7 @@ dependencies = [
 postgres = ["psycopg[binary]>=3.2"]
 auth = []  # kept as an alias; passkey support is part of the core install
 transcription = ["openai>=1.40"]
-agent = ["anthropic>=0.40", "mcp>=1.2"]
+agent = ["anthropic>=1.4", "mcp>=2.2", "pillow>=11.0"]
 all = ["victus[postgres,auth,transcription,agent]"]
 
 [project.scripts]

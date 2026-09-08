@@ -23,6 +23,7 @@ export const routes: Routes = [
       { path: 'weight', loadComponent: () => import('./features/weight/weight-page').then((m) => m.WeightPage) },
       { path: 'reports', loadComponent: () => import('./features/reports/reports-page').then((m) => m.ReportsPage) },
       { path: 'captures', loadComponent: () => import('./features/captures/captures-page').then((m) => m.CapturesPage) },
+      { path: 'agent', loadComponent: () => import('./features/agent/agent-page').then((m) => m.AgentPage) },
       { path: 'settings', loadComponent: () => import('./features/settings/settings-page').then((m) => m.SettingsPage) },
     ],
   },

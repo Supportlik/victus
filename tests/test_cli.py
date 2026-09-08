@@ -1,16 +1,18 @@
-"""T-OPS-002/003: CLI surface — version flag and honest 'not implemented' exits."""
+"""T-OPS-002/003: CLI surface — version flag and the Stage 3 command groups."""
 
 from typer.testing import CliRunner
 
 from victus import __version__
-from victus.cli.main import NOT_IMPLEMENTED_EXIT, app
+from victus.cli.main import app
 
 runner = CliRunner()
 
-PLANNED = (
-    ["agent", "run"],
-    ["mcp"],
-    ["worker"],
+HELP_TARGETS = (
+    ["agent", "run", "--help"],
+    ["agent", "runs", "--help"],
+    ["agent", "unlock", "--help"],
+    ["worker", "--help"],
+    ["mcp", "--help"],
 )
 
 
@@ -20,8 +22,25 @@ def test_version_flag() -> None:
     assert result.stdout.strip() == f"victus {__version__}"
 
 
-def test_planned_commands_exit_with_code_3() -> None:
-    for args in PLANNED:
+def test_stage3_commands_expose_help() -> None:
+    for args in HELP_TARGETS:
         result = runner.invoke(app, args)
-        assert result.exit_code == NOT_IMPLEMENTED_EXIT, args
-        assert "planned for Stage" in result.output
+        assert result.exit_code == 0, (args, result.output)
+        assert "--tenant" in result.output or args[0] == "worker"
+
+
+def test_agent_run_signature() -> None:
+    result = runner.invoke(app, ["agent", "run", "--help"])
+    for flag in ("--tenant", "--mode", "--captures", "--from", "--to"):
+        assert flag in result.output
+
+
+def test_worker_once_flag_documented() -> None:
+    result = runner.invoke(app, ["worker", "--help"])
+    assert "--once" in result.output
+
+
+def test_mcp_requires_tenant() -> None:
+    result = runner.invoke(app, ["mcp"])
+    assert result.exit_code != 0
+    assert "tenant" in result.output.lower()

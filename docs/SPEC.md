@@ -106,21 +106,21 @@ tree is marked **planned**.
 
 | ID | Requirement | Where implemented | Stage |
 |---|---|---|---|
-| R35 | A capture is text, audio or image with a content hash unique per tenant; re-uploading the same content is a no-op. | `application/use_cases/captures.py` — planned | 3 |
-| R36 | Audio is transcribed through a `TranscriptionPort` (first adapter: OpenAI `gpt-4o-transcribe`, configurable language and tenant vocabulary prompt). | `infrastructure/transcription/openai_whisper.py` — planned | 3 |
-| R37 | The agent produces **drafts** (`day_log.status = 'draft'`, `line_item.is_draft = 1`) with confidence, reasoning, source capture and top-3 alternatives per item; it never approves. | `agent/worker.py`, `application/use_cases/drafts.py` — planned | 3 |
-| R38 | Approval (`ApproveDay`) applies corrections, clears draft flags, freezes the `target_band_id`, marks captures processed, and records every change in `audit_log`. It is reachable from the web app and from the MCP tool `day_approve` after a chat summary. | `application/use_cases/drafts.py` — planned | 3 |
-| R39 | Two runners — an in-house worker (Claude Agent SDK + API key) and an external Claude (Claude Code / claude.ai via MCP over HTTP) — share **one** `agent_lock (tenant_id, date)` table; write tools require a live `run_id` holding the lock. | `infrastructure/locking/db_lock.py`, `mcp/tools/write.py` — planned | 3 |
-| R40 | Every run records model, prompt version, tokens, cost and a Markdown summary in `agent_run`; budgets (tokens, USD, images) abort a run gracefully. | `agent/budget.py` — planned | 3 |
-| R49 | **One day, one model session.** Each day is drafted in a fresh conversation containing only that day's captures; a run over several days executes one isolated session per day, sequentially. Day assignment of captures happens before drafting. `agent_session` records model, tokens, cost and outcome per day. | `agent/worker.py`, `mcp/tools/read.py` (`captures_open` scoped to the locked day) — planned | 3 |
-| R50 | Agent runs start **on demand**: `POST /agent/runs` (the web app's "Process now" button) queues a run the worker picks up within seconds; the cron schedule is optional and can be disabled (`agent.cron: null`). | `api/routers/agent.py`, `agent/worker.py` — planned | 3 |
-| R51 | Every day owns a **resumable thread** of user captures and agent messages (`day_message`). New messages — before, during or after processing — join that day's context only; a message on a drafted or locked day queues a `follow_up` run that changes the draft incrementally. Agent questions are thread messages; replies follow the same path. | `application/use_cases/day_thread.py`, `api/routers/days.py`, `mcp/tools/read.py` — planned | 3 |
+| R35 | A capture is text, audio or image with a content hash unique per tenant; re-uploading the same content is a no-op. | `application/use_cases/captures.py` (`UploadCapture`), `api/routers/captures.py` | 3 |
+| R36 | Audio is transcribed through a `TranscriptionPort` (first adapter: OpenAI `gpt-4o-transcribe`, configurable language and tenant vocabulary prompt). | `application/ports/transcription.py`, `infrastructure/transcription/openai_transcribe.py`, `application/use_cases/captures.py::TranscribeCapture` | 3 |
+| R37 | The agent produces **drafts** (`day_log.status = 'draft'`, `line_item.is_draft = 1`) with confidence, reasoning, source capture and top-3 alternatives per item; it never approves. | `application/use_cases/agent.py::CreateDraft`, `agent/runner.py`, `schemas/agent-draft.schema.json` | 3 |
+| R38 | Approval (`ApproveDay`) applies corrections, clears draft flags, freezes the `target_band_id`, marks captures processed, and records every change in `audit_log`. It is reachable from the web app and from the MCP tool `day_approve` after a chat summary. | `application/use_cases/drafts.py::ApproveDay`, MCP `day_approve` (`mcp/tools.py`), `web/features/drafts` | 3 |
+| R39 | Two runners — an in-house worker (Anthropic SDK tool loop + API key) and an external Claude (Claude Code / claude.ai via MCP over HTTP) — share **one** `agent_lock (tenant_id, date)` table; write tools require a live `run_id` holding the lock. | `infrastructure/db/repositories/inbox.py::AgentRepo.try_acquire_lock`, `application/use_cases/agent.py::BeginAgentRun`/`CreateDraft`, `mcp/tools.py` | 3 |
+| R40 | Every run records model, prompt version, tokens, cost and a Markdown summary in `agent_run`; budgets (tokens, USD, images) abort a run gracefully. | `agent/budget.py`, `agent/pricing.py`, `application/use_cases/agent.py::RecordAgentSession`/`FinishAgentRun` | 3 |
+| R49 | **One day, one model session.** Each day is drafted in a fresh conversation containing only that day's captures; a run over several days executes one isolated session per day, sequentially. Day assignment of captures happens before drafting. `agent_session` records model, tokens, cost and outcome per day. | `agent/runner.py` (one conversation per day), `application/use_cases/agent.py::GetDayContext`, `mcp/tools.py` (`captures_open` scoped to the run's locked days) | 3 |
+| R50 | Agent runs start **on demand**: `POST /agent/runs` (the web app's "Process now" button) queues a run the worker picks up within seconds; the cron schedule is optional and can be disabled (`agent.cron: null`). | `api/routers/agent.py`, `application/use_cases/agent.py::QueueAgentRun`, `agent/worker.py` | 3 |
+| R51 | Every day owns a **resumable thread** of user captures and agent messages (`day_message`). New messages — before, during or after processing — join that day's context only; a message on a drafted or locked day queues a `follow_up` run that changes the draft incrementally. Agent questions are thread messages; replies follow the same path. | `application/use_cases/day_logs.py::GetDayThread`/`AddDayMessage`, `application/use_cases/captures.py::queue_follow_up_if_needed`, `api/routers/days.py`, `mcp/tools.py` (`day_thread_get`, `day_message_add`) | 3 |
 
 ### MCP
 
 | ID | Requirement | Where implemented | Stage |
 |---|---|---|---|
-| R41 | The MCP server calls the **service layer directly**; it exposes read, write, approve, capture and agent tools with scopes, over stdio (`victus mcp --tenant`) and Streamable HTTP (`/mcp`, bearer token, rate limit, VPN CIDR only). | `mcp/server.py`, `mcp/transports.py` — planned | 3 |
+| R41 | The MCP server calls the **service layer directly**; it exposes read, write, approve, capture and agent tools with scopes, over stdio (`victus mcp --tenant`) and Streamable HTTP (`/mcp`, bearer token, rate limit, VPN CIDR only). | `mcp/server.py` (stdio, `mount_http`), `mcp/tools.py` (registry), `cli/agent_cmd.py` (`victus mcp`) | 3 |
 
 ### Configuration
 
@@ -132,7 +132,7 @@ tree is marked **planned**.
 
 | ID | Requirement | Where implemented | Stage |
 |---|---|---|---|
-| R43 | `victus backup create|verify|restore|schedule`: a ZIP with `manifest.json` (counts, SHA-256 per file), one JSONL file per table, blobs by hash, optional SQLite snapshot. `verify` restores into a temporary database and compares counts. Retention 7 daily / 8 weekly / 12 monthly. `/health` reports `backup_age_hours`. | `backup/` — planned | 1 (create/verify), 3 (schedule) |
+| R43 | `victus backup create|verify|restore|schedule`: a ZIP with `manifest.json` (counts, SHA-256 per file), one JSONL file per table, blobs by hash, optional SQLite snapshot. `verify` restores into a temporary database and compares counts. Retention 7 daily / 8 weekly / 12 monthly. `/health` reports `backup_age_hours`. | `backup/` (`export`, `verify`, `restore`, `retention`, `schedule`) | 1 (create/verify), 3 (schedule) |
 
 ### Operations
 

@@ -73,4 +73,42 @@ describe('ApiClient', () => {
     expect(req.request.body).toEqual({ mode: 'historical' });
     req.flush({});
   });
+
+  // T-WEB-030: capture and agent client methods hit the documented endpoints.
+  it('updates, transcribes and addresses captures', () => {
+    api.updateCapture('c1', { target_date: '2026-01-05' }).subscribe();
+    const patch = http.expectOne('/api/v1/captures/c1');
+    expect(patch.request.method).toBe('PATCH');
+    expect(patch.request.body).toEqual({ target_date: '2026-01-05' });
+    patch.flush({});
+    api.transcribeCapture('c1', true).subscribe();
+    const tr = http.expectOne((r) => r.url === '/api/v1/captures/c1/transcribe');
+    expect(tr.request.method).toBe('POST');
+    expect(tr.request.params.get('force')).toBe('true');
+    tr.flush({});
+    api.captures('new', '2026-01-05').subscribe();
+    const list = http.expectOne((r) => r.url === '/api/v1/captures');
+    expect(list.request.params.get('status')).toBe('new');
+    expect(list.request.params.get('date')).toBe('2026-01-05');
+    list.flush([]);
+    expect(api.attachmentUrl('a1')).toBe('/api/v1/attachments/a1');
+  });
+
+  it('lists, cancels runs and releases locks', () => {
+    api.agentRuns({ limit: 10, status: 'queued' }).subscribe();
+    const runs = http.expectOne((r) => r.url === '/api/v1/agent/runs');
+    expect(runs.request.params.get('limit')).toBe('10');
+    expect(runs.request.params.get('status')).toBe('queued');
+    runs.flush([]);
+    api.cancelAgentRun('r1').subscribe();
+    const cancel = http.expectOne('/api/v1/agent/runs/r1/cancel');
+    expect(cancel.request.method).toBe('POST');
+    cancel.flush({});
+    api.agentLocks().subscribe();
+    http.expectOne('/api/v1/agent/locks').flush([]);
+    api.forceUnlock('2026-01-05').subscribe();
+    const del = http.expectOne('/api/v1/agent/locks/2026-01-05');
+    expect(del.request.method).toBe('DELETE');
+    del.flush(null);
+  });
 });

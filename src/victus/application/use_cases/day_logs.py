@@ -19,6 +19,7 @@ from victus.application.use_cases._mappers import (
     target_band_view,
     weekday_name,
 )
+from victus.application.use_cases.captures import queue_follow_up_if_needed
 from victus.domain.model.checks import DayForCheck
 from victus.domain.services.nutrients import sum_macros
 from victus.domain.services.units import UNITS, base_factor
@@ -32,7 +33,6 @@ from victus.domain.values import (
     Macros,
     MessageKind,
     MessageRole,
-    RunStatus,
     TrainingType,
 )
 from victus.infrastructure.db import orm
@@ -498,23 +498,7 @@ class AddDayMessage(UseCase):
                     created_at=ts,
                 )
             )
-            d = uow.day_logs.get_by_date(day)
-            has_draft = d is not None and (
-                d.status == DayStatus.DRAFT.value
-                or any(li.is_draft for m in d.meals for li in m.line_items)
-            )
-            locked = uow.agent.lock_holder(day, ts) is not None
-            if has_draft or locked:
-                uow.agent.add_run(
-                    orm.AgentRun(
-                        tenant_id=self.ctx.tenant_id,
-                        runner="worker",
-                        mode="follow_up",
-                        status=RunStatus.QUEUED.value,
-                        captures=[capture.id],
-                        days=[day.isoformat()],
-                    )
-                )
+            queue_follow_up_if_needed(uow, self.ctx, day, [capture.id], ts)
             view = _message_view(message, capture)
             uow.commit()
             return view

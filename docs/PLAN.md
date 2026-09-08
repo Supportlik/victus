@@ -11,8 +11,8 @@ and is updated per stage.
 | 0 — Scaffold | **done** | 08 Sep 2026 |
 | 1 — Core | **implemented, in review** | 08 Sep 2026 |
 | 2 — Reports | **implemented, in review** | 08 Sep 2026 |
-| 3 — Agent | planned | |
-| Cross-cutting / v0.1.0 | planned | |
+| 3 — Agent | **implemented, in review** (deployment on the home server pending) | 08 Sep 2026 |
+| Cross-cutting / v0.1.0 | in progress (isolation tests and restore drill done; deployment, release tag and predecessor hand-over pending) | |
 
 ## Stages
 
@@ -38,7 +38,7 @@ and is updated per stage.
 
 | Content | Definition of done | Risks |
 |---|---|---|
-| Captures, attachments, transcription port + OpenAI adapter, MCP server (stdio + Streamable HTTP), `agent_lock`, in-house worker (Claude Agent SDK), prompt files, drafts UI + approval, cost protocol, external runner via Claude Code `/schedule`, chat summary | Voice note from the phone → draft → chat summary → `day_approve`, without any vault script; both runners tested; no double draft | Image analysis cost (budget), transcription quality (vocabulary prompt), HTTP MCP reachable from the VPN only |
+| Captures, attachments, transcription port + OpenAI adapter, MCP server (stdio + Streamable HTTP, one tool registry), `agent_lock`, in-house worker (Anthropic SDK tool loop, one session per day, queue consumer + optional cron), prompt files, drafts UI + approval, cost protocol, external runner via Claude Code `/schedule`, chat summary, day thread with follow-up runs, Agent and Captures pages | Voice note from the phone → draft → chat summary → `day_approve`, without any vault script; both runners tested; no double draft | Image analysis cost (budget), transcription quality (vocabulary prompt), HTTP MCP reachable from the VPN only |
 
 ### Cross-cutting
 

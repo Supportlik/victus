@@ -10,6 +10,8 @@ from fastapi import Depends, Request
 from sqlalchemy.orm import Session, sessionmaker
 
 from victus.application.errors import Forbidden, Unauthenticated
+from victus.application.ports.blob_storage import BlobStorage
+from victus.application.ports.transcription import TranscriptionPort
 from victus.application.ports.unit_of_work import UnitOfWork
 from victus.application.tenant_context import TenantContext
 from victus.application.use_cases._base import UowFactory
@@ -48,6 +50,16 @@ def get_session_factory(request: Request) -> sessionmaker[Session]:
 def get_webauthn(request: Request) -> WebAuthnService:
     svc: WebAuthnService = request.app.state.webauthn
     return svc
+
+
+def get_blobs(request: Request) -> BlobStorage:
+    blobs: BlobStorage = request.app.state.blobs
+    return blobs
+
+
+def get_transcription(request: Request) -> TranscriptionPort | None:
+    port: TranscriptionPort | None = getattr(request.app.state, "transcription", None)
+    return port
 
 
 def get_uow_factory(
@@ -127,3 +139,5 @@ Lookup = Annotated[SqlAuthLookup, Depends(get_lookup)]
 Config = Annotated[ServerConfig, Depends(get_config)]
 WebAuthn = Annotated[WebAuthnService, Depends(get_webauthn)]
 Who = Annotated[Principal, Depends(current_principal)]
+Blobs = Annotated[BlobStorage, Depends(get_blobs)]
+Transcription = Annotated[TranscriptionPort | None, Depends(get_transcription)]

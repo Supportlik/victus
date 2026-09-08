@@ -27,14 +27,24 @@ transcription:
   ffmpeg_path: ffmpeg
 
 agent:
-  enabled: false
-  cron: "0 * * * *"
-  model: claude-sonnet-5
+  enabled: false                         # true: the worker also creates scheduled runs (cron)
+  cron: "0 * * * *"                      # null: on-demand only (POST /agent/runs, "Process now", MCP)
+  poll_seconds: 5                        # worker looks for queued runs this often
+  lock_ttl_minutes: 5
+  model: claude-opus-5
+  effort: medium                         # low | medium | high | xhigh | max
+  max_tokens: 16000
+  fallbacks: true                        # server-side refusal fallbacks (beta)
+  max_turns_per_day: 40
   budget:
     max_input_tokens: 400000
     max_output_tokens: 40000
     max_usd_per_run: 2.0
     max_images_per_run: 12
+  pricing:                               # USD per million tokens, for agent_run.cost_usd
+    claude-opus-5: { input_per_mtok: 5.0, output_per_mtok: 25.0 }
+    claude-sonnet-5: { input_per_mtok: 2.0, output_per_mtok: 10.0 }
+    claude-haiku-4-5: { input_per_mtok: 1.0, output_per_mtok: 5.0 }
 
 mcp:
   http_enabled: false

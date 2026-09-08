@@ -187,8 +187,8 @@ def test_t_api_015_health_and_openapi(client: TestClient) -> None:
 
 
 def test_planned_routes_answer_501(client: TestClient, alice_token: dict[str, str]) -> None:
-    r = client.get("/api/v1/agent/runs", headers=alice_token)
-    assert r.status_code == 501 and "Stage 3" in r.json()["detail"]
+    r = client.get("/api/v1/backup/jobs", headers=alice_token)
+    assert r.status_code == 501 and "backup" in r.json()["detail"]
 
 
 def test_day_thread_and_drafts_over_http(client: TestClient, alice_token: dict[str, str]) -> None:
