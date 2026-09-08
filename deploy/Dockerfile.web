@@ -12,7 +12,7 @@ COPY web/ ./
 RUN npm run build -- --configuration production
 
 # ── Stage 2: nginx (unprivileged) ───────────────────────────────────────────
-FROM nginxinc/nginx-unprivileged:1.27-alpine AS runtime
+FROM nginxinc/nginx-unprivileged:1.31-alpine AS runtime
 
 ARG VERSION=dev
 LABEL org.opencontainers.image.title="victus-web" \
