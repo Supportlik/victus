@@ -42,6 +42,7 @@ from victus.application.use_cases import captures as capture_uc
 from victus.application.use_cases import day_logs as day_uc
 from victus.application.use_cases import drafts as draft_uc
 from victus.application.use_cases import products as product_uc
+from victus.application.use_cases import proposals as proposal_uc
 from victus.application.use_cases import recipes as recipe_uc
 from victus.application.use_cases import weights as weight_uc
 from victus.application.use_cases._base import UowFactory
@@ -253,6 +254,19 @@ class ProductUpdateIn(_In):
         default=None,
         description="Where the values come from, e.g. 'label photo, capture <id>'. Always set it.",
     )
+
+
+class ProductProposeIn(_In):
+    product_id: int
+    changes: dict[str, Any] = Field(
+        description=(
+            "Values read from the label per reference amount (100 g/ml): kcal, protein, carbs, "
+            "fat, fiber, salt; optionally name, brand, ean, reference_unit, note."
+        )
+    )
+    rationale: str | None = Field(default=None, description="One sentence: what you read where.")
+    source: str | None = Field(default=None, description="e.g. 'label photo, capture <id>'.")
+    capture_id: str | None = Field(default=None, description="The capture this comes from.")
 
 
 class AgentRunStartIn(_In):
@@ -640,6 +654,18 @@ def _product_update(tc: ToolContext, inp: ProductUpdateIn) -> ToolResult:
     return cast(dict[str, Any], jsonable(view))
 
 
+def _product_propose(tc: ToolContext, inp: ProductProposeIn) -> ToolResult:
+    view = proposal_uc.ProposeProductChange(tc.uow_factory, tc.ctx).execute(
+        inp.product_id,
+        inp.changes,
+        rationale=inp.rationale,
+        source=inp.source,
+        capture_id=inp.capture_id,
+        run_id=tc.run_id,
+    )
+    return cast(dict[str, Any], jsonable(view))
+
+
 def _product_create(tc: ToolContext, inp: ProductCreateIn) -> ToolResult:
     view = product_uc.CreateProduct(tc.uow_factory, tc.ctx).execute(
         product_uc.ProductInput(**inp.model_dump())
@@ -874,6 +900,15 @@ TOOLS: tuple[ToolSpec, ...] = (
         read_only=False,
     ),
     _spec(
+        "product_propose",
+        "Propose corrected product values read from a label photo or note. A person approves "
+        "in the app; nothing changes until then. Use this for product captures.",
+        SCOPE_AGENT_WRITE,
+        ProductProposeIn,
+        _product_propose,
+        read_only=False,
+    ),
+    _spec(
         "product_update",
         "Correct a product's nutrients per reference amount, e.g. from a label photo capture. "
         "Values propagate to every logged quantity of that product; set `source`.",
@@ -925,7 +960,7 @@ WORKER_TOOLS: frozenset[str] = frozenset(
         "capture_mark",
         "draft_create",
         "product_create",
-        "product_update",
+        "product_propose",
         "portion_create",
     }
 )

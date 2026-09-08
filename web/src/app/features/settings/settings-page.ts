@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
+import { LANDINGS, PrefsService } from '../../core/prefs.service';
 import { ThemeService } from '../../core/theme.service';
 import { TenantSettingsForm } from './settings-form';
 import { ApiClient, ApiToken, ApiTokenCreated, Health, Passkey, TargetBand, TenantSettingsVersion } from '../../api';
@@ -27,6 +28,11 @@ interface SchemaLike {
         <h3>Appearance</h3>
         <p class="v-small v-muted">Stored in this browser only.</p>
         <div class="v-form-row">
+          <label class="v-field"><span>After sign-in open</span>
+            <select name="landing" [ngModel]="prefs.landing()" (ngModelChange)="prefs.landing.set($event)">
+              @for (l of landings; track l.id) { <option [value]="l.id">{{ l.label }}</option> }
+            </select>
+          </label>
           <label class="v-field"><span>Light / dark</span>
             <select name="scheme" [ngModel]="theme.scheme()" (ngModelChange)="theme.scheme.set($event)">
               <option value="system">Follow the device</option><option value="light">Light</option><option value="dark">Dark</option>
@@ -143,6 +149,8 @@ export class SettingsPage {
   private readonly http = inject(HttpClient);
   readonly auth = inject(AuthService);
   readonly theme = inject(ThemeService);
+  readonly prefs = inject(PrefsService);
+  readonly landings = LANDINGS;
   readonly passkeys = signal<Passkey[]>([]);
   readonly bands = signal<TargetBand[]>([]);
   readonly settings = signal<TenantSettingsVersion | null>(null);

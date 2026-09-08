@@ -32,8 +32,9 @@ from victus.application.tenant_context import (
 )
 from victus.application.use_cases import agent as agent_uc
 from victus.application.use_cases import captures as capture_uc
+from victus.application.use_cases import products as product_uc
 from victus.config.server import ServerConfig
-from victus.domain.values import CaptureKind, MessageKind, Period, RunStatus
+from victus.domain.values import CaptureKind, CaptureStatus, MessageKind, Period, RunStatus
 from victus.infrastructure.db.uow import SqlAlchemyUnitOfWork
 from victus.infrastructure.reports.sqlalchemy_source import SqlAlchemyReportDataSource
 from victus.mcp.tools import (
@@ -70,6 +71,7 @@ MAX_IMAGE_EDGE = 1024
 class Prompts:
     system: str
     capture_to_draft: str
+    product_capture: str
     summary: str
     version: str
 
@@ -79,12 +81,13 @@ def load_prompts() -> Prompts:
     package = resources.files("victus.agent.prompts")
     texts = {
         name: (package / f"{name}.md").read_text(encoding="utf-8")
-        for name in ("system", "capture_to_draft", "summary")
+        for name in ("system", "capture_to_draft", "product_capture", "summary")
     }
     digest = hashlib.sha256("\n".join(texts[n] for n in sorted(texts)).encode("utf-8"))
     return Prompts(
         system=texts["system"],
         capture_to_draft=texts["capture_to_draft"],
+        product_capture=texts["product_capture"],
         summary=texts["summary"],
         version=digest.hexdigest()[:12],
     )
@@ -262,6 +265,9 @@ class DayDrafter:
                 outcome.markdown = str(result.get("markdown", ""))
                 outcome.questions = self._questions_from(use.input)
                 outcome.outcome = "drafted"
+            if use.name == "product_propose" and isinstance(result, dict):
+                outcome.draft = result
+                outcome.outcome = "proposed"
             if isinstance(result, ImageResult):
                 content: Any = [
                     {
@@ -296,6 +302,25 @@ class DayDrafter:
             self._record(run_id, outcome, started)
             return outcome
         messages: list[dict[str, Any]] = [{"role": "user", "content": content}]
+        self._converse(run_id, day, messages, outcome, tools, success="drafted")
+        self._record(run_id, outcome, started)
+        if outcome.outcome == "drafted" and outcome.markdown:
+            agent_uc.AddAgentMessage(self.tc.uow_factory, self.tc.ctx).execute(
+                run_id, day, MessageKind.SUMMARY.value, outcome.markdown
+            )
+        return outcome
+
+    def _converse(
+        self,
+        run_id: str,
+        day: date | None,
+        messages: list[dict[str, Any]],
+        outcome: DayOutcome,
+        tools: list[dict[str, Any]],
+        *,
+        success: str,
+    ) -> None:
+        """The model loop shared by day drafting and product review."""
         for _turn in range(self.cfg.agent.max_turns_per_day):
             try:
                 response = self.model.create(
@@ -322,26 +347,82 @@ class DayDrafter:
             if response.tool_uses:
                 results = self._tool_results(response, outcome)
                 messages.append({"role": "user", "content": results})
-                agent_uc.ExtendDayLock(self.tc.uow_factory, self.tc.ctx).execute(
-                    run_id, day, lock_ttl_minutes=self.cfg.agent.lock_ttl_minutes
-                )
+                if day is not None:
+                    agent_uc.ExtendDayLock(self.tc.uow_factory, self.tc.ctx).execute(
+                        run_id, day, lock_ttl_minutes=self.cfg.agent.lock_ttl_minutes
+                    )
             reason = self.budget.exceeded
             if reason:
-                if outcome.outcome != "drafted":
+                if outcome.outcome != success:
                     outcome.outcome = "budget_exceeded"
                 outcome.error = f"budget exhausted: {reason}"
                 break
             if response.stop_reason != "tool_use":
                 break
         else:
-            if outcome.outcome != "drafted":
+            if outcome.outcome != success:
                 outcome.outcome = "stuck"
                 outcome.error = f"no result after {self.cfg.agent.max_turns_per_day} turns"
-        self._record(run_id, outcome, started)
-        if outcome.outcome == "drafted" and outcome.markdown:
-            agent_uc.AddAgentMessage(self.tc.uow_factory, self.tc.ctx).execute(
-                run_id, day, MessageKind.SUMMARY.value, outcome.markdown
+
+    # -- product captures (label photos, corrections): one short session each --
+
+    def run_product_capture(self, run_id: str, cap: dto.CaptureView) -> DayOutcome:
+        """Read one product capture and propose corrected values (R52)."""
+        outcome = DayOutcome(date=cap.captured_at.date(), outcome="product_skipped")
+        started = self._now()
+        tools = anthropic_tool_definitions(tools_for(self.tc.ctx, WORKER_TOOLS))
+        try:
+            assert cap.product_id is not None
+            product = product_uc.GetProduct(self.tc.uow_factory, self.tc.ctx).execute(
+                cap.product_id
             )
+            fresh = cap
+            if (
+                cap.kind == CaptureKind.AUDIO.value
+                and cap.transcript is None
+                and self.tc.transcription is not None
+                and self.tc.blobs is not None
+            ):
+                fresh = capture_uc.TranscribeCapture(
+                    self.tc.uow_factory, self.tc.ctx, self.tc.blobs, self.tc.transcription
+                ).execute(cap.id)
+            content: list[dict[str, Any]] = [
+                {
+                    "type": "text",
+                    "text": self.prompts.product_capture.format(
+                        run_id=run_id, capture_id=cap.id, language=tenant_language(self.tc)
+                    ),
+                },
+                {"type": "text", "text": "## Product (JSON)\n" + json.dumps(jsonable(product))},
+                {"type": "text", "text": "## Capture (JSON)\n" + json.dumps(jsonable(fresh))},
+            ]
+            if fresh.kind == CaptureKind.IMAGE.value and fresh.attachment_id and self.tc.blobs:
+                if self.budget.take_images(1):
+                    att = capture_uc.GetAttachment(
+                        self.tc.uow_factory, self.tc.ctx, self.tc.blobs
+                    ).execute(fresh.attachment_id)
+                    data, mime = _downscale(att.data, att.mime)
+                    content.append(
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": mime,
+                                "data": base64.b64encode(data).decode("ascii"),
+                            },
+                        }
+                    )
+                else:
+                    content.append(
+                        {"type": "text", "text": "Image omitted: image budget exhausted."}
+                    )
+        except ApplicationError as exc:
+            outcome.outcome, outcome.error = "failed", exc.detail
+            self._record(run_id, outcome, started)
+            return outcome
+        messages: list[dict[str, Any]] = [{"role": "user", "content": content}]
+        self._converse(run_id, None, messages, outcome, tools, success="proposed")
+        self._record(run_id, outcome, started)
         return outcome
 
     def _record(self, run_id: str, outcome: DayOutcome, started: datetime) -> None:
@@ -392,6 +473,22 @@ class RunProcessor:
         outcomes: list[DayOutcome] = []
         skipped = dict(start.skipped_days)
         status = RunStatus.FINISHED.value
+        # product captures first: short, independent of any day lock
+        product_outcomes: list[DayOutcome] = []
+        for cap in capture_uc.ListCaptures(self.tc.uow_factory, self.tc.ctx).execute(
+            status=CaptureStatus.NEW.value
+        ):
+            if cap.product_id is None:
+                continue
+            if budget.exceeded:
+                break
+            try:
+                product_outcomes.append(drafter.run_product_capture(run_id, cap))
+            except Exception as exc:
+                log.exception("run %s: product capture %s failed", run_id, cap.id)
+                product_outcomes.append(
+                    DayOutcome(date=cap.captured_at.date(), outcome="failed", error=str(exc))
+                )
         for day in start.locked_days:
             if budget.exceeded:
                 skipped[day] = "budget exhausted"
@@ -407,6 +504,16 @@ class RunProcessor:
         elif outcomes and all(o.outcome == "failed" for o in outcomes):
             status = RunStatus.FAILED.value
         summary = self.build_summary(run_id, start, outcomes, skipped, budget)
+        if product_outcomes:
+            n_prop = sum(1 for o in product_outcomes if o.outcome == "proposed")
+            lines = [f"### Products · {n_prop} proposal(s) from {len(product_outcomes)} capture(s)"]
+            for o in product_outcomes:
+                if o.outcome == "proposed" and o.draft:
+                    name = o.draft.get("product_name") or o.draft.get("product_id")
+                    lines.append(f"- {name}: {o.draft.get('changes')} — approve in the app")
+                else:
+                    lines.append(f"- {o.outcome.replace('_', ' ')}: {o.error or ''}".rstrip())
+            summary = summary.rstrip() + "\n\n" + "\n".join(lines) + "\n"
         errors = [f"{o.date.isoformat()}: {o.error}" for o in outcomes if o.error]
         run = agent_uc.FinishAgentRun(self.tc.uow_factory, self.tc.ctx).execute(
             run_id,

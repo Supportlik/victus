@@ -26,6 +26,7 @@ import {
   Passkey,
   Portion,
   Product,
+  ProductProposal,
   ProductInput,
   Recipe,
   RecipeBatch,
@@ -248,6 +249,18 @@ export class ApiClient {
   }
   capture(id: string): Observable<Capture> {
     return this.http.get<Capture>(`${API_BASE}/captures/${id}`);
+  }
+  deleteCapture(id: string): Observable<void> {
+    return this.http.delete<void>(`${API_BASE}/captures/${id}`);
+  }
+  proposals(params_: { status?: string; product_id?: number } = {}): Observable<ProductProposal[]> {
+    return this.http.get<ProductProposal[]>(`${API_BASE}/proposals`, { params: params({ status: params_.status ?? 'pending', product_id: params_.product_id }) });
+  }
+  approveProposal(id: string, changes?: Record<string, unknown>): Observable<ProductProposal> {
+    return this.http.post<ProductProposal>(`${API_BASE}/proposals/${id}/approve`, changes ? { changes } : {});
+  }
+  rejectProposal(id: string): Observable<ProductProposal> {
+    return this.http.post<ProductProposal>(`${API_BASE}/proposals/${id}/reject`, {});
   }
   uploadCapture(form: FormData): Observable<Capture> {
     return this.http.post<Capture>(`${API_BASE}/captures`, form);

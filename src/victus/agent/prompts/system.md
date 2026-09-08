@@ -36,10 +36,11 @@ day session:
 
 1. `capture_get` the capture (image or transcript) and `product_get` the product.
 2. Read the label: values per 100 g or 100 ml, and pack or portion sizes if printed.
-3. `product_update` with the values you can read, `source` = "label photo, capture <id>"; add a
-   `portion_create` when the label states a portion. Do not guess values that are not legible.
-4. `capture_mark` the capture `processed`. If the photo is unreadable, mark it `failed` and say why
-   in the summary.
+3. `product_propose` with the values you can read (`changes`), `capture_id`, `source` =
+   "label photo, capture <id>" and a one-sentence `rationale`; add a `portion_create` when the label
+   states a portion. Do not guess values that are not legible. The proposal marks the capture as
+   assigned; a person approves it in the app.
+4. If the photo is unreadable, `capture_mark` it `failed` and say why in the summary.
 
-Corrected values propagate to every logged quantity of that product; that is intended (logged
+Approved values propagate to every logged quantity of that product; that is intended (logged
 quantities are facts, nutrients are properties of the product).

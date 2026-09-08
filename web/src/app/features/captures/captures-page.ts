@@ -1,24 +1,27 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { ApiClient, AgentRun, Capture } from '../../api';
+import { AgentRun, ApiClient, Capture } from '../../api';
+import { BadgesService } from '../../core/badges.service';
 import { describeError } from '../../core/problem';
+import { CaptureCard } from '../../shared/capture-card';
 import { CaptureInput } from '../../shared/capture-input';
 import { MarkdownPipe } from '../../shared/markdown.pipe';
 
+type Filter = 'open' | 'all' | 'assigned' | 'processed' | 'discarded' | 'failed';
+
 /**
- * Inbox: drop text, a voice note or a photo, optionally for a specific day, then press
- * "Process now". The run is queued and picked up by the worker within seconds.
- * Each row shows the transcript or image, and lets you re-target, discard or re-transcribe.
+ * Inbox: everything you noted about food that the agent has not turned into a draft yet.
+ * Record, photograph, pick files or type; then "Process now" (or let the hourly run take it).
  */
 @Component({
   selector: 'v-captures-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, RouterLink, MarkdownPipe, CaptureInput],
+  imports: [FormsModule, RouterLink, MarkdownPipe, CaptureInput, CaptureCard],
   template: `
     <div class="v-page">
       <header class="v-page-head">
-        <div><h2>Captures</h2><p class="sub">Whatever you noted about food — text, voice, photo. The agent turns it into drafts you approve.</p></div>
+        <div><h2>Captures</h2><p class="sub">Voice, photo or text about what you ate. The agent turns it into drafts you approve.</p></div>
         <div class="v-actions">
           <a class="v-btn" routerLink="/agent">Agent runs</a>
           <button type="button" class="v-btn primary" (click)="processNow()" [disabled]="run() && !finished(run()!)">
@@ -33,101 +36,106 @@ import { MarkdownPipe } from '../../shared/markdown.pipe';
         <section class="v-panel run" [class.active]="!finished(r)" aria-live="polite">
           <h3>Run {{ r.id.slice(0, 8) }} · {{ r.status.replace('_', ' ') }}</h3>
           @if (r.days.length) { <p class="v-small v-muted">Days: {{ r.days.join(', ') }}@if (r.cost_usd != null) { · {{ r.cost_usd.toFixed(2) }} USD }</p> }
-          @if (!finished(r)) { <p class="v-small v-muted">The worker picks the run up within seconds; this page polls until it is done.</p> }
+          @if (!finished(r)) { <p class="v-small v-muted">Waiting for the worker; this page polls until the run is done.</p> }
           @if (r.error) { <div class="v-error">{{ r.error }}</div> }
           @if (r.summary_md) { <div class="v-md" [innerHTML]="r.summary_md | markdown"></div> <a class="v-btn" routerLink="/drafts">Review drafts</a> }
         </section>
       }
 
-      <form class="v-panel upload" (ngSubmit)="upload()">
-        <h3>Add a capture</h3>
-        <div class="v-form-row">
-          <label class="v-field"><span>For which day? <span class="v-muted">(optional — the agent can infer it)</span></span><input name="date" type="date" [(ngModel)]="targetDate" /></label>
+      <section class="v-panel add">
+        <div class="add-head">
+          <h3>Add a capture</h3>
+          <label class="v-field day"><span>For day</span><input name="date" type="date" [(ngModel)]="targetDate" /></label>
         </div>
-        <v-capture-input [targetDate]="targetDate || null" (uploaded)="load()" />
-        <label class="v-field"><span>…or type it</span><textarea name="text" [(ngModel)]="text" placeholder="e.g. lunch: 400 g quark with berries, two slices of rye bread"></textarea></label>
-        <div class="v-actions"><button type="submit" class="v-btn" [disabled]="busy() || !text.trim()">Save text</button></div>
-      </form>
+        <v-capture-input [targetDate]="targetDate || null" (uploaded)="onUploaded($event)" />
+        <form class="typed" (ngSubmit)="upload()">
+          <textarea name="text" [(ngModel)]="text" rows="2" placeholder="…or type it: lunch 400 g quark with berries, two slices of rye bread" [disabled]="busy()"></textarea>
+          <button type="submit" class="v-btn" [disabled]="busy() || !text.trim()">Save text</button>
+        </form>
+      </section>
 
       <section class="list">
-        <div class="v-actions"><label class="v-field"><span>Show</span>
-          <select [ngModel]="status()" (ngModelChange)="status.set($event); load()"><option value="">all</option><option value="new">new</option><option value="assigned">assigned</option><option value="processed">processed</option><option value="discarded">discarded</option><option value="failed">failed</option></select>
-        </label></div>
-        <div class="v-scroll">
-        <table class="v-table">
-          <thead><tr><th>Captured</th><th>Kind</th><th>For day</th><th>Content</th><th>Status</th><th>Actions</th></tr></thead>
-          <tbody>
-            @for (c of captures(); track c.id) {
-              <tr [attr.data-capture]="c.id">
-                <td>{{ c.captured_at.replace('T', ' ').slice(0, 16) }}</td><td>{{ c.kind }}</td>
-                <td>
-                  @if (editing() === c.id) {
-                    <span class="set-day">
-                      <input type="date" [ngModel]="c.target_date ?? ''" (ngModelChange)="pendingDate = $event" name="d{{ c.id }}" aria-label="Target day" />
-                      <button type="button" class="v-btn small primary" (click)="saveDay(c)">Save</button>
-                      <button type="button" class="v-btn small quiet" (click)="editing.set(null)">Cancel</button>
-                    </span>
-                  } @else if (c.product_id) { <a [routerLink]="['/products', c.product_id]">product #{{ c.product_id }}</a>
-                  } @else if (c.target_date) { <a [routerLink]="['/days', c.target_date]">{{ c.target_date }}</a> } @else { <span class="v-muted">–</span> }
-                </td>
-                <td class="content">
-                  @if (c.text) { <div>{{ c.text }}</div> }
-                  @if (c.kind === 'audio') {
-                    @if (c.attachment_id) { <audio controls preload="none" [src]="api.attachmentUrl(c.attachment_id)"></audio> }
-                    @if (c.transcript) { <div class="transcript">“{{ c.transcript }}”</div> } @else { <div class="v-muted v-small">no transcript yet</div> }
-                  }
-                  @if (c.kind === 'image' && c.attachment_id) {
-                    <a [href]="api.attachmentUrl(c.attachment_id)" target="_blank" rel="noopener"><img class="thumb" [src]="api.attachmentUrl(c.attachment_id)" alt="capture photo" loading="lazy" /></a>
-                  }
-                </td>
-                <td><span class="v-tag" [class]="'v-tag ' + tagClass(c.status)">{{ c.status.replace('_', ' ') }}</span></td>
-                <td class="actions">
-                  @if ((c.status === 'new' || c.status === 'failed') && !c.product_id) {
-                    <button type="button" class="v-btn small" (click)="editing.set(c.id); pendingDate = c.target_date ?? ''">Set day</button>
-                    <button type="button" class="v-btn small quiet" (click)="discard(c)">Discard</button>
-                  }
-                  @if (c.kind === 'audio') { <button type="button" class="v-btn small" (click)="retranscribe(c)" [disabled]="busy()">Re-transcribe</button> }
-                </td>
-              </tr>
-            } @empty { <tr><td colspan="6" class="v-muted">No captures yet.</td></tr> }
-          </tbody>
-        </table>
+        <div class="filters" role="tablist">
+          @for (f of filters; track f.id) {
+            <button type="button" class="chip" [class.active]="filter() === f.id" (click)="filter.set(f.id)">{{ f.label }}@if (count(f.id); as n) { <span class="n">{{ n }}</span> }</button>
+          }
+        </div>
+        <p class="v-small v-muted">New captures wait for the next agent run. Discarded ones are deleted automatically after one day.</p>
+        <div class="cards">
+          @for (c of visible(); track c.id) {
+            <v-capture-card [capture]="c" (changed)="replace($event)" (deleted)="removed($event)" />
+          } @empty {
+            <div class="v-empty">Nothing here.</div>
+          }
         </div>
       </section>
     </div>
   `,
   styles: `
     .run { margin-bottom: 1rem; } .run.active { border-color: var(--v-agent); }
-    .upload { display: grid; gap: 0.75rem; margin-bottom: 1.5rem; }
-    .content { max-width: 32rem; white-space: pre-wrap; }
-    .transcript { color: var(--v-ink-2); font-style: italic; margin-top: 0.25rem; }
-    .thumb { max-width: 12rem; max-height: 8rem; border-radius: var(--v-radius); display: block; }
-    audio { max-width: 16rem; display: block; margin-top: 0.25rem; }
-    .actions { white-space: nowrap; display: flex; gap: 0.3rem; flex-wrap: wrap; }
-    .set-day { display: inline-flex; gap: 0.3rem; align-items: center; }
-    .v-scroll { overflow-x: auto; }
+    .add { display: grid; gap: 0.75rem; margin-bottom: 1.25rem; }
+    .add-head { display: flex; justify-content: space-between; align-items: end; gap: 1rem; flex-wrap: wrap; }
+    .day { min-width: 11rem; }
+    .typed { display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; align-items: start; }
+    .typed textarea { padding: 0.5rem; border: 1px solid var(--v-line-strong); border-radius: var(--v-radius); background: var(--v-surface); resize: vertical; }
+    .filters { display: flex; gap: 0.35rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+    .chip { border: 1px solid var(--v-line-strong); background: var(--v-surface); border-radius: 999px; padding: 0.3rem 0.8rem; cursor: pointer; font-size: var(--v-fs-s); display: inline-flex; gap: 0.4rem; align-items: center; }
+    .chip.active { background: var(--v-primary-soft); border-color: var(--v-primary); color: var(--v-primary); }
+    .chip .n { font-size: var(--v-fs-xs); color: var(--v-ink-3); }
+    .cards { display: grid; gap: 0.6rem; }
+    @media (max-width: 40rem) { .typed { grid-template-columns: 1fr; } }
   `,
 })
 export class CapturesPage {
   readonly api = inject(ApiClient);
+  private readonly badges = inject(BadgesService);
   readonly captures = signal<Capture[]>([]);
-  readonly status = signal('');
+  readonly filter = signal<Filter>('open');
   readonly run = signal<AgentRun | null>(null);
   readonly busy = signal(false);
   readonly error = signal<string | null>(null);
   readonly notice = signal<string | null>(null);
-  readonly editing = signal<string | null>(null);
+  readonly filters: { id: Filter; label: string }[] = [
+    { id: 'open', label: 'Open' },
+    { id: 'assigned', label: 'In draft' },
+    { id: 'processed', label: 'Done' },
+    { id: 'discarded', label: 'Discarded' },
+    { id: 'failed', label: 'Failed' },
+    { id: 'all', label: 'All' },
+  ];
   text = '';
-  targetDate = '';
-  pendingDate = '';
+  targetDate = new Date().toISOString().slice(0, 10);
   private timer: ReturnType<typeof setTimeout> | null = null;
+
+  readonly visible = computed(() => this.captures().filter((c) => this.matches(c, this.filter())));
 
   constructor() {
     this.load();
   }
 
+  count(f: Filter): number {
+    return f === 'all' ? 0 : this.captures().filter((c) => this.matches(c, f)).length;
+  }
+
+  private matches(c: Capture, f: Filter): boolean {
+    if (f === 'all') return true;
+    if (f === 'open') return c.status === 'new' || c.status === 'in_progress';
+    return c.status === f;
+  }
+
   load(): void {
-    this.api.captures(this.status() || undefined).subscribe({ next: (c) => this.captures.set(c), error: (e: unknown) => this.error.set(describeError(e)) });
+    this.api.captures().subscribe({
+      next: (c) => {
+        this.captures.set(c);
+        this.badges.refresh();
+      },
+      error: (e: unknown) => this.error.set(describeError(e)),
+    });
+  }
+
+  onUploaded(c: Capture): void {
+    this.captures.update((list) => [c, ...list]);
+    this.badges.refresh();
   }
 
   upload(): void {
@@ -141,9 +149,9 @@ export class CapturesPage {
     this.api.uploadCapture(form).subscribe({
       next: (c) => {
         if (c.created === false) this.notice.set('This capture already exists (same content) — nothing was added.');
+        else this.onUploaded(c);
         this.text = '';
         this.busy.set(false);
-        this.load();
       },
       error: (e: unknown) => {
         this.error.set(describeError(e));
@@ -152,40 +160,14 @@ export class CapturesPage {
     });
   }
 
-  saveDay(c: Capture): void {
-    const target_date = this.pendingDate || null;
-    this.api.updateCapture(c.id, { target_date }).subscribe({
-      next: (u) => {
-        this.replace(u);
-        this.editing.set(null);
-      },
-      error: (e: unknown) => this.error.set(describeError(e)),
-    });
-  }
-
-  discard(c: Capture): void {
-    this.api.updateCapture(c.id, { status: 'discarded' }).subscribe({
-      next: (u) => this.replace(u),
-      error: (e: unknown) => this.error.set(describeError(e)),
-    });
-  }
-
-  retranscribe(c: Capture): void {
-    this.busy.set(true);
-    this.api.transcribeCapture(c.id, true).subscribe({
-      next: (u) => {
-        this.replace(u);
-        this.busy.set(false);
-      },
-      error: (e: unknown) => {
-        this.error.set(describeError(e));
-        this.busy.set(false);
-      },
-    });
-  }
-
-  private replace(u: Capture): void {
+  replace(u: Capture): void {
     this.captures.update((list) => list.map((x) => (x.id === u.id ? u : x)));
+    this.badges.refresh();
+  }
+
+  removed(id: string): void {
+    this.captures.update((list) => list.filter((x) => x.id !== id));
+    this.badges.refresh();
   }
 
   finished(r: AgentRun): boolean {
@@ -215,9 +197,5 @@ export class CapturesPage {
         error: (e: unknown) => this.error.set(describeError(e)),
       });
     }, 2000);
-  }
-
-  tagClass(s: Capture['status']): string {
-    return s === 'processed' ? 'closed' : s === 'failed' ? 'bad' : s === 'new' ? 'warn' : s === 'assigned' ? 'draft' : '';
   }
 }

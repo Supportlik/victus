@@ -787,6 +787,36 @@ class DayMessage(Base):
     created_at: Mapped[datetime] = mapped_column(TS, nullable=False, default=utcnow)
 
 
+class ProductProposal(Base):
+    """A product change the agent read from a label photo or a note; a person decides."""
+
+    __tablename__ = "product_proposal"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending','approved','rejected')", name="ck_product_proposal_status"
+        ),
+        Index("ix_product_proposal_tenant_status", "tenant_id", "status"),
+        Index("ix_product_proposal_product", "product_id"),
+    )
+
+    id: Mapped[str] = mapped_column(ID, primary_key=True, default=new_id)
+    tenant_id: Mapped[str] = mapped_column(ID, ForeignKey("tenant.id"), nullable=False)
+    product_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("product.id", ondelete="CASCADE"), nullable=False
+    )
+    capture_id: Mapped[str | None] = mapped_column(
+        ID, ForeignKey("capture.id", ondelete="SET NULL")
+    )
+    run_id: Mapped[str | None] = mapped_column(ID)
+    changes: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    rationale: Mapped[str | None] = mapped_column(Text)
+    source: Mapped[str | None] = mapped_column(String(300))
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    created_at: Mapped[datetime] = mapped_column(TS, nullable=False, default=utcnow)
+    decided_at: Mapped[datetime | None] = mapped_column(TS)
+    decided_by: Mapped[str | None] = mapped_column(ID)
+
+
 # ── Backup and audit ────────────────────────────────────────────────────────
 
 

@@ -87,6 +87,7 @@ export class AuthService {
   sessionLost(): void {
     this.me.set(null);
     this.loaded.set(true);
-    void this.router.navigate(['/login'], { queryParams: { returnUrl: this.router.url } });
+    const here = this.router.url;
+    void this.router.navigate(['/login'], here.startsWith('/login') ? {} : { queryParams: { returnUrl: here } });
   }
 }

@@ -16,6 +16,7 @@ export class BadgesService {
   readonly newCaptures = signal(0);
   readonly draftDays = signal(0);
   readonly openDays = signal(0);
+  readonly pendingProposals = signal(0);
   private timer: ReturnType<typeof setInterval> | null = null;
 
   start(): void {
@@ -33,6 +34,7 @@ export class BadgesService {
     const quiet = { error: () => undefined };
     this.api.captures('new').subscribe({ next: (c) => this.newCaptures.set(c.length), ...quiet });
     this.api.drafts().subscribe({ next: (d) => this.draftDays.set(d.length), ...quiet });
+    this.api.proposals().subscribe({ next: (p) => this.pendingProposals.set(p.length), ...quiet });
     const today = iso(new Date());
     const from = iso(new Date(Date.now() - 60 * 86_400_000));
     this.api.days(from, today, 'open').subscribe({

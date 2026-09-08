@@ -246,7 +246,29 @@ export interface DayMessage {
   content: string;
   created_at: string;
   /** For user messages: capture processing state. */
-  processing_state?: 'new' | 'in_progress' | 'assigned' | 'processed' | null;
+  processing_state?: CaptureStatus | null;
+  /** Set when the message is a capture (text typed here, voice note, photo). */
+  capture_id?: string | null;
+  capture_kind?: 'text' | 'audio' | 'image' | null;
+  attachment_id?: string | null;
+  attachment_mime?: string | null;
+  transcript?: string | null;
+}
+
+/** A product change the agent read from a label photo or note; a person decides. */
+export interface ProductProposal {
+  id: string;
+  product_id: number;
+  product_name?: string | null;
+  capture_id?: string | null;
+  run_id?: string | null;
+  changes: Record<string, unknown>;
+  current: Record<string, unknown>;
+  rationale?: string | null;
+  source?: string | null;
+  status: 'pending' | 'approved' | 'rejected';
+  created_at: string;
+  decided_at?: string | null;
 }
 
 // ── Drafts ───────────────────────────────────────────────────────────────

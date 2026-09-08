@@ -226,6 +226,13 @@ The pyramid is deliberate: most cases are `T-DOM`/`T-SVC`; E2E covers the two fl
 | T-SVC-047 | Product capture | product, PNG | `UploadCapture(product_id, target_date)` | `target_date` dropped, no follow-up queued, listed by `product_id`, absent from the day context | service | yes | 3 |
 | T-SVC-048 | Product capture ownership | Bob's context / unknown id | `UploadCapture(product_id)` | 404 | service | yes | 3 |
 | T-SVC-049 | Capture re-link | text capture | `UpdateCapture(product_id)` set and cleared | `product_id` follows | service | yes | 3 |
+| T-SVC-050 | Proposal approve | product, label capture | `ProposeProductChange` then `DecideProposal(approve, changes)` | values applied, `verified` true, capture processed, second decision 409 | service | yes | 3 |
+| T-SVC-051 | Proposal reject | pending proposal | `DecideProposal(approve=False)` | product unchanged, capture discarded; foreign tenant 404; non-proposable field 422 | service | yes | 3 |
+| T-SVC-052 | Capture delete | image capture | `DeleteCapture` | capture and orphan blob gone; an assigned capture gives 409 | service | yes | 3 |
+| T-SVC-053 | Discard retention | capture discarded 2 days ago | `ListCaptures` | purged automatically; still listed inside the retention window | service | yes | 3 |
+| T-SVC-054 | Prompt echo | transcript empty or all vocabulary words | `TranscribeCapture` | transcript stored empty, capture `failed`, audit entry | service | yes | 3 |
+| T-API-026 | Proposal endpoints | product + product capture | list, approve with correction | 200 with diff, product verified, capture processed, re-decide 409 | api | yes | 3 |
+| T-API-027 | Proposal isolation | Alice's proposal | Bob lists / unknown id | empty list / 404 | api | yes | 3 |
 | T-MCP-008 | captures_open scope | one product capture, one day capture | `captures_open(scope=product|day|all)` | product scope returns only captures with `product_id`; day scope none of them | registry | yes | 3 |
 | T-MCP-009 | product_update from label | product + capture | `product_update(kcal, protein, source)` then `capture_mark(processed)` | values written, `verified=false`, `source` kept, capture processed | registry | yes | 3 |
 | T-MCP-007 | stdio smoke | installed CLI | `victus mcp --help`, `victus agent --help` | commands and flags listed; exit 0 | – | yes | 3 |

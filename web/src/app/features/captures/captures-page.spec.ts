@@ -1,84 +1,110 @@
-// T-WEB-032: captures page renders transcript and image, re-targets a capture, discards it,
-// and reports a duplicate upload as a notice instead of a new row.
-import { TestBed } from '@angular/core/testing';
+// T-WEB-032: the inbox lists open captures as cards with media, and the card actions
+// (set day, discard, restore/delete) go through the API; typed text becomes a capture.
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { Capture } from '../../api';
 import { CapturesPage } from './captures-page';
 
-const captures: Capture[] = [
-  { id: 'c_audio', kind: 'audio', captured_at: '2026-01-05T07:41:00Z', target_date: null, status: 'new', transcript: 'a whole tub of skyr', attachment_id: 'att1', attachment_mime: 'audio/ogg' },
-  { id: 'c_img', kind: 'image', captured_at: '2026-01-05T19:02:00Z', target_date: '2026-01-05', status: 'assigned', attachment_id: 'att2', attachment_mime: 'image/jpeg' },
+const CAPTURES: Capture[] = [
+  { id: 'c_audio', kind: 'audio', captured_at: '2026-01-05T07:41:00Z', target_date: null, text: null, status: 'new', transcript: 'a whole tub of skyr', attachment_id: 'att1', attachment_mime: 'audio/ogg' },
+  { id: 'c_img', kind: 'image', captured_at: '2026-01-05T12:02:00Z', target_date: '2026-01-05', text: null, status: 'processed', transcript: null, attachment_id: 'att2', attachment_mime: 'image/jpeg' },
+  { id: 'c_gone', kind: 'text', captured_at: '2026-01-04T12:02:00Z', target_date: null, text: 'old', status: 'discarded', transcript: null, attachment_id: null, attachment_mime: null },
 ];
 
-function buttonWithText(root: Element, text: string): HTMLButtonElement {
-  const found = Array.from(root.querySelectorAll('button')).find((b) => b.textContent?.includes(text));
-  if (!found) throw new Error(`no button containing "${text}"`);
-  return found;
+function flushList(http: HttpTestingController): void {
+  http.expectOne((r) => r.url === '/api/v1/captures' && r.method === 'GET').flush(CAPTURES);
+  http.match(() => true).forEach((r) => r.flush([]));
+}
+
+function chip(el: HTMLElement, label: string): HTMLButtonElement {
+  return Array.from(el.querySelectorAll('.chip')).find((b) => b.textContent?.trim().startsWith(label)) as HTMLButtonElement;
 }
 
 describe('CapturesPage', () => {
-  beforeEach(async () => {
-    await TestBed.configureTestingModule({
-      imports: [CapturesPage],
-      providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting()],
-    }).compileComponents();
+  let http: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])] });
+    http = TestBed.inject(HttpTestingController);
   });
 
-  async function render() {
-    const fixture = TestBed.createComponent(CapturesPage);
-    await fixture.whenStable();
-    const http = TestBed.inject(HttpTestingController);
-    http.expectOne((r) => r.url === '/api/v1/captures').flush(captures);
-    await fixture.whenStable();
-    return { fixture, http, el: fixture.nativeElement as HTMLElement };
-  }
-
-  it('renders transcript, audio player and image thumbnail', async () => {
-    const { el } = await render();
-    const audioRow = el.querySelector('[data-capture="c_audio"]')!;
-    expect(audioRow.textContent).toContain('a whole tub of skyr');
-    expect(audioRow.querySelector('audio')?.getAttribute('src')).toBe('/api/v1/attachments/att1');
-    expect(el.querySelector('[data-capture="c_img"] img')?.getAttribute('src')).toBe('/api/v1/attachments/att2');
-    // an assigned capture offers no set-day/discard buttons; only new/failed ones do
-    expect(el.querySelector('[data-capture="c_img"] .actions button')).toBeNull();
+  it('shows open captures by default with transcript and audio, processed ones read-only under All', () => {
+    const f = TestBed.createComponent(CapturesPage);
+    f.detectChanges();
+    flushList(http);
+    f.detectChanges();
+    const el = f.nativeElement as HTMLElement;
+    const audio = el.querySelector('[data-capture="c_audio"]')!;
+    expect(audio.textContent).toContain('a whole tub of skyr');
+    expect(audio.querySelector('audio')?.getAttribute('src')).toBe('/api/v1/attachments/att1');
+    expect(el.querySelector('[data-capture="c_img"]')).toBeNull();
+    chip(el, 'All').click();
+    f.detectChanges();
+    const img = el.querySelector('[data-capture="c_img"]')!;
+    expect(img.querySelector('img')?.getAttribute('src')).toBe('/api/v1/attachments/att2');
+    expect(img.querySelector('.actions')).toBeNull();
   });
 
-  it('re-targets a new capture to a day', async () => {
-    const { fixture, http, el } = await render();
-    const row = el.querySelector('[data-capture="c_audio"]')!;
-    buttonWithText(row, 'Set day').click();
-    await fixture.whenStable();
-    fixture.componentInstance.pendingDate = '2026-01-05';
-    buttonWithText(row, 'Save').click();
-    const req = http.expectOne('/api/v1/captures/c_audio');
-    expect(req.request.method).toBe('PATCH');
-    expect(req.request.body).toEqual({ target_date: '2026-01-05' });
-    req.flush({ ...captures[0], target_date: '2026-01-05' });
-    await fixture.whenStable();
-    expect(el.querySelector('[data-capture="c_audio"] a[href="/days/2026-01-05"]')).not.toBeNull();
+  it('re-targets, discards and deletes through the card', () => {
+    const f = TestBed.createComponent(CapturesPage);
+    f.detectChanges();
+    flushList(http);
+    f.detectChanges();
+    const el = f.nativeElement as HTMLElement;
+    const card = () => el.querySelector('[data-capture="c_audio"]')!;
+    const button = (label: string) => Array.from(card().querySelectorAll('button')).find((b) => b.textContent?.trim().startsWith(label)) as HTMLButtonElement;
+    button('Set day').click();
+    f.detectChanges();
+    const dateInput = card().querySelector('input[type="date"]') as HTMLInputElement;
+    dateInput.value = '2026-01-05';
+    dateInput.dispatchEvent(new Event('input'));
+    f.detectChanges();
+    button('Save').click();
+    const patch = http.expectOne('/api/v1/captures/c_audio');
+    expect(patch.request.method).toBe('PATCH');
+    expect(patch.request.body).toEqual({ target_date: '2026-01-05' });
+    patch.flush({ ...CAPTURES[0], target_date: '2026-01-05' });
+    f.detectChanges();
+    http.match(() => true).forEach((r) => r.flush([]));
+    expect(card().querySelector('a[href="/days/2026-01-05"]')).not.toBeNull();
+
+    button('Discard').click();
+    const discard = http.expectOne('/api/v1/captures/c_audio');
+    expect(discard.request.body).toEqual({ status: 'discarded' });
+    discard.flush({ ...CAPTURES[0], target_date: '2026-01-05', status: 'discarded' });
+    f.detectChanges();
+    http.match(() => true).forEach((r) => r.flush([]));
+    chip(el, 'Discarded').click();
+    f.detectChanges();
+    expect(card().textContent).toContain('deleted automatically after one day');
+    button('Delete').click();
+    f.detectChanges();
+    button('Yes, delete').click();
+    const del = http.expectOne('/api/v1/captures/c_audio');
+    expect(del.request.method).toBe('DELETE');
+    del.flush(null, { status: 204, statusText: 'No Content' });
+    f.detectChanges();
+    http.match(() => true).forEach((r) => r.flush([]));
+    expect(el.querySelector('[data-capture="c_audio"]')).toBeNull();
   });
 
-  it('discards a capture', async () => {
-    const { fixture, http, el } = await render();
-    buttonWithText(el.querySelector('[data-capture="c_audio"]')!, 'Discard').click();
-    const req = http.expectOne('/api/v1/captures/c_audio');
-    expect(req.request.body).toEqual({ status: 'discarded' });
-    req.flush({ ...captures[0], status: 'discarded' });
-    await fixture.whenStable();
-    expect(el.querySelector('[data-capture="c_audio"] .v-tag')?.textContent).toContain('discarded');
-  });
-
-  it('shows a notice when an upload was a duplicate', async () => {
-    const { fixture, http, el } = await render();
-    fixture.componentInstance.text = 'lunch: skyr';
-    fixture.componentInstance.upload();
+  it('defaults the day picker to today and reports a duplicate typed capture', () => {
+    const f = TestBed.createComponent(CapturesPage);
+    f.detectChanges();
+    flushList(http);
+    f.detectChanges();
+    const cmp = f.componentInstance;
+    expect(cmp.targetDate).toBe(new Date().toISOString().slice(0, 10));
+    cmp.text = 'lunch: skyr';
+    cmp.upload();
     const req = http.expectOne('/api/v1/captures');
     expect(req.request.method).toBe('POST');
-    req.flush({ ...captures[0], id: 'c_dup', kind: 'text', created: false });
-    http.expectOne((r) => r.url === '/api/v1/captures').flush(captures);
-    await fixture.whenStable();
-    expect(el.querySelector('.v-notice')?.textContent).toContain('already exists');
+    expect((req.request.body as FormData).get('text')).toBe('lunch: skyr');
+    req.flush({ ...CAPTURES[2], id: 'c_new', status: 'new', text: 'lunch: skyr', created: false });
+    f.detectChanges();
+    expect((f.nativeElement as HTMLElement).querySelector('.v-notice')?.textContent).toContain('already exists');
   });
 });

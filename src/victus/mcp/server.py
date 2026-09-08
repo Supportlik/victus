@@ -63,7 +63,7 @@ INSTRUCTIONS = (
     "Drafting a day: agent_run_start → day_thread_get → product_search per item → draft_create "
     "→ agent_run_finish. Approval is a separate, human decision (day_approve). "
     "Product captures (captures_open scope=product: label photos with product_id): capture_get → "
-    "product_update with source → capture_mark processed; no day session involved."
+    "product_propose(changes, capture_id, source); a person approves in the app."
 )
 
 ContextResolver = Callable[[], TenantContext]

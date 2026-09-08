@@ -48,6 +48,7 @@ EXPECTED = {
     "meal_update",
     "meal_delete",
     "product_update",
+    "product_propose",
     "product_create",
     "portion_create",
     "weight_add",

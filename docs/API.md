@@ -118,10 +118,23 @@ The tenant is always derived from the principal (session or token); it never app
 | Method | Path | Purpose |
 |---|---|---|
 | POST | `/captures` | Multipart: `text` and/or `file` (audio, image), optional `target_date` or `product_id` (a capture about one product: label photo or spoken correction, R52; it never has a day). `201` with the capture; an upload whose content hash already exists returns `200` with the existing capture and `created: false` (no-op, R35). Audio is transcribed right away when a transcription provider is configured; a failed transcription leaves the capture `failed` and the upload still succeeds |
-| GET | `/captures?status=&date=&product_id=&limit=` | List (newest first) |
+| GET | `/captures?status=&date=&product_id=&limit=` | List (newest first). Reading the list also purges captures that were discarded more than a day ago |
+| DELETE | `/captures/{id}` | Delete a capture the agent has not used (`new`, `failed` or `discarded`); `409` otherwise. Its blob goes too when no other capture references it |
 | GET / PATCH | `/captures/{id}` | Detail incl. `transcript`, `attachment_id`, `attachment_mime` / change `status` (e.g. `discarded`), `target_date` or `product_id`. Re-targeting a `new` capture to a drafted or locked day queues a `follow_up` run |
 | POST | `/captures/{id}/transcribe?force=` | (Re-)transcribe an audio capture; `502` with problem details when the provider fails or none is configured |
 | GET | `/attachments/{id}` | The attachment bytes (image, audio) inline, tenant-checked; `Cache-Control: private` |
+
+### Product proposals
+
+The agent never changes a product on its own: what it reads from a label photo or a spoken
+correction becomes a proposal a person approves (R54).
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/proposals?status=pending&product_id=&limit=` | Pending proposals with `changes` and the product's `current` values |
+| GET | `/proposals/{id}` | One proposal |
+| POST | `/proposals/{id}/approve` | Apply it (optional body `{changes}` corrects a misread value), mark the product `verified`, set the capture `processed` |
+| POST | `/proposals/{id}/reject` | Discard it and the capture; `409` when already decided |
 
 ### Agent
 

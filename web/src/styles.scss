@@ -158,6 +158,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .v-page {
   padding: 1.5rem 2rem 3rem;
   max-width: 76rem;
+  margin-inline: auto;
 }
 .v-page-head {
   display: flex;
@@ -166,6 +167,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
   gap: 1rem;
   flex-wrap: wrap;
   margin-bottom: 1.25rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--v-line);
 
   .sub { color: var(--v-ink-2); margin: 0.25rem 0 0; }
 }
@@ -228,7 +231,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
   border: 1px solid var(--v-line);
   border-radius: var(--v-radius-l);
   padding: 1rem 1.25rem;
+  box-shadow: 0 1px 2px light-dark(rgb(0 0 0 / 0.04), rgb(0 0 0 / 0.4));
 }
+.v-panel + .v-panel { margin-top: 1rem; }
 
 .v-muted { color: var(--v-ink-2); }
 .v-small { font-size: var(--v-fs-s); }

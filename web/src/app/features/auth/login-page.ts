@@ -2,15 +2,17 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
+import { Logo } from '../../shared/logo';
+import { PrefsService } from '../../core/prefs.service';
 import { describeError } from '../../core/problem';
 
 @Component({
   selector: 'v-login-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule],
+  imports: [FormsModule, Logo],
   template: `
     <section class="login">
-      <h1>Victus</h1>
+      <div class="brand"><v-logo [size]="44" /><h1>Victus</h1></div>
       <p class="lead">Sign in with the passkey stored on this device. There is no password.</p>
 
       @if (error(); as e) {
@@ -53,6 +55,7 @@ export class LoginPage {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
 
+  private readonly prefs = inject(PrefsService);
   readonly busy = signal(false);
   readonly error = signal<string | null>(null);
   readonly showRecovery = signal(false);
@@ -64,7 +67,8 @@ export class LoginPage {
     this.error.set(null);
     try {
       await this.auth.loginWithPasskey();
-      await this.router.navigateByUrl(this.route.snapshot.queryParamMap.get('returnUrl') ?? '/');
+      const back = this.route.snapshot.queryParamMap.get('returnUrl');
+      await this.router.navigateByUrl(back && !back.startsWith('/login') ? back : this.prefs.landingUrl());
     } catch (e) {
       this.error.set(describeError(e));
     } finally {

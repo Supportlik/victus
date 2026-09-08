@@ -13,6 +13,7 @@ from victus.application.ports.repositories import (
     DayLogRepository,
     DayMessageRepository,
     ProductRepository,
+    ProposalRepository,
     RecipeRepository,
     SettingsRepository,
     TargetBandRepository,
@@ -58,6 +59,9 @@ class UnitOfWork(Protocol):
 
     @property
     def day_messages(self) -> DayMessageRepository: ...
+
+    @property
+    def proposals(self) -> ProposalRepository: ...
 
     @property
     def audit(self) -> AuditRepository: ...

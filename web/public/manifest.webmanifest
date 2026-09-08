@@ -5,7 +5,10 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#f5f5f3",
+  "background_color": "#16171a",
   "theme_color": "#2a78d6",
-  "icons": [{ "src": "favicon.ico", "sizes": "48x48", "type": "image/x-icon" }]
+  "icons": [
+    { "src": "logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" },
+    { "src": "favicon.ico", "sizes": "48x48", "type": "image/x-icon" }
+  ]
 }

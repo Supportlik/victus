@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { ApiClient, Product } from '../../api';
+import { ApiClient, Product, ProductProposal } from '../../api';
 import { describeError } from '../../core/problem';
 import { MacroPipe } from '../../shared/format';
 import { ProductSearch } from '../../shared/product-search';
@@ -20,6 +20,16 @@ import { ProductSearch } from '../../shared/product-search';
         </div>
       </header>
       @if (error(); as e) { <div class="v-error">{{ e }}</div> }
+      @if (proposals().length) {
+        <section class="v-panel pending">
+          <h3>Waiting for your approval</h3>
+          <ul>
+            @for (pr of proposals(); track pr.id) {
+              <li><a [routerLink]="['/products', pr.product_id]">{{ pr.product_name ?? 'product ' + pr.product_id }}</a> <span class="v-muted v-small">— {{ keys(pr).join(', ') }} · {{ pr.source }}</span></li>
+            }
+          </ul>
+        </section>
+      }
       <v-product-search (picked)="open($event)" />
       <section class="recent">
         <h3>All products (A–Z)</h3>
@@ -43,14 +53,19 @@ import { ProductSearch } from '../../shared/product-search';
       </section>
     </div>
   `,
-  styles: `.recent { margin-top: 1.5rem; } .recent h3 { margin-bottom: 0.5rem; }`,
+  styles: `.recent { margin-top: 1.5rem; } .recent h3 { margin-bottom: 0.5rem; } .pending { margin-bottom: 1rem; border-color: var(--v-agent); } .pending ul { margin: 0.25rem 0 0; padding-left: 1.1rem; }`,
 })
 export class ProductsPage {
   private readonly api = inject(ApiClient);
   readonly recent = signal<Product[]>([]);
+  readonly proposals = signal<ProductProposal[]>([]);
   readonly error = signal<string | null>(null);
   constructor() {
     this.api.products('', { limit: 25 }).subscribe({ next: (p) => this.recent.set(p), error: (e: unknown) => this.error.set(describeError(e)) });
+    this.api.proposals().subscribe({ next: (p) => this.proposals.set(p), error: () => undefined });
+  }
+  keys(pr: ProductProposal): string[] {
+    return Object.keys(pr.changes);
   }
   open(p: Product): void {
     window.location.assign(`/products/${p.id}`);

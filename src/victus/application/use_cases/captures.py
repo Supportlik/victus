@@ -7,13 +7,16 @@ view, a voice note or a photo all end up here; the agent reads them through
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
+import re
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from victus.application import dto
 from victus.application.errors import (
+    Conflict,
     ExternalServiceError,
     NotFound,
     ValidationFailed,
@@ -230,7 +233,66 @@ class UploadCapture(UseCase):
             return view
 
 
+DISCARD_RETENTION = timedelta(days=1)
+DELETABLE_STATUSES = frozenset(
+    {CaptureStatus.NEW.value, CaptureStatus.FAILED.value, CaptureStatus.DISCARDED.value}
+)
+
+
+def _remove_capture(uow: UnitOfWork, blobs: BlobStorage | None, cap: orm.Capture) -> None:
+    """Delete a capture and its attachment blob when nothing else references it."""
+    att = cap.attachment
+    uow.captures.delete(cap)
+    if att is not None and uow.captures.attachment_refs(att.id) == 0:
+        key = att.storage_key
+        uow.captures.delete_attachment(att)
+        if blobs is not None:
+            # the row is gone; a stray file is harmless and reported by verify
+            with contextlib.suppress(OSError):
+                blobs.delete(key)
+
+
+def purge_discarded(uow: UnitOfWork, blobs: BlobStorage | None, at: datetime) -> int:
+    """Discarded captures are deleted for good after ``DISCARD_RETENTION``."""
+    removed = 0
+    for cap in list(uow.captures.discarded_before(at - DISCARD_RETENTION)):
+        _remove_capture(uow, blobs, cap)
+        removed += 1
+    return removed
+
+
+class DeleteCapture(UseCase):
+    """Remove a capture that the agent has not used (new, failed or discarded)."""
+
+    def __init__(
+        self, uow_factory: UowFactory, ctx: TenantContext, blobs: BlobStorage | None = None
+    ) -> None:
+        super().__init__(uow_factory, ctx)
+        self.blobs = blobs
+
+    def execute(self, capture_id: str) -> None:
+        self.ctx.require(SCOPE_CAPTURE_WRITE)
+        with self._uow() as uow:
+            cap = uow.captures.get(capture_id)
+            if cap is None:
+                raise NotFound(f"capture {capture_id} not found")
+            if cap.status not in DELETABLE_STATUSES:
+                raise Conflict(
+                    f"capture {capture_id} is {cap.status}; only new, failed or discarded "
+                    "captures can be deleted"
+                )
+            uow.audit.record("capture.delete", "capture", cap.id, {"kind": cap.kind})
+            _remove_capture(uow, self.blobs, cap)
+            uow.commit()
+
+
 class ListCaptures(UseCase):
+    def __init__(
+        self, uow_factory: UowFactory, ctx: TenantContext, blobs: BlobStorage | None = None
+    ) -> None:
+        super().__init__(uow_factory, ctx)
+        self.blobs = blobs
+
     def execute(
         self,
         *,
@@ -243,6 +305,9 @@ class ListCaptures(UseCase):
         if status is not None and status not in {s.value for s in CaptureStatus}:
             raise ValidationFailed(f"unknown capture status '{status}'")
         with self._uow() as uow:
+            # housekeeping on read: no worker is needed for the one-day retention
+            if self.ctx.has_scope(SCOPE_CAPTURE_WRITE) and purge_discarded(uow, self.blobs, now()):
+                uow.commit()
             rows = uow.captures.list(
                 status=status, target_date=target_date, limit=limit, product_id=product_id
             )
@@ -333,6 +398,27 @@ def transcription_settings(uow: UnitOfWork) -> tuple[str | None, str | None]:
     return (str(lang) if lang else None, str(vocab) if vocab else None)
 
 
+_WORD = re.compile(r"[\w'-]+", re.UNICODE)
+
+
+def looks_like_prompt_echo(text: str, vocabulary_prompt: str | None) -> bool:
+    """Speech models return the vocabulary prompt (or nothing) for silent audio.
+
+    True when the transcript is empty, or short and made almost entirely of words
+    that occur in the vocabulary prompt.
+    """
+    words = [w.lower() for w in _WORD.findall(text or "")]
+    if not words:
+        return True
+    if not vocabulary_prompt:
+        return False
+    vocab = {w.lower() for w in _WORD.findall(vocabulary_prompt)}
+    if len(words) > 40:
+        return False
+    hits = sum(1 for w in words if w in vocab)
+    return hits / len(words) >= 0.8
+
+
 class TranscribeCapture(UseCase):
     """Transcribe an audio capture through the port and store the transcript (R36)."""
 
@@ -385,19 +471,26 @@ class TranscribeCapture(UseCase):
                 )
                 uow.commit()
                 raise ExternalServiceError(f"transcription failed: {exc}") from exc
+            echo = looks_like_prompt_echo(result.text, vocab)
             transcript = uow.captures.add_transcript(
                 orm.Transcript(
                     capture_id=cap.id,
                     provider=result.provider,
                     model=result.model,
                     language=result.language,
-                    text=result.text,
-                    segments=result.segments,
+                    text="" if echo else result.text,
+                    segments=None if echo else result.segments,
                     duration_s=result.duration_s,
                     cost_usd=result.cost_usd,
                 )
             )
-            if cap.status == CaptureStatus.FAILED.value:
+            if echo:
+                # nothing intelligible: keep the audio, flag it, never feed the prompt to the agent
+                cap.status = CaptureStatus.FAILED.value
+                uow.audit.record(
+                    "capture.transcribe_empty", "capture", cap.id, {"model": result.model}
+                )
+            elif cap.status == CaptureStatus.FAILED.value:
                 cap.status = CaptureStatus.NEW.value
             uow.audit.record(
                 "capture.transcribe",

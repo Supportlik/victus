@@ -46,7 +46,8 @@ HTTP responses: missing or invalid token → `401`; token lacks the tool's scope
 | `draft_discard(date)` | `approve` | `DiscardDraft` | discarded count |
 | `day_approve(date, corrections[], close)` | `approve` | `ApproveDay` | approved day + warnings |
 | `meal_update(meal_id, name?, time?)`, `meal_delete(meal_id)` | `write` | `UpdateMeal` / `DeleteMeal` | meal; delete fails while items remain |
-| `product_update(product_id, …, source)` | `write` | `UpdateProduct` | product with corrected values (`verified` stays false); used for label-photo captures |
+| `product_propose(product_id, changes, capture_id?, source?, rationale?)` | `agent:write` | `ProposeProductChange` | proposal awaiting a person's approval; the way to act on a product capture |
+| `product_update(product_id, …, source)` | `write` | `UpdateProduct` | direct product change (people and `write`-scope clients only) |
 | `line_item_create / line_item_update / line_item_delete` | `write` | `AddLineItem` / `UpdateLineItem` / `DeleteLineItem` | line item |
 | `product_create(...)`, `portion_create(...)` | `write` | `CreateProduct` / `AddPortion` | product / portion |
 | `weight_add(date, kg)` | `write` | `AddWeight` | weight row (`source=manual`) |

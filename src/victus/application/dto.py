@@ -204,6 +204,12 @@ class DayMessageView:
     content: str
     created_at: datetime
     processing_state: str | None
+    # For messages that are captures: id, kind (text|audio|image) and media
+    capture_id: str | None = None
+    capture_kind: str | None = None
+    attachment_id: str | None = None
+    attachment_mime: str | None = None
+    transcript: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -339,6 +345,22 @@ class CaptureView:
     agent_run_id: str | None
     product_id: int | None = None  # set for captures about one product (label photo)
     created: bool = True  # False when the upload was a duplicate (content hash)
+
+
+@dataclass(frozen=True, slots=True)
+class ProductProposalView:
+    id: str
+    product_id: int
+    product_name: str | None
+    capture_id: str | None
+    run_id: str | None
+    changes: dict[str, Any]
+    current: dict[str, Any]
+    rationale: str | None
+    source: str | None
+    status: str
+    created_at: datetime
+    decided_at: datetime | None
 
 
 @dataclass(frozen=True, slots=True)

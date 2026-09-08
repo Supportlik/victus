@@ -473,7 +473,9 @@ class ReopenDay(UseCase):
 # ── day thread (ADR 0010) ───────────────────────────────────────────────────
 
 
-def _message_view(m: orm.DayMessage, capture: orm.Capture | None) -> dto.DayMessageView:
+def _message_view(
+    m: orm.DayMessage, capture: orm.Capture | None, transcript: str | None = None
+) -> dto.DayMessageView:
     return dto.DayMessageView(
         id=str(m.id),
         role=m.role,
@@ -481,6 +483,15 @@ def _message_view(m: orm.DayMessage, capture: orm.Capture | None) -> dto.DayMess
         content=m.content,
         created_at=m.created_at,
         processing_state=capture.status if capture is not None else None,
+        capture_id=capture.id if capture is not None else None,
+        capture_kind=capture.kind if capture is not None else None,
+        attachment_id=capture.attachment_id if capture is not None else None,
+        attachment_mime=(
+            capture.attachment.mime
+            if capture is not None and capture.attachment is not None
+            else None
+        ),
+        transcript=transcript,
     )
 
 
@@ -493,12 +504,14 @@ class GetDayThread(UseCase):
             out: list[dto.DayMessageView] = []
             for m in messages:
                 cap = uow.captures.get(m.capture_id) if m.capture_id else None
-                out.append(_message_view(m, cap))
+                tr = uow.captures.transcript_for(cap.id) if cap is not None else None
+                out.append(_message_view(m, cap, tr.text if tr else None))
             # captures that arrived without a thread message (uploads, voice notes)
             for cap in uow.captures.list(target_date=day):
-                if cap.id in linked:
+                if cap.id in linked or cap.product_id is not None:
                     continue
-                text = cap.text or f"[{cap.kind}]"
+                tr = uow.captures.transcript_for(cap.id)
+                text = cap.text or (tr.text if tr and tr.text else "") or f"[{cap.kind}]"
                 out.append(
                     dto.DayMessageView(
                         id=f"capture:{cap.id}",
@@ -507,6 +520,11 @@ class GetDayThread(UseCase):
                         content=text,
                         created_at=cap.captured_at,
                         processing_state=cap.status,
+                        capture_id=cap.id,
+                        capture_kind=cap.kind,
+                        attachment_id=cap.attachment_id,
+                        attachment_mime=cap.attachment.mime if cap.attachment else None,
+                        transcript=tr.text if tr else None,
                     )
                 )
             out.sort(key=lambda m: m.created_at)

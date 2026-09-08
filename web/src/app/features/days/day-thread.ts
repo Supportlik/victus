@@ -1,39 +1,39 @@
 import { ChangeDetectionStrategy, Component, effect, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ApiClient, DayMessage } from '../../api';
+import { ApiClient, Capture, DayMessage } from '../../api';
+import { BadgesService } from '../../core/badges.service';
 import { describeError } from '../../core/problem';
+import { CaptureCard } from '../../shared/capture-card';
 import { CaptureInput } from '../../shared/capture-input';
 import { MarkdownPipe } from '../../shared/markdown.pipe';
 
 /**
- * The day's conversation: your notes and the agent's summaries and questions, in order.
- * A message typed here becomes a capture for this date; while a run is active it waits.
+ * The day's conversation. Everything you write, say or photograph here is a capture for this
+ * date; the agent answers with summaries, questions and notes in the same thread.
  */
 @Component({
   selector: 'v-day-thread',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, MarkdownPipe, CaptureInput],
+  imports: [FormsModule, MarkdownPipe, CaptureInput, CaptureCard],
   template: `
     <aside class="thread">
       <h3>Talk to this day</h3>
-      <p class="v-small v-muted">Everything you write, say or photograph here is a capture for this day. The agent reads it on its next run and answers in this thread.</p>
+      <p class="v-small v-muted">Text, voice or photo — each becomes a capture for this day. The agent reads it on its next run and answers here.</p>
       @if (error(); as e) { <div class="v-error">{{ e }}</div> }
       <ol class="messages" aria-live="polite">
         @for (m of messages(); track m.id) {
-          <li class="msg" [class]="m.role + ' ' + m.kind">
-            <div class="meta">
-              <span class="who">{{ m.role === 'agent' ? 'Agent' : m.role === 'system' ? 'System' : 'You' }}</span>
-              @if (m.role === 'agent' && m.kind !== 'text') { <span class="v-tag" [class]="'v-tag ' + kindClass(m.kind)">{{ m.kind }}</span> }
-              <time [attr.datetime]="m.created_at">{{ m.created_at.slice(11, 16) }}</time>
-              @if (m.processing_state === 'new' || m.processing_state === 'in_progress') {
-                <span class="v-tag warn" title="The agent has not processed this note yet">{{ m.processing_state === 'new' ? 'waiting for the agent' : 'processing' }}</span>
-              } @else if (m.processing_state === 'assigned') {
-                <span class="v-tag draft" title="Part of the current draft; approve the day to finish">in draft</span>
-              }
-            </div>
-            @if (m.role === 'agent') {
+          <li class="msg" [class]="'msg ' + m.role + ' ' + m.kind" [class.card]="!!m.capture_id">
+            @if (m.role === 'agent' || m.role === 'system') {
+              <div class="meta">
+                <span class="who">{{ m.role === 'agent' ? 'Agent' : 'System' }}</span>
+                @if (m.kind !== 'text') { <span class="v-tag" [class]="'v-tag ' + kindClass(m.kind)">{{ m.kind }}</span> }
+                <time [attr.datetime]="m.created_at">{{ m.created_at.slice(11, 16) }}</time>
+              </div>
               <div class="body v-md" [innerHTML]="m.content | markdown"></div>
+            } @else if (m.capture_id) {
+              <v-capture-card [capture]="asCapture(m)" [compact]="true" [showTarget]="false" (changed)="reload()" (deleted)="reload()" />
             } @else {
+              <div class="meta"><span class="who">You</span><time [attr.datetime]="m.created_at">{{ m.created_at.slice(11, 16) }}</time></div>
               <div class="body">{{ m.content }}</div>
             }
           </li>
@@ -45,7 +45,7 @@ import { MarkdownPipe } from '../../shared/markdown.pipe';
         <textarea name="text" [(ngModel)]="text" rows="2" placeholder="e.g. the chicken was 300 g, not 400" [disabled]="sending()"></textarea>
         <div class="v-actions">
           <button type="submit" class="v-btn primary" [disabled]="sending() || !text.trim()">Send</button>
-          <v-capture-input [targetDate]="date()" [compact]="true" (uploaded)="onCapture()" />
+          <v-capture-input [targetDate]="date()" [compact]="true" (uploaded)="reload()" />
         </div>
       </form>
     </aside>
@@ -53,8 +53,8 @@ import { MarkdownPipe } from '../../shared/markdown.pipe';
   styles: `
     .thread { display: grid; gap: 0.6rem; align-content: start; }
     .messages { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; max-height: 60vh; overflow: auto; }
-    .msg { padding: 0.5rem 0.7rem; border-radius: var(--v-radius-l); background: var(--v-surface-2); }
-    .msg.agent { background: var(--v-agent-soft); border-left: 3px solid var(--v-agent); }
+    .msg:not(.card) { padding: 0.5rem 0.7rem; border-radius: var(--v-radius-l); background: var(--v-surface-2); }
+    .msg.agent, .msg.system { background: var(--v-agent-soft); border-left: 3px solid var(--v-agent); }
     .msg.question { border-left-color: var(--v-warn); }
     .msg.summary { border-left-color: var(--v-ok); }
     .msg.note { border-left-style: dashed; }
@@ -67,6 +67,7 @@ import { MarkdownPipe } from '../../shared/markdown.pipe';
 })
 export class DayThread {
   private readonly api = inject(ApiClient);
+  private readonly badges = inject(BadgesService);
   readonly date = input.required<string>();
   readonly messages = signal<DayMessage[]>([]);
   readonly sending = signal(false);
@@ -75,11 +76,18 @@ export class DayThread {
 
   constructor() {
     effect(() => {
-      const d = this.date();
-      this.api.dayMessages(d).subscribe({
-        next: (m) => this.messages.set(m),
-        error: (e: unknown) => this.error.set(describeError(e)),
-      });
+      this.date();
+      this.reload();
+    });
+  }
+
+  reload(): void {
+    this.api.dayMessages(this.date()).subscribe({
+      next: (m) => {
+        this.messages.set(m);
+        this.badges.refresh();
+      },
+      error: (e: unknown) => this.error.set(describeError(e)),
     });
   }
 
@@ -87,8 +95,19 @@ export class DayThread {
     return kind === 'question' ? 'warn' : kind === 'summary' ? 'closed' : kind === 'correction' ? 'draft' : '';
   }
 
-  onCapture(): void {
-    this.api.dayMessages(this.date()).subscribe({ next: (m) => this.messages.set(m), error: () => undefined });
+  /** A thread entry that is a capture, shaped for the shared card. */
+  asCapture(m: DayMessage): Capture {
+    return {
+      id: m.capture_id!,
+      kind: m.capture_kind ?? 'text',
+      captured_at: m.created_at,
+      target_date: this.date(),
+      text: m.capture_kind === 'text' ? m.content : null,
+      status: m.processing_state ?? 'new',
+      transcript: m.transcript ?? null,
+      attachment_id: m.attachment_id ?? null,
+      attachment_mime: m.attachment_mime ?? null,
+    };
   }
 
   send(): void {
@@ -96,10 +115,10 @@ export class DayThread {
     if (!t) return;
     this.sending.set(true);
     this.api.addDayMessage(this.date(), t).subscribe({
-      next: (m) => {
-        this.messages.update((list) => [...list, m]);
+      next: () => {
         this.text = '';
         this.sending.set(false);
+        this.reload();
       },
       error: (e: unknown) => {
         this.error.set(describeError(e));

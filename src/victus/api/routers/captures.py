@@ -74,15 +74,22 @@ async def upload_capture(
 def list_captures(
     ctx: Ctx,
     uow: Uow,
+    blobs: Blobs,
     status_: Annotated[str | None, Query(alias="status")] = None,
     day: Annotated[date | None, Query(alias="date")] = None,
     product_id: Annotated[int | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=1000)] = 200,
 ) -> list[CaptureOut]:
-    rows = uc.ListCaptures(uow, ctx).execute(
+    rows = uc.ListCaptures(uow, ctx, blobs).execute(
         status=status_, target_date=day, limit=limit, product_id=product_id
     )
     return [CaptureOut.model_validate(c) for c in rows]
+
+
+@router.delete("/captures/{capture_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_capture(capture_id: str, ctx: Ctx, uow: Uow, blobs: Blobs) -> Response:
+    uc.DeleteCapture(uow, ctx, blobs).execute(capture_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/captures/{capture_id}", response_model=CaptureOut)

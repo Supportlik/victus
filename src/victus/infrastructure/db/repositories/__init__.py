@@ -10,6 +10,7 @@ from victus.infrastructure.db.repositories.diary import (
 )
 from victus.infrastructure.db.repositories.inbox import AgentRepo, CaptureRepo, DayMessageRepo
 from victus.infrastructure.db.repositories.ops import AuditRepo, BackupJobRepo
+from victus.infrastructure.db.repositories.proposals import ProposalRepo
 from victus.infrastructure.db.repositories.tenancy import TenantRepo, UserRepo
 
 __all__ = [
@@ -20,6 +21,7 @@ __all__ = [
     "DayLogRepo",
     "DayMessageRepo",
     "ProductRepo",
+    "ProposalRepo",
     "RecipeRepo",
     "SettingsRepo",
     "TargetBandRepo",

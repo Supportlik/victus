@@ -87,6 +87,33 @@ class CaptureRepo(Repo):
             .limit(1)
         )
 
+    def delete(self, capture: orm.Capture) -> None:
+        self.guard(capture)
+        self.session.delete(capture)
+        self.session.flush()
+
+    def attachment_refs(self, attachment_id: str) -> int:
+        stmt = self.scoped(
+            select(orm.Capture).where(orm.Capture.attachment_id == attachment_id), orm.Capture
+        )
+        return len(self.session.scalars(stmt).all())
+
+    def delete_attachment(self, attachment: orm.Attachment) -> None:
+        self.guard(attachment)
+        self.session.delete(attachment)
+        self.session.flush()
+
+    def discarded_before(self, cutoff: datetime) -> Sequence[orm.Capture]:
+        stmt = self.scoped(
+            select(orm.Capture).where(
+                orm.Capture.status == "discarded",
+                orm.Capture.processed_at.is_not(None),
+                orm.Capture.processed_at < cutoff,
+            ),
+            orm.Capture,
+        )
+        return self.session.scalars(stmt).all()
+
 
 class AgentRepo(Repo):
     def add_run(self, run: orm.AgentRun) -> orm.AgentRun:

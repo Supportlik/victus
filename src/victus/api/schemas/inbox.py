@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -88,3 +88,24 @@ class AgentLockOut(Out):
 class UnlockOut(Out):
     date: date
     released: bool
+
+
+class ProposalOut(Out):
+    id: str
+    product_id: int
+    product_name: str | None = None
+    capture_id: str | None = None
+    run_id: str | None = None
+    changes: dict[str, Any]
+    current: dict[str, Any]
+    rationale: str | None = None
+    source: str | None = None
+    status: str
+    created_at: datetime
+    decided_at: datetime | None = None
+
+
+class ProposalDecisionIn(BaseModel):
+    """Optional corrections applied on approval (e.g. a misread digit)."""
+
+    changes: dict[str, Any] | None = None

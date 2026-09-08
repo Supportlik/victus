@@ -168,6 +168,11 @@ class DayMessageOut(Out):
     content: str
     created_at: datetime
     processing_state: str | None = None
+    capture_id: str | None = None
+    capture_kind: str | None = None
+    attachment_id: str | None = None
+    attachment_mime: str | None = None
+    transcript: str | None = None
 
 
 class WeightEntryOut(Out):

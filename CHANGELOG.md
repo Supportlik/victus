@@ -41,6 +41,16 @@ All notable changes to Victus are documented here. The format follows
   open days; the second-passkey notice can be dismissed for good; phone layout pass (touch targets, scrollable
   tables, fewer macro columns); installable web manifest.
 
+- Product proposals (R54): the agent proposes label readings (`product_propose`, `product_proposal` table,
+  migration 0003) and a person approves or rejects them (`/proposals`, product page section); approving marks
+  the product verified.
+- Captures can be deleted while unused, restored after a discard, and are purged one day after being discarded;
+  an empty or prompt-echo transcript marks the capture `failed` instead of passing the vocabulary prompt on (R55).
+- Day threads carry their captures with media: audio players, image thumbnails and the same actions everywhere
+  (one capture card for inbox, day and product).
+- Web: Victus logo and favicon, collapsible navigation rail, configurable landing page after sign-in, pages
+  centred on wide screens, badge for pending product proposals.
+
 ### Changed
 - No importer in the product (ADR 0011): existing data enters through the backup archive format, REST or MCP.
 - One model session per day (ADR 0009) and a resumable per-day thread (ADR 0010); lock TTL 5 minutes;
