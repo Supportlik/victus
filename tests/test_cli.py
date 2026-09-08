@@ -5,7 +5,9 @@ from typer.testing import CliRunner
 from victus import __version__
 from victus.cli.main import app
 
-runner = CliRunner()
+# Plain, wide output: CI terminals otherwise get Rich colours and 80-column wrapping,
+# which splits option names across lines.
+runner = CliRunner(env={"NO_COLOR": "1", "TERM": "dumb", "COLUMNS": "200"})
 
 HELP_TARGETS = (
     ["agent", "run", "--help"],

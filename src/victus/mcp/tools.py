@@ -18,6 +18,7 @@ import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time
+from decimal import Decimal
 from typing import Any, Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -117,6 +118,8 @@ def jsonable(value: Any) -> Any:
         return value
     if isinstance(value, enum.Enum):
         return value.value
+    if isinstance(value, Decimal):  # PostgreSQL NUMERIC columns
+        return float(value)
     if isinstance(value, datetime | date | time):
         return value.isoformat()
     if isinstance(value, bytes):
