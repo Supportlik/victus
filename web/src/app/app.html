@@ -1,22 +1,52 @@
-<header class="topbar">
-  <h1>{{ title() }}</h1>
-  <p class="tagline">Self-hosted nutrition tracking</p>
-</header>
-
-<main class="content">
-  <section class="card" aria-live="polite">
-    <h2>API</h2>
-    @if (health(); as h) {
-      <p class="status ok">
-        <span class="dot"></span>
-        {{ h.status }} · version {{ h.version }}
-      </p>
-    } @else if (apiError(); as err) {
-      <p class="status error"><span class="dot"></span>{{ err }}</p>
-    } @else {
-      <p class="status pending"><span class="dot"></span>checking…</p>
-    }
-  </section>
-
-  <router-outlet />
-</main>
+@if (auth.isAuthenticated()) {
+  <div class="shell" [class.recovery]="auth.isRecoverySession()">
+    <nav class="rail" aria-label="Main">
+      <a class="brand" [routerLink]="auth.isRecoverySession() ? '/settings' : todayLink()">
+        <h1>{{ title() }}</h1>
+        <span class="tenant">{{ auth.me()?.tenant?.name }}</span>
+      </a>
+      @if (!auth.isRecoverySession()) {
+        <a class="today" [routerLink]="todayLink()" routerLinkActive="active">Today</a>
+        <ul>
+          @for (item of nav; track item.path) {
+            <li>
+              <a [routerLink]="item.path" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: false }">
+                <span class="glyph" aria-hidden="true">{{ item.glyph }}</span>{{ item.label }}
+              </a>
+            </li>
+          }
+        </ul>
+      }
+      <div class="foot">
+        <span class="user">{{ auth.me()?.user?.display_name }}</span>
+        <button type="button" class="v-btn quiet small" (click)="logout()">Sign out</button>
+        <p class="health" aria-live="polite">
+          @if (health(); as h) {
+            <span class="dot ok"></span>API {{ h.version }}
+          } @else if (apiError(); as err) {
+            <span class="dot bad"></span>{{ err }}
+          } @else {
+            <span class="dot"></span>checking API…
+          }
+        </p>
+      </div>
+    </nav>
+    <main class="content">
+      @if (auth.isRecoverySession()) {
+        <div class="v-notice recovery-notice">
+          You signed in with a recovery code. This session can only register a new passkey. Add one below, then sign in again with it.
+        </div>
+      } @else if (auth.needsSecondPasskey()) {
+        <div class="v-notice passkey-nudge">
+          You have one passkey. Add a second one on another device so a lost phone does not lock you out.
+          <a routerLink="/settings" fragment="passkeys">Add a passkey</a>
+        </div>
+      }
+      <router-outlet />
+    </main>
+  </div>
+} @else {
+  <main class="bare">
+    <router-outlet />
+  </main>
+}

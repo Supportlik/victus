@@ -59,6 +59,9 @@ The pyramid is deliberate: most cases are `T-DOM`/`T-SVC`; E2E covers the two fl
 | T-DOM-023 | Matcher threshold | coverage 0.61 vs 0.62 | `find` | 0.61 → no match, 0.62 → stage 3 | inline | yes | 1 |
 | T-DOM-024 | Target band for a date and training type | three versions | `target_band.for_date(bands, date, training_type)` | picks the version valid at date; falls back to `rest` when type unknown | inline | yes | 1 |
 | T-DOM-025 | Frozen quantities, propagating nutrients | item with base_quantity; product kcal changed | recompute | base_quantity unchanged, kcal changed | inline | yes | 1 |
+| T-DOM-026 | Implied TDEE and required rate (status arithmetic) | window weights and kcal; goal | `tdee.implied_tdee`, `tdee.required_rate`, `tdee.eat_target` | `mean_kcal + (−Δkg × kcal_per_kg) / n_kcal`; rate = (goal − current)/days × 7; deficit = −slope × kcal_per_kg; eat = tdee_ref − deficit | inline | yes | 2 |
+| T-DOM-027 | Training type from free text | German/English training notes | `target_band.training_type_from_text` | "krafttraining (5x5)" → strength, "kickboxing" → martial_arts, "nein (Sauna)" → rest, unknown → `None` | inline | yes | 1 |
+| T-DOM-028 | Multiplication anywhere in a quantity | `2 Fl. à 0,5 l`, `2 Flaschen (2 × 0,33 l)` | `parse_quantity_details` | base amount = count × per-piece volume (1000 ml / 660 ml) | inline | yes | 1 |
 
 ## Importer (`T-IMP`)
 
@@ -107,6 +110,26 @@ The pyramid is deliberate: most cases are `T-DOM`/`T-SVC`; E2E covers the two fl
 | T-SVC-023 | Message during a locked run | day locked by run A; message arrives | run A finishes | message still `new`; a `follow_up` run is queued automatically; no second draft of the same items | fake LLM | yes | 3 |
 | T-SVC-024 | Agent question round-trip | draft with `open_questions` | run finishes; user replies via message | question stored as `day_message(kind=question)`; reply queues follow-up; draft updated incrementally | fake LLM | yes | 3 |
 
+## Reports (`T-RPT`)
+
+| ID | Title | Precondition | Steps | Expected | Fixture | Automated | Stage |
+|---|---|---|---|---|---|---|---|
+| T-RPT-001 | Definition parsing | valid YAML with every block type | `load_definition` | typed blocks, defaults applied (period 14d, horizons, columns) | inline | yes | 2 |
+| T-RPT-002 | Definition rejects unknown block / bad ids | YAML with `type: pie` or `id: "Bad Id"` | `load_definition` | `ValidationError` | inline | yes | 2 |
+| T-RPT-003 | Built-in `checkup.yaml` is schema-valid | packaged YAML | validate against `schemas/report-definition.schema.json` | valid; registry lists `checkup` as built-in and tenant reports cannot shadow it | package | yes | 2 |
+| T-RPT-004 | `tdee_windows` equals frozen reference | synthetic fixture as data source | render block for windows 3…90 | mean kcal, Δ, TDEE, coverage, quality identical to `tdee_reference.json` | `tdee_reference.json` | yes | 2 |
+| T-RPT-005 | `trend` / `forecast` equal frozen reference | as above | render | slopes, rates, m1/m3/m6, ETA identical | `tdee_reference.json` | yes | 2 |
+| T-RPT-006 | `burndown` equals frozen reference | as above, stages from settings | render | anchor, remaining, gap, per-stage rates identical | `tdee_reference.json` | yes | 2 |
+| T-RPT-007 | `band_distribution` sums | protein series and band | render | zone counts sum to `n`; `below_optimum + above_optimum` equals the reference "between"; kcal rated against the asymmetric corridor | `tdee_reference.json` | yes | 2 |
+| T-RPT-008 | `kpi_tile` metric paths | every path in `metrics.PROVIDERS` | render | value or `None` with note; unknown path → `BlockError`, other blocks still render | in-memory | yes | 2 |
+| T-RPT-009 | `day_list` limit and columns | 30 days, one open day | `limit: 5`, columns incl. weight/status | 5 newest rows, weight joined, open day flagged not countable | in-memory | yes | 2 |
+| T-RPT-010 | `text_finding` empty and filled | no finding / agent finding with 8 bullets, `max_items: 5` | render | `None` → placeholder text / first 5 bullets kept | in-memory | yes | 2 |
+| T-RPT-011 | Missing weight data | source without weights | render checkup | weight-based blocks are `BlockError`, `day_list` and `text_finding` render, weight tile is `None` | in-memory | yes | 2 |
+| T-RPT-012 | Markdown renderer | rendered checkup | `to_markdown` | headings per block, table headers, traffic-light emoji only here, English number format, errors shown with ⚠️ | in-memory | yes | 2 |
+| T-RPT-013 | JSON renderer round-trip | rendered checkup | `to_dict` → `json.dumps` | serialisable; dates ISO; enums as values; `error` flag per block | in-memory | yes | 2 |
+| T-RPT-014 | Countable days only | one non-countable day with absurd kcal | render `kcal.average` | only `reliable` + `closed` days contribute | in-memory | yes | 2 |
+| T-RPT-015 | Historical render | `today` 60 days in the past | render `weight.latest` | period ends on that day; no weigh-in after it is used | in-memory | yes | 2 |
+
 ## API (`T-API`)
 
 | ID | Title | Precondition | Steps | Expected | Fixture | Automated | Stage |
@@ -136,11 +159,14 @@ The pyramid is deliberate: most cases are `T-DOM`/`T-SVC`; E2E covers the two fl
 
 | ID | Title | Precondition | Steps | Expected | Fixture | Automated | Stage |
 |---|---|---|---|---|---|---|---|
-| T-WEB-001 | Day view renders macros and traffic lights | mocked `GET /days/{date}` | render component | values, ⚠️ on estimated items, band colours | mock | yes | 1 |
+| T-WEB-001 | Day view renders macros and band gauges | mocked `GET /days/{date}` (200 and 404) | render component | values, ⚠️ on estimated items, draft tint, gauge zones; 404 shows “Create this day” with mandatory reliable choice and posts `POST /days/{date}` | mock | yes | 1 |
 | T-WEB-002 | Product search debounce | typing | 300 ms debounce, one request per pause | mock | yes | 1 |
 | T-WEB-003 | Draft approval form | mocked drafts | edit quantity, approve | request body contains corrections and `close` | mock | yes | 3 |
 | T-WEB-004 | Report dashboard blocks | mocked `ReportResult` | render | every block type has a component; unknown type shows a placeholder | mock | yes | 2 |
 | T-WEB-005 | Passkey nudge | `passkeys.length < 2` | login | banner shown; hidden at 2 | mock | yes | 1 |
+| T-WEB-006 | App shell | signed out / signed in (`AuthService.me`) | render `App` | bare layout when signed out; rail with 8 entries, tenant name and API version when signed in; unreachable API shows an error dot | mock | yes | 1 |
+| T-WEB-007 | AuthService and interceptor | mocked `/auth/me`, WebAuthn options with `ceremony_id`, writes, 401 | load, login, register, recover, post, logout | 401 on `/auth/me` = signed out without redirect; options minus `ceremony_id` go to the browser, `ceremony_id` (and passkey `name`) echoed on verify; recovery login sets `recovery_session`; `X-CSRF-Token` on writes; 401 on protected route → `/login`; logout clears session even on 500 | mock | yes | 1 |
+| T-WEB-008 | ApiClient contract | – | call each method group | paths, query params and bodies match `docs/API.md` (days, products, line items, reports, messages, agent runs) | mock | yes | 1 |
 
 ## E2E (`T-E2E`)
 
@@ -153,13 +179,14 @@ The pyramid is deliberate: most cases are `T-DOM`/`T-SVC`; E2E covers the two fl
 
 ## Migration (`T-MIG`)
 
+Victus has no importer (ADR 0011); migration means producing a backup archive and restoring it.
+
 | ID | Title | Precondition | Steps | Expected | Fixture | Automated | Stage |
 |---|---|---|---|---|---|---|---|
-| T-MIG-001 | Full sample import | sample vault | `import vault --dry-run --report` | report produced; counts match the fixture manifest | `vault_sample/` | yes | 1 |
-| T-MIG-002 | Round-trip gate | after import | gate | ≥ 90 % of sample days within 3 % (sample is curated); failures listed | `vault_sample/` | yes | 1 |
-| T-MIG-003 | Baseline guard | gate below baseline | real import | refused without `--force` | mocked gate | yes | 1 |
-| T-MIG-004 | Target-band seeding | settings JSON with contradicting salt bands | import | one `target_band` per training type; contradiction listed as review item | `vault_sample/config.json` | yes | 1 |
-| T-MIG-005 | Real vault (owner-only, manual) | the operator's own vault | dry run | match rate and gate ≥ the numbers recorded before Victus existed | – | manual | 1 |
+| T-MIG-001 | Archive round-trip | tenant with products, days, weights | `backup create` → `backup verify` → `backup restore` into an empty database | row counts per table equal the manifest; computed day macros identical | factories | yes | 1 |
+| T-MIG-002 | Foreign archive | hand-written JSONL following MIGRATION.md (minimal: tenant, unit, consumable, product, day_log, meal, line_item) | `backup verify`, `backup restore` | accepted; days appear with computed macros; missing required column is refused with a clear message | inline | yes | 1 |
+| T-MIG-003 | Schema drift | archive with an unknown column | `backup verify` | refused, column named | inline | yes | 1 |
+| T-MIG-004 | Tenant isolation on restore | archive of tenant A restored while tenant B exists | restore | B untouched; A's rows scoped to A | factories | yes | 1 |
 
 ## Operations (`T-OPS`)
 
@@ -175,6 +202,12 @@ The pyramid is deliberate: most cases are `T-DOM`/`T-SVC`; E2E covers the two fl
 | T-OPS-008 | Compose smoke | `docker compose up` (CI) | wait for health | `api`, `web`, `worker` healthy; `/health` 200 through `web` | CI | yes | 0–1 |
 | T-OPS-009 | Migration downgrade | head | `alembic downgrade -1 && upgrade head` | no error; row counts unchanged | temp DB | yes | 1 |
 | T-OPS-010 | Restore drill (manual, quarterly) | production archive | follow BACKUP.md "clone" steps | app opens on the drill tenant; delete afterwards | – | manual | ops |
+| T-OPS-011 | All-tenant archive | two tenants | `backup create --all`; restore into empty DB; restore again with `--mode merge_new` | both tenants restored; second run inserts nothing, counts unchanged | temp dir | yes | 1 |
+| T-OPS-012 | Replace mode | archive of alice; alice's line items deleted | `restore --mode replace` | alice's rows swapped back, computed macros restored; bob untouched; `fail_if_exists` refused beforehand | temp dir | yes | 1 |
+| T-OPS-013 | Dry run | archive, empty DB | `restore --dry-run` | full import performed, counts reported, database still empty | temp dir | yes | 1 |
+| T-OPS-014 | Scheduler cycle | seeded DB | `backup schedule --once`; daemon loop with fake clock | archive + verification + `backup_job` row (`finished`, verified); alive marker written; loop waits for the cron slot | temp dir | yes | 1 |
+| T-OPS-015 | Cron parser | – | parse `0 3 * * *`, `*/15 * * * *`, `0 4 * * 0`, invalid expressions | correct `next_after`; 4-field and out-of-range expressions rejected | inline | yes | 1 |
+| T-OPS-016 | Scoping coverage | ORM metadata | `scoping.check_coverage()` | every table is global, carries `tenant_id` or has a parent mapping — a new table without one fails this test | inline | yes | 1 |
 
 ## Reference values
 

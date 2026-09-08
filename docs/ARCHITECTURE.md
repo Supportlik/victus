@@ -14,16 +14,15 @@ adapters (REST, MCP, CLI, agent worker) share the same use cases and therefore t
 | **API** | `src/victus/api/` | FastAPI app factory, routers, Pydantic schemas, auth dependencies, middleware | Maps HTTP ↔ use case. No business logic. |
 | **MCP** | `src/victus/mcp/` | FastMCP server, tools, transports (stdio, Streamable HTTP), token auth | Calls use cases directly (see [ADR 0004](adr/0004-mcp-calls-service-layer.md)). |
 | **Agent** | `src/victus/agent/` | Worker loop, Claude Agent SDK runner, budget, prompt files | Uses MCP tools as its tool set; never touches the database directly. |
-| **CLI** | `src/victus/cli/` | `victus serve | import | export | backup | mcp | agent | token | migrate | shell` | Thin Typer commands over use cases. |
+| **CLI** | `src/victus/cli/` | `victus serve | backup | mcp | agent | token | migrate | shell` | Thin Typer commands over use cases. |
 | **Reports** | `src/victus/reports/` | Report registry, engine, block implementations, renderers | Blocks call domain services; renderers are output-only. |
-| **Importer** | `src/victus/importer/` | Vault Markdown parsers, matching driver, round-trip gate, review list | Parsers take `str`, never paths; the use case does the writing. |
 | **Backup** | `src/victus/backup/` | Export, restore, verify, retention | Streams JSONL through the repositories, never raw SQL dumps. |
 | **Config** | `src/victus/config/` | Server config (pydantic-settings), tenant settings, defaults | Validated against `schemas/`. |
 
 ### Dependency rule
 
 ```
-api / mcp / cli / agent / reports / importer / backup
+api / mcp / cli / agent / reports / backup
             │  (call use cases, build DTOs)
             ▼
         application  ──►  ports (Protocols)
@@ -65,7 +64,6 @@ src/victus/
 ├─ mcp/             server tools/read tools/write auth transports
 ├─ agent/           worker runner_sdk budget prompts/
 ├─ reports/         registry engine blocks/ render/ builtin/checkup.yaml
-├─ importer/vault/  markdown_common markdown_day_log markdown_products markdown_recipes weight_csv target_bands roundtrip review_list
 ├─ backup/          export restore verify retention
 └─ config/          server tenant_settings defaults
 ```
@@ -186,7 +184,7 @@ settings; emoji and Markdown stay in renderers. The scripts themselves are not p
 |---|---|---|
 | Moving average, weekly TDEE, rolling TDEE, regression trend, forecast, yearly stats, burndown (report script) | `domain/services/trend.py`, `tdee.py`, `forecast.py`, `burndown.py`, `reliability.py` | `kcal_per_kg`, goal and windows become parameters; quality emoji become an enum |
 | Band distribution (status script) | `domain/services/band_rating.py` | Takes a `TargetBand` entity |
-| Number normalisation, frontmatter and balance-section parsing (log reader) | `importer/vault/markdown_day_log.py`, `domain/services/quantity_parser.py` | Functions take text, not paths |
+| Number normalisation, frontmatter and balance-section parsing (log reader) | `domain/services/quantity_parser.py` (the Markdown parsers themselves live in the author's private migration tool, ADR 0011) | Functions take text, not paths |
 | Tolerances, meal-sum logic, error types 0–3, "not assessable" (consistency checker) | `domain/services/consistency.py` | Tolerances as a value object; "not assessable" stays a distinct finding |
 | Cell splitting with escaped pipes, name normalisation, three-stage matcher, unit table, quantity parser, target-band seed, day-log import (database builder) | `quantity_parser.py`, `matching.py::ProductIndex`, `importer/vault/*`, unit seed migration | Match score becomes confidence; documented pitfalls become regression tests |
 | SQL views | Alembic `0001_initial` (`op.execute`) plus `nutrition.py::macros_for` | View and function tested against each other |

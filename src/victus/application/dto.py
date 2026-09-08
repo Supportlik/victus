@@ -1,0 +1,320 @@
+"""Result objects of the use cases — framework-free, serialised by the API layer.
+
+Field names mirror ``docs/API.md`` and the web client's ``models.ts`` so the
+Pydantic response schemas can be built with ``from_attributes``.
+"""
+
+from __future__ import annotations
+
+import datetime as dt
+from dataclasses import dataclass, field
+from datetime import date, datetime
+from typing import Any
+
+from victus.domain.values import BandZone, Finding, Macros, MatchCandidate
+
+# ── master data ─────────────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True, slots=True)
+class UnitView:
+    code: str
+    singular: str
+    plural: str
+    unit_type: str
+
+
+@dataclass(frozen=True, slots=True)
+class CategoryView:
+    id: int
+    name: str
+
+
+@dataclass(frozen=True, slots=True)
+class PortionView:
+    id: int
+    product_id: int
+    unit_code: str
+    label: str
+    description: str | None
+    amount: float
+    amount_unit: str
+    is_default: bool
+    weight_source: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class ProductView:
+    id: int
+    name: str
+    brand: str | None
+    category_id: int | None
+    category: str | None
+    reference_amount: float
+    reference_unit: str
+    kcal: float | None
+    protein: float | None
+    carbs: float | None
+    fat: float | None
+    fiber: float | None
+    salt: float | None
+    source: str | None
+    verified: bool
+    ean: str | None
+    note: str | None
+    portions: list[PortionView] = field(default_factory=list)
+
+
+@dataclass(frozen=True, slots=True)
+class IngredientView:
+    id: int
+    position: int
+    product_id: int | None
+    product_name: str | None
+    amount: float | None
+    unit_code: str | None
+    free_text: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class BatchView:
+    id: int
+    recipe_id: int
+    name: str
+    cooked_at: date | None
+    servings: int | None
+    total_weight_g: float | None
+    kcal: float | None
+    protein: float | None
+    carbs: float | None
+    fat: float | None
+    fiber: float | None
+    salt: float | None
+    finished_at: date | None
+
+
+@dataclass(frozen=True, slots=True)
+class RecipeView:
+    id: int
+    name: str
+    default_servings: int | None
+    ingredients: list[IngredientView] = field(default_factory=list)
+    batches: list[BatchView] = field(default_factory=list)
+
+
+# ── days ────────────────────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True, slots=True)
+class LineItemView:
+    id: int
+    meal_id: int
+    position: int
+    consumable_id: int
+    consumable_name: str
+    consumable_kind: str
+    amount: float | None
+    unit_code: str | None
+    base_amount: float
+    base_unit: str
+    estimated: bool
+    amount_estimated: bool
+    is_draft: bool
+    confidence: float | None
+    rationale: str | None
+    alternatives: list[dict[str, Any]] | None
+    raw_text: str | None
+    kcal: float | None
+    protein: float | None
+    carbs: float | None
+    fat: float | None
+    fiber: float | None
+    salt: float | None
+
+
+@dataclass(frozen=True, slots=True)
+class MealView:
+    id: int
+    position: int
+    name: str
+    time: dt.time | None
+    line_items: list[LineItemView]
+    totals: Macros
+
+
+@dataclass(frozen=True, slots=True)
+class BandSpecView:
+    min: float
+    opt_min: float
+    opt_max: float
+    target: float
+    max: float
+    stretch: float | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class TargetBandView:
+    id: int
+    name: str
+    training_type: str | None
+    valid_from: date
+    valid_until: date | None
+    kcal: BandSpecView | None
+    protein: BandSpecView
+    carbs: BandSpecView
+    fat: BandSpecView
+    fiber: BandSpecView
+    salt: BandSpecView
+    note: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class DaySummaryView:
+    date: date
+    status: str
+    reliable: bool | None
+    training_type: str | None
+    macros: Macros
+    has_drafts: bool
+    weight_kg: float | None
+
+
+@dataclass(frozen=True, slots=True)
+class DayView:
+    date: date
+    status: str
+    reliable: bool | None
+    training_type: str | None
+    macros: Macros
+    has_drafts: bool
+    weight_kg: float | None
+    weekday: str | None
+    meals: list[MealView]
+    target_band: TargetBandView | None
+    zones: dict[str, BandZone]
+    findings: list[Finding]
+    notes: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class DayMessageView:
+    id: str
+    role: str
+    kind: str
+    content: str
+    created_at: datetime
+    processing_state: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class DraftListEntryView:
+    date: date
+    status: str
+    draft_items: int
+    kcal: float | None
+    estimated_items: int
+    created_by: str
+
+
+@dataclass(frozen=True, slots=True)
+class DraftSummaryView:
+    date: date
+    markdown: str
+    day: DayView
+
+
+@dataclass(frozen=True, slots=True)
+class WeightEntryView:
+    id: int
+    measured_at: datetime
+    kg: float
+    source: str
+
+
+@dataclass(frozen=True, slots=True)
+class SettingsVersionView:
+    version: int
+    valid_from: date
+    data: dict[str, Any]
+    changed_by: str | None
+
+
+# ── auth ────────────────────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True, slots=True)
+class UserView:
+    id: str
+    display_name: str
+    email: str | None
+    role: str
+
+
+@dataclass(frozen=True, slots=True)
+class TenantView:
+    id: str
+    slug: str
+    name: str
+
+
+@dataclass(frozen=True, slots=True)
+class MeView:
+    user: UserView
+    tenant: TenantView
+    csrf_token: str
+    passkeys: int
+    recovery_session: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class PasskeyView:
+    id: str
+    name: str | None
+    created_at: datetime
+    last_used_at: datetime | None
+
+
+@dataclass(frozen=True, slots=True)
+class TokenView:
+    id: str
+    name: str
+    prefix: str
+    scopes: list[str]
+    expires_at: datetime | None
+    last_used_at: datetime | None
+    revoked_at: datetime | None
+
+
+@dataclass(frozen=True, slots=True)
+class TokenCreatedView(TokenView):
+    token: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class SessionInfo:
+    """What the API layer needs after a successful login."""
+
+    session_id: str
+    tenant_id: str
+    user_id: str
+    expires_at: datetime
+    recovery: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class OwnerCreated:
+    user: UserView
+    recovery_code: str
+
+
+@dataclass(frozen=True, slots=True)
+class HealthView:
+    status: str
+    version: str
+    checks: dict[str, str]
+    backup_age_hours: float | None
+
+
+@dataclass(frozen=True, slots=True)
+class MatchResult:
+    candidates: list[MatchCandidate]

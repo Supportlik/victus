@@ -2,15 +2,15 @@
 # Victus — restore a backup archive (wrapper around `victus backup restore`).
 #
 # Usage:
-#   deploy/backup/restore.sh ARCHIVE.zip [--tenant NEW-SLUG] [--dry-run] [--yes]
+#   deploy/backup/restore.sh ARCHIVE.zip [--as NEW-SLUG] [--mode replace|fail_if_exists|merge_new] [--dry-run] [--yes]
 #
 # ARCHIVE.zip must live inside the backup directory that is bind-mounted into
 # the `backup` service (BACKUP_DIR, default ./backups) — give the file name or
 # the full host path.
 #
-# What happens: the archive is verified (manifest hashes), restored into a
-# temporary database, row counts are compared with the manifest, and only then
-# is it swapped into the live database. Running services (api, worker) are
+# What happens: the archive's hashes are checked, all rows are inserted in one
+# transaction (mode replace: the archived tenant's rows are deleted first), row
+# counts are compared with the manifest, and a mismatch rolls everything back. Running services (api, worker) are
 # stopped before and started after the restore. Without --yes you are asked to
 # confirm; --dry-run performs everything except the final swap.
 # Exit codes: 0 ok · 1 usage · 2 aborted by user · 3 restore failed
@@ -30,11 +30,13 @@ usage() { sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; exit 1; }
 [ $# -ge 1 ] || usage
 ARCHIVE="$1"; shift
 EXTRA=""
+MODE="replace"
 YES=0
 DRY=0
 while [ $# -gt 0 ]; do
   case "$1" in
-    --tenant) [ $# -ge 2 ] || usage; EXTRA="$EXTRA --tenant $2"; shift 2 ;;
+    --as|--tenant) [ $# -ge 2 ] || usage; EXTRA="$EXTRA --as $2"; shift 2 ;;
+    --mode) [ $# -ge 2 ] || usage; MODE="$2"; shift 2 ;;
     --dry-run) DRY=1; EXTRA="$EXTRA --dry-run"; shift ;;
     --yes|-y) YES=1; shift ;;
     -h|--help) usage ;;
@@ -56,6 +58,8 @@ if [ "$DRY" -ne 1 ]; then
   $COMPOSE stop api worker backup >/dev/null
 fi
 
+# The wrapper has asked already (or --yes/--dry-run was given): skip the CLI prompt.
+EXTRA="$EXTRA --mode $MODE --yes"
 log "starting: victus backup restore /backups/$NAME$EXTRA"
 # shellcheck disable=SC2086
 if $COMPOSE run --rm --no-deps backup backup restore "/backups/$NAME" $EXTRA; then

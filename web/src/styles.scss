@@ -1,1 +1,222 @@
-/* You can add global styles to this file, and also import other style files */
+// Victus — global styles and design tokens.
+// One typeface (IBM Plex Sans, variable), paper-like surfaces, colour only where it carries meaning.
+@use '@angular/material' as mat;
+@use '@fontsource-variable/ibm-plex-sans/index.css';
+
+:root {
+  color-scheme: light dark;
+
+  // Paper & ink
+  --v-bg: light-dark(#f5f5f3, #16171a);
+  --v-surface: light-dark(#fdfdfc, #1e2024);
+  --v-surface-2: light-dark(#eeede9, #26282d);
+  --v-ink: light-dark(#1e1f1c, #ecebe6);
+  --v-ink-2: light-dark(#5f5e58, #a8a79f);
+  --v-ink-3: light-dark(#8f8e86, #767570);
+  --v-line: light-dark(#dddbd4, #33363c);
+  --v-line-strong: light-dark(#bdbbb3, #4a4e56);
+
+  // Meaning colours (dataviz palette)
+  --v-ok: #1baf7a;
+  --v-primary: #2a78d6;
+  --v-warn: #eda100;
+  --v-bad: #eb6834;
+  --v-agent: #4a3aa7;
+  --v-ok-soft: light-dark(#e4f5ee, #163b2e);
+  --v-primary-soft: light-dark(#e6effa, #1a2c45);
+  --v-warn-soft: light-dark(#fbf1d9, #3e3112);
+  --v-bad-soft: light-dark(#fce6dd, #46231a);
+  --v-agent-soft: light-dark(#ebe7f7, #2a2450);
+
+  // Type scale (ratio 1.2)
+  --v-font: 'IBM Plex Sans Variable', 'IBM Plex Sans', system-ui, sans-serif;
+  --v-fs-xs: 0.75rem;
+  --v-fs-s: 0.875rem;
+  --v-fs-m: 1rem;
+  --v-fs-l: 1.25rem;
+  --v-fs-xl: 1.5rem;
+  --v-fs-xxl: 2rem;
+
+  --v-radius: 6px;
+  --v-radius-l: 10px;
+  --v-rail: 13.5rem;
+}
+
+html {
+  @include mat.theme((
+    color: (
+      primary: mat.$azure-palette,
+      tertiary: mat.$green-palette,
+      theme-type: color-scheme,
+    ),
+    typography: (
+      plain-family: 'IBM Plex Sans Variable',
+      brand-family: 'IBM Plex Sans Variable',
+    ),
+    density: -1,
+  ));
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: var(--v-font);
+  font-size: var(--v-fs-m);
+  line-height: 1.5;
+  color: var(--v-ink);
+  background: var(--v-bg);
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 {
+  margin: 0;
+  font-weight: 560;
+  letter-spacing: -0.005em;
+  line-height: 1.2;
+}
+h1 { font-size: var(--v-fs-xxl); }
+h2 { font-size: var(--v-fs-xl); }
+h3 { font-size: var(--v-fs-l); }
+h4 { font-size: var(--v-fs-m); }
+
+p { margin: 0 0 0.75rem; max-width: 68ch; }
+a { color: var(--v-primary); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+
+button, input, select, textarea { font: inherit; color: inherit; }
+
+:focus-visible {
+  outline: 2px solid var(--v-primary);
+  outline-offset: 2px;
+}
+
+// ── Shared primitives (global so features stay small) ────────────────────
+.v-page {
+  padding: 1.5rem 2rem 3rem;
+  max-width: 76rem;
+}
+.v-page-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+
+  .sub { color: var(--v-ink-2); margin: 0.25rem 0 0; }
+}
+.v-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+
+.v-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.9rem;
+  border: 1px solid var(--v-line-strong);
+  border-radius: var(--v-radius);
+  background: var(--v-surface);
+  color: var(--v-ink);
+  cursor: pointer;
+  line-height: 1.2;
+  &:hover { border-color: var(--v-ink-3); }
+  &:disabled { opacity: 0.5; cursor: default; }
+  &.primary { background: var(--v-primary); border-color: var(--v-primary); color: #fff; }
+  &.primary:hover { filter: brightness(0.95); }
+  &.danger { color: var(--v-bad); border-color: var(--v-bad); }
+  &.quiet { border-color: transparent; background: transparent; color: var(--v-primary); padding-inline: 0.4rem; }
+  &.small { padding: 0.25rem 0.6rem; font-size: var(--v-fs-s); }
+}
+
+.v-field {
+  display: grid;
+  gap: 0.3rem;
+  font-size: var(--v-fs-s);
+  color: var(--v-ink-2);
+
+  input, select, textarea {
+    padding: 0.45rem 0.6rem;
+    border: 1px solid var(--v-line-strong);
+    border-radius: var(--v-radius);
+    background: var(--v-surface);
+    color: var(--v-ink);
+    font-size: var(--v-fs-m);
+    min-width: 0;
+  }
+  textarea { resize: vertical; min-height: 4.5rem; }
+}
+.v-form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: 0.75rem; }
+
+.v-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--v-fs-s);
+
+  th, td { padding: 0.5rem 0.6rem; text-align: left; border-bottom: 1px solid var(--v-line); vertical-align: top; }
+  th { color: var(--v-ink-2); font-weight: 500; }
+  td.num, th.num { text-align: right; }
+  tr.total td { font-weight: 560; border-top: 1px solid var(--v-line-strong); }
+  tbody tr:hover td { background: var(--v-surface-2); }
+}
+.v-scroll-x { overflow-x: auto; }
+
+.v-panel {
+  background: var(--v-surface);
+  border: 1px solid var(--v-line);
+  border-radius: var(--v-radius-l);
+  padding: 1rem 1.25rem;
+}
+
+.v-muted { color: var(--v-ink-2); }
+.v-small { font-size: var(--v-fs-s); }
+.v-empty {
+  padding: 2rem 1rem;
+  color: var(--v-ink-2);
+  border: 1px dashed var(--v-line-strong);
+  border-radius: var(--v-radius-l);
+  text-align: center;
+}
+.v-error {
+  padding: 0.75rem 1rem;
+  border-left: 3px solid var(--v-bad);
+  background: var(--v-bad-soft);
+  border-radius: 0 var(--v-radius) var(--v-radius) 0;
+  margin-bottom: 1rem;
+}
+.v-notice {
+  padding: 0.75rem 1rem;
+  border-left: 3px solid var(--v-warn);
+  background: var(--v-warn-soft);
+  border-radius: 0 var(--v-radius) var(--v-radius) 0;
+  margin-bottom: 1rem;
+}
+
+.v-tag {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: var(--v-fs-xs);
+  line-height: 1.5;
+  border: 1px solid var(--v-line-strong);
+  color: var(--v-ink-2);
+  &.draft { color: var(--v-agent); border-color: var(--v-agent); background: var(--v-agent-soft); }
+  &.open { color: var(--v-primary); border-color: var(--v-primary); background: var(--v-primary-soft); }
+  &.closed { color: var(--v-ok); border-color: var(--v-ok); background: var(--v-ok-soft); }
+  &.warn { color: var(--v-warn); border-color: var(--v-warn); background: var(--v-warn-soft); }
+  &.bad { color: var(--v-bad); border-color: var(--v-bad); background: var(--v-bad-soft); }
+  &.ok { color: var(--v-ok); border-color: var(--v-ok); background: var(--v-ok-soft); }
+}
+
+.v-md {
+  h1, h2, h3 { font-size: var(--v-fs-m); margin: 0.75rem 0 0.25rem; }
+  table { border-collapse: collapse; font-size: var(--v-fs-s); margin: 0.5rem 0; }
+  th, td { padding: 0.25rem 0.5rem; border-bottom: 1px solid var(--v-line); text-align: left; }
+  code { font-size: 0.9em; background: var(--v-surface-2); padding: 0 0.25rem; border-radius: 3px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}

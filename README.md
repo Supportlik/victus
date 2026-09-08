@@ -13,9 +13,9 @@ voice notes, photos and free text into day-log drafts you approve with one comma
 
 > **Victus** (Latin *vīctus*: "nourishment, means of living, way of life").
 
-> **Status: early development (Stage 0).** The repository holds the specification, the
-> architecture, the deployment stack and a runnable skeleton. See [`docs/PLAN.md`](docs/PLAN.md)
-> for the roadmap and what each stage delivers.
+> **Status: pre-release (Stages 1 and 2 implemented, Stage 3 — captures, agent, MCP — pending).**
+> Database, REST API with passkeys and tokens, Angular web app, report engine with the built-in
+> check-up, and backup/restore are in place. See [`docs/PLAN.md`](docs/PLAN.md) for the roadmap.
 
 ## How it works
 
@@ -61,8 +61,8 @@ victus serve --port 8000
 
 ```bash
 victus serve                                  # API + web app + MCP endpoint
-victus import vault ~/Obsidian/MyVault        # migrate an existing Markdown diary (Stage 1)
-victus backup create --all                    # write a verifiable backup archive (Stage 1)
+victus backup restore victus-alice-20260908.zip   # bring existing data in via the archive format (docs/MIGRATION.md)
+victus backup create --all                    # write a verifiable backup archive
 victus mcp --tenant alice                     # MCP over stdio for Claude Code (Stage 3)
 victus agent run --mode historical            # process open captures into drafts (Stage 3)
 ```

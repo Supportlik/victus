@@ -8,11 +8,9 @@ from victus.cli.main import NOT_IMPLEMENTED_EXIT, app
 runner = CliRunner()
 
 PLANNED = (
-    ["import", "vault", "/tmp/vault"],
-    ["backup", "create"],
+    ["agent", "run"],
     ["mcp"],
     ["worker"],
-    ["migrate"],
 )
 
 

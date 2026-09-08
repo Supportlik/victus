@@ -37,15 +37,31 @@ Every render call takes `from`/`to` (or the default period) and the tenant setti
 
 ### Metric paths for `kpi_tile`
 
-| Path | Meaning |
-|---|---|
-| `weight.latest` / `weight.ma7` | Last weigh-in / 7-day moving average |
-| `weight.delta_week` | Change of the moving average over 7 days |
-| `tdee.rolling_14` | Rolling 14-day TDEE (reference value for all derived numbers) |
-| `goal.rate_kg_week` | Required loss per week to reach the goal on time |
-| `goal.deficit_kcal` | Required daily deficit |
-| `kcal.average` | Average intake in the period (countable days only) |
-| `protein.average` | Average protein |
+| Path | Meaning | Unit |
+|---|---|---|
+| `weight.latest` | Last weigh-in at or before the report date | kg |
+| `weight.ma7` (alias `weight.ma`) | Moving average (length from tenant settings) on the report date | kg |
+| `weight.delta_week` | Change of the moving average over the last 7 days | kg |
+| `tdee.rolling_7` / `tdee.rolling_14` / `tdee.rolling_30` | Rolling TDEE for that window, with quality grade | kcal |
+| `tdee.reference` | The steering value: rolling 14-day TDEE, else mean of the last eight weekly values | kcal |
+| `goal.rate_kg_per_week` | Required loss per week to reach the goal on time | kg/week |
+| `goal.deficit_kcal` | Required daily deficit for that rate | kcal/day |
+| `goal.eat_kcal` | Daily intake that yields the required deficit under the reference TDEE | kcal/day |
+| `goal.to_go_kg` | Kilograms above the goal | kg |
+| `kcal.average` | Average intake in the period (countable days only), rated against the corridor | kcal |
+| `protein.average` / `carbs.average` / `fat.average` / `fiber.average` / `salt.average` | Period averages (countable days only), rated against the band of the last day | g |
+
+A tile shows the delta to the same metric over the previous period of equal length unless `delta_to` names
+another path. Unknown paths make the tile a `BlockError`; the rest of the report still renders.
+
+**Engine behaviour worth knowing**
+
+* Only *countable* days (`reliable` and `closed`) feed calorie and macro series, exactly like the predecessor's
+  countable-days view. Weigh-ins after the report date are ignored so historical renders do not leak the future.
+* Rolling and trend windows end on the last moving-average date at or before the report date.
+* `band_distribution` rates every day against **its own** band (bands differ by training type and validity);
+  `kcal` is rated against the corridor (asymmetric: below the minimum counts as "below optimum", never as a finding).
+* `burndown.start` may be a date, `from_settings` (tenant `burndown_start`) or omitted (period start).
 
 ## Built-in `checkup.yaml`
 

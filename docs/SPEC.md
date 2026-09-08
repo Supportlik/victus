@@ -56,11 +56,9 @@ tree is marked **planned**.
 
 | ID | Requirement | Where implemented | Stage |
 |---|---|---|---|
-| R13 | `victus import vault --path <dir> --tenant <slug>` imports target bands, products, portions, categories, recipes, day logs (meals, line items), and the weight CSV, in that order. | `importer/vault/` — planned | 1 |
-| R14 | Import is idempotent: upsert on `(tenant, external_ref)` for master data and `(tenant, date)` for days; `--replace-day` re-imports a single day deliberately. | `importer/vault/roundtrip.py` — planned | 1 |
-| R15 | Line items are matched to products by a three-stage matcher (exact incl. parentheses → exact short form if unique → fuzzy ≥ 0.62); the stage and score are stored as confidence. Unmatched items become `ad_hoc_item` rows and land on the **review list**. | `domain/services/matching.py`, `importer/vault/review_list.py` — planned | 1 |
-| R16 | The import report states the match rate, the days reproducing the source within 3 % (**round-trip gate**), and the review list with top-3 candidates. The gate must be ≥ the baseline measured in the dry run. | `importer/vault/roundtrip.py` — planned | 1 |
-| R17 | The parser handles: escaped pipes in wikilinks, meals appended *after* the balance section, 7- and 8-column tables, bold/non-bold values, German number formats (`1.056`, `150,5`). | `importer/vault/markdown_day_log.py`, `domain/services/quantity_parser.py` — planned | 1 |
+| R13 | **Victus has no importer** (ADR 0011). Existing data enters through the backup format: an external tool produces a Victus backup archive (JSONL per table, ADR 0008) and `victus backup restore` loads it; alternatively data is written through the REST API or the MCP tools. | `backup/restore.py`, `docs/MIGRATION.md` | 1 |
+| R14 | The archive contract (table order, required columns, id rules, tenant scoping) is documented so third parties can write their own migration; `victus backup verify` validates an archive against the current schema before anything is written. | `docs/MIGRATION.md`, `backup/verify.py` | 1 |
+| R15 | The generic building blocks a migration needs — quantity parser, unit table, three-stage product matcher — are part of the domain and reused by product search and agent drafts. | `domain/services/quantity_parser.py`, `units.py`, `matching.py` | 1 |
 
 ### Search
 

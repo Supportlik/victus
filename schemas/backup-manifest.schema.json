@@ -61,7 +61,7 @@
       "additionalProperties": false,
       "required": ["file", "sha256", "size"],
       "properties": {
-        "file": { "type": "string", "const": "victus.db" },
+        "file": { "type": "string", "const": "snapshot/victus.db" },
         "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
         "size": { "type": "integer", "minimum": 0 }
       }
@@ -82,7 +82,7 @@
       ],
       "blobs": [],
       "includes_sqlite_snapshot": true,
-      "sqlite_snapshot": { "file": "victus.db", "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "size": 655360 },
+      "sqlite_snapshot": { "file": "snapshot/victus.db", "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "size": 655360 },
       "sha256_total": "0000000000000000000000000000000000000000000000000000000000000000"
     }
   ]

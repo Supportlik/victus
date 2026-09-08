@@ -1,59 +1,49 @@
-# Web
+# Victus web app
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 22.1.7.
+Angular 22 (standalone components, signals, Vitest) front end for the Victus API. UI language is English;
+no personal data lives in this tree — fixtures use the placeholder tenant `alice`.
 
-## Development server
-
-To start a local development server, run:
-
-```bash
-ng serve
-```
-
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
-
-## Code scaffolding
-
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
+## Commands
 
 ```bash
-ng generate component component-name
+npm ci                                  # install (Node 24 LTS or 26)
+npm start                               # dev server on :4200, proxies /api and /mcp to :8000 (proxy.conf.json)
+npm test -- --watch=false               # Vitest (jsdom); setup in src/test-setup.ts
+npm run build -- --configuration production
+npm outdated                            # TypeScript and vitest stay inside Angular's supported ranges
 ```
 
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
+## Structure
 
-```bash
-ng generate --help
+```
+src/app/
+├─ api/            models.ts (hand-written, mirrors docs/API.md), api-client.ts (one method per endpoint)
+├─ core/auth/      AuthService (passkeys via @simplewebauthn/browser), authGuard, authInterceptor (CSRF, 401 → /login)
+├─ core/problem.ts RFC 9457 error → one sentence
+├─ shared/         band-gauge (target strip), macro-line, status-tag, product-search (300 ms debounce), format pipes, markdown pipe
+├─ features/
+│  ├─ auth/        login-page (passkey, recovery code)
+│  ├─ days/        days-page (ledger), day-view (meals, gauges, thread panel), day-thread
+│  ├─ drafts/      drafts-page, draft-approval (corrections → POST /drafts/{date}/approve)
+│  ├─ products/    products-page, product-detail (+portions), product-form, review-list (unlinked items)
+│  ├─ recipes/     recipes-page, recipe-detail (cook a batch)
+│  ├─ weight/      weight-page (ECharts, manual entry)
+│  ├─ reports/     reports-page + report-blocks/report-block (one branch per block type)
+│  ├─ captures/    captures-page (upload, "Process now", run polling)
+│  └─ settings/    settings-page (passkeys, target bands, tenant settings JSON, API tokens, health)
+└─ app.*           shell: navigation rail (desktop) / bottom bar (phone), health footer, passkey nudge
 ```
 
-## Building
+Design tokens live in `src/styles.scss` (`--v-*`): one typeface (IBM Plex Sans, bundled), paper-like surfaces,
+colour only where it carries meaning (band zones, drafts). Charts use the shared palette in
+`features/reports/report-blocks/palette.ts` and load ECharts lazily.
 
-To build the project run:
+## API client generation (planned)
 
-```bash
-ng build
-```
+`src/app/api/` is the only place that knows URLs and payload shapes. When the backend publishes
+`/api/v1/openapi.json`, replace it with a generated client (`@hey-api/openapi-ts`) and keep the folder name
+so the features do not change.
 
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
+## Tests
 
-## Running unit tests
-
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
-
-```bash
-ng test
-```
-
-## Running end-to-end tests
-
-For end-to-end (e2e) testing, run:
-
-```bash
-ng e2e
-```
-
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
-
-## Additional Resources
-
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+Test IDs follow `docs/TESTPLAN.md` (`T-WEB-001` …) and appear as comments at the top of each spec.

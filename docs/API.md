@@ -73,7 +73,8 @@ The tenant is always derived from the principal (session or token); it never app
 |---|---|---|
 | GET | `/days?from=&to=&status=` | List days with computed macros |
 | GET | `/days/{date}` | Day with meals, line items, computed macros, target band, findings |
-| PUT | `/days/{date}` | Flags (`reliable`, `training_type`), notes |
+| POST | `/days/{date}` | Create the day (`reliable` required, `training_type`, `notes`) |
+| PUT | `/days/{date}` | Flags (`reliable`, `training_type`), notes; 404 if the day does not exist |
 | POST | `/days/{date}/meals` | Add meal |
 | POST | `/meals/{id}/line-items` | Add line item |
 | PATCH / DELETE | `/line-items/{id}` | Edit / remove line item |

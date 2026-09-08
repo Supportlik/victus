@@ -1,0 +1,97 @@
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { ApiClient, ReportBlock, ReportDefinition, ReportResult } from '../../api';
+import { describeError } from '../../core/problem';
+import { isoDate, shiftDate } from '../../shared/format';
+import { ReportBlockView } from './report-blocks/report-block';
+
+/** Report dashboard: pick a definition and a period, render the blocks. */
+@Component({
+  selector: 'v-reports-page',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [FormsModule, ReportBlockView],
+  template: `
+    <div class="v-page">
+      <header class="v-page-head">
+        <div><h2>{{ current()?.title ?? 'Reports' }}</h2>@if (current()?.description) { <p class="sub">{{ current()!.description }}</p> }</div>
+        <div class="v-actions">
+          <label class="v-field"><span>Report</span>
+            <select [ngModel]="name()" (ngModelChange)="name.set($event); render()">
+              @for (r of definitions(); track r.name) { <option [value]="r.name">{{ r.title }}@if (!r.builtin) { (custom) }</option> }
+            </select>
+          </label>
+          <label class="v-field"><span>Period</span>
+            <select [ngModel]="period()" (ngModelChange)="setPeriod($event)">
+              @for (p of current()?.period?.options ?? ['7d', '14d', '30d', '90d', 'custom']; track p) { <option [value]="p">{{ p === 'custom' ? 'custom range' : 'last ' + p.replace('d', ' days') }}</option> }
+            </select>
+          </label>
+          @if (period() === 'custom') {
+            <label class="v-field"><span>From</span><input type="date" [ngModel]="from()" (ngModelChange)="from.set($event); render()" /></label>
+            <label class="v-field"><span>To</span><input type="date" [ngModel]="to()" (ngModelChange)="to.set($event); render()" /></label>
+          }
+        </div>
+      </header>
+      @if (error(); as e) { <div class="v-error">{{ e }}</div> }
+      @if (result(); as r) {
+        <p class="v-small v-muted">{{ r.period.start }} to {{ r.period.end }} ({{ r.period.days }} days) · generated {{ r.generated_at.replace('T', ' ').slice(0, 16) }}@if (errorCount(); as n) { · <span class="v-tag bad">{{ n }} block(s) failed</span> }</p>
+        @if (tiles().length) {
+          <section class="tiles">@for (b of tiles(); track $index) { <v-report-block [block]="b" /> }</section>
+        }
+        <section class="blocks">@for (b of others(); track $index) { <v-report-block [block]="b" /> }</section>
+      } @else if (!error()) {
+        <p class="v-muted">Rendering…</p>
+      }
+    </div>
+  `,
+  styles: `
+    .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
+    .blocks { display: grid; gap: 1rem; }
+  `,
+})
+export class ReportsPage {
+  private readonly api = inject(ApiClient);
+  readonly definitions = signal<ReportDefinition[]>([]);
+  readonly name = signal('checkup');
+  readonly period = signal('14d');
+  readonly to = signal(isoDate(new Date()));
+  readonly from = signal(shiftDate(isoDate(new Date()), -13));
+  readonly result = signal<ReportResult | null>(null);
+  readonly error = signal<string | null>(null);
+  readonly current = computed(() => this.definitions().find((d) => d.name === this.name()) ?? null);
+  readonly tiles = computed<ReportBlock[]>(() => this.result()?.blocks.filter((b) => b.meta.type === 'kpi_tile' && !b.error) ?? []);
+  readonly errorCount = computed(() => this.result()?.blocks.filter((b) => b.error).length ?? 0);
+  readonly others = computed<ReportBlock[]>(() => this.result()?.blocks.filter((b) => b.meta.type !== 'kpi_tile' || b.error) ?? []);
+
+  constructor() {
+    this.api.reports().subscribe({
+      next: (d) => {
+        this.definitions.set(d);
+        const first = d.find((x) => x.name === 'checkup') ?? d[0];
+        if (first) {
+          this.name.set(first.name);
+          this.setPeriod(first.period?.default ?? '14d');
+        }
+      },
+      error: (e: unknown) => this.error.set(describeError(e)),
+    });
+  }
+
+  setPeriod(p: string): void {
+    this.period.set(p);
+    const m = /^(\d+)d$/.exec(p);
+    if (m) {
+      this.to.set(isoDate(new Date()));
+      this.from.set(shiftDate(this.to(), -(Number(m[1]) - 1)));
+    }
+    this.render();
+  }
+
+  render(): void {
+    this.error.set(null);
+    this.result.set(null);
+    this.api.renderReport(this.name(), this.from(), this.to()).subscribe({
+      next: (r) => this.result.set(r),
+      error: (e: unknown) => this.error.set(describeError(e)),
+    });
+  }
+}

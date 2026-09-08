@@ -8,9 +8,9 @@ and is updated per stage.
 
 | Stage | State | Date |
 |---|---|---|
-| 0 — Scaffold | **in progress** | 08 Sep 2026 |
-| 1 — Core | planned | |
-| 2 — Reports | planned | |
+| 0 — Scaffold | **done** | 08 Sep 2026 |
+| 1 — Core | **implemented, in review** | 08 Sep 2026 |
+| 2 — Reports | **implemented, in review** | 08 Sep 2026 |
 | 3 — Agent | planned | |
 | Cross-cutting / v0.1.0 | planned | |
 

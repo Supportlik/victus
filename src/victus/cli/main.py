@@ -14,6 +14,8 @@ from typing import Annotated
 import typer
 
 from victus import __version__
+from victus.cli.admin_cmd import passkey_app, tenant_app, token_app, user_app
+from victus.cli.backup_cmd import backup_app
 
 app = typer.Typer(
     name="victus",
@@ -65,9 +67,7 @@ def serve(
     import uvicorn
 
     if migrate:
-        # Alembic wiring arrives with Stage 1; until then this is a no-op that
-        # keeps the deploy command line stable.
-        typer.echo("migrations: none yet (Stage 1)", err=True)
+        _migrate_database()
     uvicorn.run("victus.api.app:create_app", factory=True, host=host, port=port, reload=reload)
 
 
@@ -76,51 +76,7 @@ def _planned(stage: str, what: str) -> None:
     raise typer.Exit(code=NOT_IMPLEMENTED_EXIT)
 
 
-import_app = typer.Typer(help="Import data from external sources (Stage 1).", no_args_is_help=True)
-backup_app = typer.Typer(help="Create, verify and restore backups (Stage 1).", no_args_is_help=True)
-token_app = typer.Typer(help="Manage API tokens (Stage 1).", no_args_is_help=True)
 agent_app = typer.Typer(help="Run and inspect agent jobs (Stage 3).", no_args_is_help=True)
-
-
-@import_app.command("vault")
-def import_vault(
-    path: Annotated[str, typer.Argument(help="Path to the Obsidian vault.")],
-    tenant: Annotated[str, typer.Option(help="Tenant slug.")] = "default",
-    dry_run: Annotated[bool, typer.Option("--dry-run", help="Parse and report only.")] = False,
-) -> None:
-    """Import products, recipes, day logs and weights from an Obsidian vault."""
-    flags = " --dry-run" if dry_run else ""
-    _planned("Stage 1", f"import vault {path} --tenant {tenant}{flags}")
-
-
-@backup_app.command("create")
-def backup_create() -> None:
-    """Write a tenant backup archive."""
-    _planned("Stage 1", "backup create")
-
-
-@backup_app.command("verify")
-def backup_verify() -> None:
-    """Restore an archive into a temporary database and compare counts."""
-    _planned("Stage 1", "backup verify")
-
-
-@backup_app.command("restore")
-def backup_restore() -> None:
-    """Restore an archive."""
-    _planned("Stage 1", "backup restore")
-
-
-@backup_app.command("schedule")
-def backup_schedule() -> None:
-    """Run scheduled backups (daemon mode)."""
-    _planned("Stage 1", "backup schedule")
-
-
-@token_app.command("create")
-def token_create() -> None:
-    """Create an API token."""
-    _planned("Stage 1", "token create")
 
 
 @agent_app.command("run")
@@ -141,15 +97,26 @@ def mcp() -> None:
     _planned("Stage 3", "mcp")
 
 
+def _migrate_database() -> None:
+    from victus.config.server import load_server_config
+    from victus.infrastructure.migrations import runner
+
+    cfg = load_server_config()
+    runner.upgrade(cfg.database.url)
+    typer.echo(f"migrations: up to date ({runner.current(cfg.database.url)})", err=True)
+
+
 @app.command()
 def migrate() -> None:
-    """Apply database migrations."""
-    _planned("Stage 1", "migrate")
+    """Apply database migrations (Alembic, to head)."""
+    _migrate_database()
 
 
-app.add_typer(import_app, name="import")
 app.add_typer(backup_app, name="backup")
 app.add_typer(token_app, name="token")
+app.add_typer(tenant_app, name="tenant")
+app.add_typer(user_app, name="user")
+app.add_typer(passkey_app, name="passkey")
 app.add_typer(agent_app, name="agent")
 
 

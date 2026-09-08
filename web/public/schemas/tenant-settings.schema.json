@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Supportlik/victus/schemas/tenant-settings.schema.json",
+  "title": "Victus tenant settings",
+  "description": "Per-tenant, versioned settings: weight goal, TDEE parameters, calorie corridor and the target bands per training-day type. Salt targets live ONLY here (single source of truth).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["goal", "kcal_per_kg", "calorie_corridor", "target_bands"],
+  "$defs": {
+    "band": {
+      "type": "object",
+      "description": "Target band for one macro: min / optimal range / target / max (+ optional stretch where more is better).",
+      "additionalProperties": false,
+      "required": ["min", "opt_min", "opt_max", "target", "max"],
+      "properties": {
+        "min": { "type": "number", "minimum": 0 },
+        "opt_min": { "type": "number", "minimum": 0 },
+        "opt_max": { "type": "number", "minimum": 0 },
+        "target": { "type": "number", "minimum": 0 },
+        "max": { "type": "number", "minimum": 0 },
+        "stretch": { "type": ["number", "null"], "minimum": 0 }
+      }
+    },
+    "target_band": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "valid_from", "protein", "carbs", "fat", "fiber", "salt"],
+      "properties": {
+        "name": { "type": "string" },
+        "training_type": { "type": ["string", "null"], "enum": ["rest", "strength", "martial_arts", null], "description": "null = applies to every day type not covered by a specific profile." },
+        "valid_from": { "type": "string", "format": "date" },
+        "valid_until": { "type": ["string", "null"], "format": "date" },
+        "kcal": { "$ref": "#/$defs/band" },
+        "protein": { "$ref": "#/$defs/band" },
+        "carbs": { "$ref": "#/$defs/band" },
+        "fat": { "$ref": "#/$defs/band" },
+        "fiber": { "$ref": "#/$defs/band" },
+        "salt": { "$ref": "#/$defs/band" },
+        "note": { "type": "string" }
+      }
+    }
+  },
+  "properties": {
+    "goal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["weight_kg", "date"],
+      "properties": {
+        "weight_kg": { "type": "number", "exclusiveMinimum": 0 },
+        "date": { "type": "string", "format": "date" },
+        "reference": { "type": "string", "description": "Name of the stage used as the reference in reports." },
+        "stages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "date"],
+            "properties": {
+              "name": { "type": "string" },
+              "date": { "type": "string", "format": "date" },
+              "note": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "kcal_per_kg": { "type": "number", "exclusiveMinimum": 0, "default": 7716.17, "description": "Energy per kg body mass used in TDEE = mean kcal + (-delta_kg * kcal_per_kg) / days." },
+    "moving_average_days": { "type": "integer", "minimum": 1, "default": 7 },
+    "trend_windows": { "type": "array", "items": { "type": "integer", "minimum": 2 }, "default": [7, 14, 21, 30, 60, 90] },
+    "tdee_windows": { "type": "array", "items": { "type": "integer", "minimum": 2 }, "default": [3, 7, 14, 21, 30, 60, 90] },
+    "tdee_reference_window": { "type": "integer", "minimum": 2, "default": 14, "description": "Rolling window whose TDEE drives every derived number." },
+    "calorie_corridor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["min", "max"],
+      "properties": {
+        "min": { "type": "number", "minimum": 0 },
+        "max": { "type": "number", "minimum": 0 },
+        "asymmetric": { "type": "boolean", "default": true, "description": "true: only exceeding max is rated red; being below min is unproblematic; the average over the window is rated, not single days." }
+      }
+    },
+    "target_bands": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/target_band" } },
+    "body": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "birth_date": { "type": "string", "format": "date" },
+        "height_cm": { "type": "number", "exclusiveMinimum": 0 },
+        "sex": { "type": "string", "enum": ["m", "f", "x"] }
+      }
+    },
+    "transcription": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "language": { "type": "string", "default": "de" },
+        "vocabulary_prompt": { "type": "string", "description": "Domain vocabulary passed to the transcription model (product names, exercises) to avoid number/name errors." }
+      }
+    },
+    "report_defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "period": { "type": "string", "pattern": "^[0-9]+d$", "default": "14d" },
+        "palette": { "type": "object", "additionalProperties": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" } }
+      }
+    }
+  },
+  "examples": [
+    {
+      "goal": { "weight_kg": 80.0, "date": "2027-03-31", "reference": "Okay", "stages": [ { "name": "Okay", "date": "2027-03-31" }, { "name": "Minimal", "date": "2027-06-30" } ] },
+      "kcal_per_kg": 7716.17,
+      "moving_average_days": 7,
+      "trend_windows": [7, 14, 21, 30, 60, 90],
+      "tdee_windows": [3, 7, 14, 21, 30, 60, 90],
+      "calorie_corridor": { "min": 1400, "max": 2000, "asymmetric": true },
+      "target_bands": [
+        {
+          "name": "Rest day", "training_type": "rest", "valid_from": "2026-01-01",
+          "protein": { "min": 105, "opt_min": 150, "opt_max": 185, "target": 165, "max": 200, "stretch": 185 },
+          "carbs": { "min": 120, "opt_min": 155, "opt_max": 200, "target": 180, "max": 230 },
+          "fat": { "min": 45, "opt_min": 55, "opt_max": 70, "target": 58, "max": 75 },
+          "fiber": { "min": 25, "opt_min": 32, "opt_max": 38, "target": 35, "max": 50, "stretch": 38 },
+          "salt": { "min": 4, "opt_min": 6, "opt_max": 8, "target": 7, "max": 15 }
+        }
+      ],
+      "transcription": { "language": "de", "vocabulary_prompt": "skyr, quark, squat, deadlift" },
+      "report_defaults": { "period": "14d" }
+    }
+  ]
+}

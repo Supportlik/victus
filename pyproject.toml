@@ -36,11 +36,16 @@ dependencies = [
   "typer>=0.12",
   "PyYAML>=6.0",
   "python-multipart>=0.0.9",
+  # Authentication is not optional: passkeys (WebAuthn) and Argon2 recovery codes.
+  "webauthn>=3.0",
+  "argon2-cffi>=23.1",
+  # Tenant settings are validated against schemas/tenant-settings.schema.json.
+  "jsonschema>=4.20",
 ]
 
 [project.optional-dependencies]
 postgres = ["psycopg[binary]>=3.2"]
-auth = ["webauthn>=2.1", "argon2-cffi>=23.1"]
+auth = []  # kept as an alias; passkey support is part of the core install
 transcription = ["openai>=1.40"]
 agent = ["anthropic>=0.40", "mcp>=1.2"]
 all = ["victus[postgres,auth,transcription,agent]"]
@@ -64,6 +69,7 @@ dev = [
   "mypy>=1.11",
   "types-PyYAML>=6.0",
   "check-jsonschema>=0.29",
+  "types-jsonschema>=4.26.0.20260518",
 ]
 
 # The version lives in src/victus/__init__.py only, so `victus --version` and
@@ -74,6 +80,11 @@ path = "src/victus/__init__.py"
 [tool.hatch.build.targets.wheel]
 packages = ["src/victus"]
 
+# The JSON Schemas are part of the runtime (settings validation), so the wheel
+# carries a copy under victus/schemas; a checkout uses the repo directory.
+[tool.hatch.build.targets.wheel.force-include]
+schemas = "victus/schemas"
+
 [tool.hatch.build.targets.sdist]
 exclude = [".github", "web/node_modules", "web/dist", "deploy", "docs/images"]
 
@@ -82,8 +93,9 @@ testpaths = ["tests"]
 markers = [
   "domain: pure domain logic, no I/O",
   "service: use cases against an in-memory database",
+  "reports: report engine against in-memory data",
   "api: HTTP layer via TestClient",
-  "migration: vault import round-trips",
+  "migration: backup archive round-trips",
   "slow: long-running tests (skipped by default in pre-commit)",
 ]
 addopts = "-ra"
@@ -99,6 +111,8 @@ ignore = ["RUF001", "RUF002", "RUF003"]  # German text with typographic quotes i
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101"]
+# Application errors mirror HTTP problem titles (NotFound, Conflict); no Error suffix.
+"src/victus/application/errors.py" = ["N818"]
 
 [tool.mypy]
 python_version = "3.12"
@@ -111,3 +125,5 @@ warn_unreachable = true
 [[tool.mypy.overrides]]
 module = ["victus.api.*", "victus.cli.*", "victus.infrastructure.*"]
 disallow_untyped_decorators = false
+# SQLAlchemy's Session.scalar() returns Any; the repositories declare the real type.
+warn_return_any = false

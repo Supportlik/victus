@@ -24,6 +24,9 @@ updates:
       # they arrive with the Angular update, not on their own.
       - dependency-name: typescript
         update-types: ["version-update:semver-major"]
+      # vitest majors follow @angular/build's peer range.
+      - dependency-name: vitest
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /
