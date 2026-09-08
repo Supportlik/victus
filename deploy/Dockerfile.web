@@ -2,7 +2,7 @@
 # Build context is the repository root:  docker build -f deploy/Dockerfile.web .
 
 # ── Stage 1: build the Angular bundle ───────────────────────────────────────
-FROM node:24-alpine AS build
+FROM node:26-alpine AS build
 
 WORKDIR /web
 COPY web/package.json web/package-lock.json ./
