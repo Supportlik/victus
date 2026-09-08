@@ -1,8 +1,11 @@
 # Victus web image: Angular production build served by nginx.
 # Build context is the repository root:  docker build -f deploy/Dockerfile.web .
+#
+# Base images are Alpine and pinned to the newest stable release; Dependabot
+# (`.github/dependabot.yml`, ecosystem docker) proposes bumps.
 
 # ── Stage 1: build the Angular bundle ───────────────────────────────────────
-FROM node:24-alpine AS build
+FROM node:26.8-alpine3.24 AS build
 
 WORKDIR /web
 COPY web/package.json web/package-lock.json ./
@@ -11,8 +14,8 @@ RUN npm ci --no-audit --no-fund
 COPY web/ ./
 RUN npm run build -- --configuration production
 
-# ── Stage 2: nginx (unprivileged) ───────────────────────────────────────────
-FROM nginxinc/nginx-unprivileged:1.27-alpine AS runtime
+# ── Stage 2: nginx (unprivileged, Alpine, mainline) ─────────────────────────
+FROM nginxinc/nginx-unprivileged:mainline-alpine3.24 AS runtime
 
 ARG VERSION=dev
 LABEL org.opencontainers.image.title="victus-web" \

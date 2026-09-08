@@ -2,11 +2,13 @@
 # needed for certificate issuance — required behind DS-Lite/CGNAT).
 # Only used with `--profile caddy`. Behind a central reverse proxy use
 # Caddyfile.snippet instead.
+#
+# Alpine variants, pinned to the newest stable Caddy release.
 
-FROM caddy:2-builder AS builder
+FROM caddy:2.9.1-builder-alpine AS builder
 RUN xcaddy build --with github.com/caddy-dns/cloudflare
 
-FROM caddy:2
+FROM caddy:2.9.1-alpine
 LABEL org.opencontainers.image.source="https://github.com/Supportlik/victus" \
       org.opencontainers.image.licenses="MIT"
 COPY --from=builder /usr/bin/caddy /usr/bin/caddy

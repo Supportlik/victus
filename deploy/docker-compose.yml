@@ -121,7 +121,7 @@ services:
       start_period: 2m
 
   postgres:
-    image: postgres:17-alpine
+    image: postgres:18.6-alpine3.24
     container_name: victus-postgres
     profiles: ["postgres"]
     restart: unless-stopped

@@ -19,6 +19,11 @@ updates:
         patterns: ["@angular/*", "@angular-devkit/*"]
       npm-minor-patch:
         update-types: [minor, patch]
+    ignore:
+      # TypeScript majors are dictated by the Angular compiler's supported range;
+      # they arrive with the Angular update, not on their own.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /

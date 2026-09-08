@@ -22,7 +22,7 @@ server behind a reverse proxy, reachable only over a VPN (Tailscale is used in t
 | `web` | `ghcr.io/supportlik/victus-web` | nginx serving the Angular build, proxies `/api` and `/mcp` to `api` | via `WEB_PORT` | default |
 | `worker` | `victus-api` | `victus worker` (agent cron, scale sync, backup schedule) | – | default |
 | `backup` | `victus-api` | `victus backup schedule --daemon`; one-shot via `docker compose run --rm backup …` | – | default |
-| `postgres` | `postgres:17-alpine` | – | internal | `postgres` |
+| `postgres` | `postgres:18.6-alpine3.24` | – | internal | `postgres` |
 | `caddy` | `deploy/Dockerfile.caddy` | standalone TLS proxy for hosts without a central Caddy | 443 | `caddy` |
 | `dev` overrides | `docker-compose.override.example.yml` | hot reload, bind mounts | 8090, 4200 | `dev` |
 
