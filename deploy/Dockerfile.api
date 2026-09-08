@@ -28,8 +28,9 @@ COPY pyproject.toml uv.lock README.md ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev --no-install-project --extra postgres --extra auth --extra transcription --extra agent
 
-# Then the project itself.
+# Then the project itself (schemas/ is force-included into the wheel).
 COPY src ./src
+COPY schemas ./schemas
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev --extra postgres --extra auth --extra transcription --extra agent
 
