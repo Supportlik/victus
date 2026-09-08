@@ -387,6 +387,11 @@ class LineItemDeleteIn(_In):
     line_item_id: int
 
 
+class ProductUsageIn(_In):
+    product_id: int
+    limit: int = Field(default=50, ge=1, le=500)
+
+
 class ProductCreateIn(_In):
     name: str
     brand: str | None = None
@@ -761,6 +766,13 @@ def _product_update(tc: ToolContext, inp: ProductUpdateIn) -> ToolResult:
     return cast(dict[str, Any], jsonable(view))
 
 
+def _product_usage(tc: ToolContext, inp: ProductUsageIn) -> ToolResult:
+    view = product_uc.GetProductUsage(tc.uow_factory, tc.ctx).execute(
+        inp.product_id, limit=inp.limit
+    )
+    return cast(dict[str, Any], jsonable(view))
+
+
 def _product_propose(tc: ToolContext, inp: ProductProposeIn) -> ToolResult:
     view = proposal_uc.ProposeProductChange(tc.uow_factory, tc.ctx).execute(
         inp.product_id,
@@ -1046,6 +1058,13 @@ TOOLS: tuple[ToolSpec, ...] = (
         MealDeleteIn,
         _meal_delete,
         read_only=False,
+    ),
+    _spec(
+        "product_usage",
+        "The days a product was logged on, newest first, with amounts and kcal.",
+        SCOPE_READ,
+        ProductUsageIn,
+        _product_usage,
     ),
     _spec(
         "product_propose",

@@ -26,6 +26,7 @@ from victus.mcp.tools import (
 EXPECTED = {
     "product_search",
     "product_get",
+    "product_usage",
     "recipe_get",
     "day_get",
     "days_list",

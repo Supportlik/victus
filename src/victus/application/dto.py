@@ -369,6 +369,35 @@ class ProductProposalView:
 
 
 @dataclass(frozen=True, slots=True)
+class ProductUsageEntry:
+    """One logged occurrence of a product, for its "where did I eat this" list."""
+
+    date: date
+    day_status: str
+    meal: str
+    line_item_id: int
+    amount: float | None
+    unit_code: str | None
+    base_amount: float
+    base_unit: str
+    is_draft: bool
+    estimated: bool
+    kcal: float | None
+    protein: float | None
+
+
+@dataclass(frozen=True, slots=True)
+class ProductUsage:
+    product_id: int
+    entries: list[ProductUsageEntry]
+    days: int
+    total_base_amount: float
+    total_kcal: float
+    first_date: date | None
+    last_date: date | None
+
+
+@dataclass(frozen=True, slots=True)
 class ReportSnapshotView:
     id: str
     report_name: str

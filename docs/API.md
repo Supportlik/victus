@@ -58,6 +58,7 @@ The tenant is always derived from the principal (session or token); it never app
 | GET | `/products?q=&category=&limit=&cursor=` | Search (full-text + fuzzy score) |
 | POST | `/products` | Create product |
 | GET / PATCH / DELETE | `/products/{id}` | Product detail |
+| GET | `/products/{id}/usage?limit=` | The days this product was logged on, newest first, with amounts, kcal and draft flags (R60) |
 | GET / POST | `/products/{id}/portions` | Portions of a product |
 | PATCH / DELETE | `/portions/{id}` | Edit portion |
 | POST | `/products/match` | Free text → ranked candidates `{id, name, stage, score}` (same function the agent uses) |

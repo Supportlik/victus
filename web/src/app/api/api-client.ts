@@ -27,6 +27,7 @@ import {
   Portion,
   Product,
   ProductProposal,
+  ProductUsage,
   ProductInput,
   Recipe,
   RecipeBatch,
@@ -118,6 +119,9 @@ export class ApiClient {
   }
   createProduct(body: ProductInput): Observable<Product> {
     return this.http.post<Product>(`${API_BASE}/products`, body);
+  }
+  productUsage(id: number, limit = 100): Observable<ProductUsage> {
+    return this.http.get<ProductUsage>(`${API_BASE}/products/${id}/usage`, { params: params({ limit }) });
   }
   updateProduct(id: number, body: Partial<ProductInput>): Observable<Product> {
     return this.http.patch<Product>(`${API_BASE}/products/${id}`, body);

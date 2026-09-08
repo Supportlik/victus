@@ -158,7 +158,11 @@ import { DayThread } from './day-thread';
                         <tr [class.draft]="it.is_draft" [class.estimated]="it.estimated || it.amount_estimated" [attr.data-item]="it.id">
                           <td>
                             <v-food-icon [name]="it.consumable_name" [category]="it.category" [kind]="it.consumable_kind" [icon]="it.icon" />
-                            {{ it.consumable_name }}
+                            @if (it.consumable_kind === 'product') {
+                              <a [routerLink]="['/products', it.consumable_id]" title="Open the product">{{ it.consumable_name }}</a>
+                            } @else if (it.consumable_kind === 'recipe_batch') {
+                              <a [routerLink]="['/recipes']" title="Recipes">{{ it.consumable_name }}</a>
+                            } @else { {{ it.consumable_name }} }
                             @if (it.is_draft) { <span class="v-tag draft">draft</span> }
                             @if (it.estimated || it.amount_estimated) { <span class="warn-mark" title="estimated">⚠️</span> }
                             @if (it.consumable_kind === 'ad_hoc') { <span class="v-tag">unmatched</span> }

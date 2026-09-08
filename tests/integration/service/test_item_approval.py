@@ -106,3 +106,31 @@ def test_reassigning_a_consumable_drops_the_old_products_portion(
         item.id, {"consumable_id": other.id, "amount": 1, "unit_code": "tub"}
     )
     assert moved.consumable_id == other.id and moved.base_amount == 450
+
+
+def test_product_usage_lists_the_days_it_was_eaten(
+    factory: UowFactory, alice: TenantContext, bob: TenantContext, skyr: int
+) -> None:
+    from datetime import timedelta
+
+    from victus.application.errors import NotFound
+    from victus.application.use_cases import products as products_uc
+
+    other_day = DAY + timedelta(days=1)
+    for day in (DAY, other_day):
+        days_uc.CreateDay(factory, alice).execute(day, reliable=True)
+        meal_id = days_uc.AddMeal(factory, alice).execute(day, "Breakfast").id
+        days_uc.AddLineItem(factory, alice).execute(
+            meal_id, days_uc.LineItemInput(consumable_id=skyr, amount=200, unit_code="g")
+        )
+
+    usage = products_uc.GetProductUsage(factory, alice).execute(skyr)
+    assert usage.days == 2 and len(usage.entries) == 2
+    assert [e.date for e in usage.entries] == [other_day, DAY]  # newest first
+    assert usage.total_base_amount == 400
+    assert usage.first_date == DAY and usage.last_date == other_day
+    assert usage.entries[0].meal == "Breakfast" and usage.entries[0].kcal == 126
+
+    # another tenant sees neither the product nor its usage
+    with pytest.raises(NotFound):
+        products_uc.GetProductUsage(factory, bob).execute(skyr)

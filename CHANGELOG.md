@@ -69,6 +69,9 @@ All notable changes to Victus are documented here. The format follows
 - Accepting a drafted item can move it to another meal or create one (`meal_id` / `meal_name`).
 - Agent run details open below the table instead of beside it.
 
+- A product page shows where it was eaten (R60): the days it was logged on with amounts, kcal and
+  draft state; items in the day view link back to their product. MCP `product_usage`.
+
 ### Changed
 - No importer in the product (ADR 0011): existing data enters through the backup archive format, REST or MCP.
 - One model session per day (ADR 0009) and a resumable per-day thread (ADR 0010); lock TTL 5 minutes;

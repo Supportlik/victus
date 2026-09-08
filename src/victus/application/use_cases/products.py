@@ -146,6 +146,46 @@ def _validate_product(data: ProductInput) -> None:
         raise ValidationFailed("reference_amount must be positive")
 
 
+class GetProductUsage(UseCase):
+    """Which days a product was logged on, newest first."""
+
+    def execute(self, product_id: int, *, limit: int = 100) -> dto.ProductUsage:
+        self.ctx.require(SCOPE_READ)
+        with self._uow() as uow:
+            if uow.products.get_consumable(product_id) is None:
+                raise NotFound(f"product {product_id} not found")
+            rows = uow.day_logs.usage_of(product_id, limit=limit)
+            entries = [
+                dto.ProductUsageEntry(
+                    date=r["date"]
+                    if isinstance(r["date"], date)
+                    else date.fromisoformat(str(r["date"])),
+                    day_status=str(r["day_status"]),
+                    meal=str(r["meal"] or ""),
+                    line_item_id=int(r["line_item_id"]),
+                    amount=float(r["amount"]) if r["amount"] is not None else None,
+                    unit_code=str(r["unit_code"]) if r["unit_code"] else None,
+                    base_amount=float(r["base_amount"]),
+                    base_unit=str(r["base_unit"]),
+                    is_draft=bool(r["is_draft"]),
+                    estimated=bool(r["estimated"]) or bool(r["amount_estimated"]),
+                    kcal=float(r["kcal"]) if r["kcal"] is not None else None,
+                    protein=float(r["protein"]) if r["protein"] is not None else None,
+                )
+                for r in rows
+            ]
+            dates = [e.date for e in entries]
+            return dto.ProductUsage(
+                product_id=product_id,
+                entries=entries,
+                days=len({e.date for e in entries}),
+                total_base_amount=sum(e.base_amount for e in entries),
+                total_kcal=sum(e.kcal or 0.0 for e in entries),
+                first_date=min(dates) if dates else None,
+                last_date=max(dates) if dates else None,
+            )
+
+
 class CreateProduct(UseCase):
     def execute(self, data: ProductInput) -> dto.ProductView:
         self.ctx.require(SCOPE_WRITE)

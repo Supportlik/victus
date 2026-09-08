@@ -8,7 +8,12 @@ from typing import Annotated
 from fastapi import APIRouter, Query, Response, status
 
 from victus.api.deps import Ctx, Uow
-from victus.api.schemas.common import MatchCandidateOut, PortionOut, ProductOut
+from victus.api.schemas.common import (
+    MatchCandidateOut,
+    PortionOut,
+    ProductOut,
+    ProductUsageOut,
+)
 from victus.api.schemas.requests import MatchIn, PortionIn, PortionPatch, ProductIn, ProductPatch
 from victus.application.use_cases import products as uc
 
@@ -56,6 +61,19 @@ def match_products(body: MatchIn, ctx: Ctx, uow: Uow) -> list[MatchCandidateOut]
 @router.get("/products/{product_id}", response_model=ProductOut)
 def get_product(product_id: int, ctx: Ctx, uow: Uow) -> ProductOut:
     return _out(uc.GetProduct(uow, ctx).execute(product_id))
+
+
+@router.get("/products/{product_id}/usage", response_model=ProductUsageOut)
+def product_usage(
+    product_id: int,
+    ctx: Ctx,
+    uow: Uow,
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+) -> ProductUsageOut:
+    """The days this product was logged on, newest first."""
+    return ProductUsageOut.model_validate(
+        uc.GetProductUsage(uow, ctx).execute(product_id, limit=limit)
+    )
 
 
 @router.patch("/products/{product_id}", response_model=ProductOut)

@@ -29,6 +29,7 @@ HTTP responses: missing or invalid token → `401`; token lacks the tool's scope
 |---|---|---|---|
 | `product_search(q, limit=10)` | `read` | `SearchProducts` | candidates `{id, name, kind, tier, score, kcal_per_100}` |
 | `product_get(id)` | `read` | `GetProduct` | product with portions and nutrients |
+| `product_usage(product_id, limit?)` | `read` | `GetProductUsage` | the days a product was logged on |
 | `recipe_get(id)` | `read` | `GetRecipe` | recipe, ingredients, batches |
 | `day_get(date)` | `read` | `GetDay` | day with meals, line items, computed macros, target band, findings |
 | `days_list(from, to, status?)` | `read` | `ListDays` | compact list |

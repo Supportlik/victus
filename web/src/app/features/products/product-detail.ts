@@ -1,7 +1,8 @@
 import { ChangeDetectionStrategy, Component, effect, inject, input, signal } from '@angular/core';
+import { DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { ApiClient, Capture, Portion, Product, ProductProposal } from '../../api';
+import { ApiClient, Capture, Portion, Product, ProductProposal, ProductUsage } from '../../api';
 import { describeError } from '../../core/problem';
 import { CaptureCard } from '../../shared/capture-card';
 import { CaptureInput } from '../../shared/capture-input';
@@ -11,7 +12,7 @@ import { ProductForm } from './product-form';
 @Component({
   selector: 'v-product-detail',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, FormsModule, MacroPipe, ProductForm, CaptureInput, CaptureCard],
+  imports: [RouterLink, FormsModule, MacroPipe, ProductForm, CaptureInput, CaptureCard, DecimalPipe],
   template: `
     <div class="v-page">
       @if (error(); as e) { <div class="v-error">{{ e }}</div> }
@@ -89,6 +90,31 @@ import { ProductForm } from './product-form';
           </div>
         </section>
 
+        <section class="usage v-panel">
+          <h3>Where you ate this</h3>
+          @if (usage(); as u) {
+            @if (u.entries.length) {
+              <p class="v-small v-muted">{{ u.days }} day{{ u.days === 1 ? '' : 's' }} · {{ u.first_date }} to {{ u.last_date }} · {{ u.total_base_amount | number: '1.0-0' }} {{ p.reference_unit }} in total · {{ u.total_kcal | number: '1.0-0' }} kcal</p>
+              <div class="v-scroll-x"><table class="v-table">
+                <thead><tr><th>Day</th><th>Meal</th><th class="num">Amount</th><th class="num">kcal</th><th></th></tr></thead>
+                <tbody>
+                  @for (e of u.entries; track e.line_item_id) {
+                    <tr>
+                      <td><a [routerLink]="['/days', e.date]">{{ e.date }}</a></td>
+                      <td>{{ e.meal }}</td>
+                      <td class="num">{{ e.amount ?? e.base_amount }} {{ e.unit_code ?? e.base_unit }}@if (e.estimated) { <span title="estimated"> ⚠️</span> }</td>
+                      <td class="num">{{ e.kcal | number: '1.0-0' }}</td>
+                      <td>@if (e.is_draft) { <span class="v-tag draft">draft</span> }</td>
+                    </tr>
+                  }
+                </tbody>
+              </table></div>
+            } @else {
+              <p class="v-muted v-small">Not logged yet.</p>
+            }
+          } @else { <p class="v-muted v-small">Loading…</p> }
+        </section>
+
         <section class="portions">
           <h3>Portions</h3>
           <p class="v-small v-muted">Piece weights live only here. One default portion per unit.</p>
@@ -122,6 +148,7 @@ import { ProductForm } from './product-form';
     dt { font-size: var(--v-fs-xs); color: var(--v-ink-3); } dd { margin: 0; font-size: var(--v-fs-l); font-weight: 560; }
     .portions { margin-top: 1.5rem; } .add { margin-top: 0.75rem; align-items: end; }
     .captures { margin-top: 1.5rem; display: grid; gap: 0.6rem; }
+    .usage { margin-top: 1.5rem; display: grid; gap: 0.5rem; }
     .cap-list { display: grid; gap: 0.5rem; }
     .proposals { margin-top: 1.5rem; display: grid; gap: 0.75rem; border-color: var(--v-agent); }
     .proposal { display: grid; gap: 0.4rem; padding-top: 0.5rem; border-top: 1px dashed var(--v-line); }
@@ -138,6 +165,7 @@ export class ProductDetail {
   readonly error = signal<string | null>(null);
   readonly captures = signal<Capture[]>([]);
   readonly proposals = signal<ProductProposal[]>([]);
+  readonly usage = signal<ProductUsage | null>(null);
   readonly deciding = signal(false);
   readonly unselected = signal<Set<string>>(new Set());
   np: Omit<Portion, 'id' | 'product_id'> = { label: '', unit_code: 'piece', amount: 0, amount_unit: 'g', is_default: false, weight_source: 'weighed' };
@@ -149,6 +177,7 @@ export class ProductDetail {
     this.api.product(id).subscribe({ next: (p) => this.product.set(p), error: (e: unknown) => this.error.set(describeError(e)) });
     this.api.captures(undefined, undefined, id).subscribe({ next: (c) => this.captures.set(c), error: () => undefined });
     this.api.proposals({ product_id: id }).subscribe({ next: (p) => this.proposals.set(p), error: () => undefined });
+    this.api.productUsage(id).subscribe({ next: (u) => this.usage.set(u), error: () => undefined });
   }
   onCapture(c: Capture): void {
     this.captures.update((list) => [c, ...list]);

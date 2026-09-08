@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import date, datetime
 from typing import Any
 
@@ -121,6 +121,26 @@ class DayLogRepo(Repo):
             {"t": self.tenant_id, "d": day},
         ).mappings()
         return {int(r["id"]): _macros(_Row(r)) for r in rows}
+
+    def usage_of(self, consumable_id: int, limit: int = 100) -> Sequence[Mapping[str, Any]]:
+        """Where a consumable was logged: newest day first, with its computed macros."""
+        rows = self.session.execute(
+            text(
+                "SELECT d.date AS date, d.status AS day_status, m.name AS meal, "
+                "       lm.id AS line_item_id, lm.amount, lm.unit_code, lm.base_amount, "
+                "       lm.base_unit, lm.is_draft, lm.estimated, lm.amount_estimated, "
+                "       lm.kcal, lm.protein, lm.carbs, lm.fat, lm.fiber, lm.salt "
+                "  FROM line_item_macros lm "
+                "  JOIN meal m ON m.id = lm.meal_id "
+                "  JOIN day_log d ON d.id = m.day_log_id "
+                " WHERE d.tenant_id = :t AND lm.id IN ("
+                "       SELECT li.id FROM line_item li WHERE li.consumable_id = :c) "
+                " ORDER BY d.date DESC, m.position, lm.position "
+                " LIMIT :n"
+            ),
+            {"t": self.tenant_id, "c": consumable_id, "n": limit},
+        ).mappings()
+        return [dict(r) for r in rows]
 
     # ── meals / items ──
     def add_meal(self, meal: orm.Meal) -> orm.Meal:

@@ -9,7 +9,7 @@ objects). Only the signatures the use cases need are declared here.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import date, datetime
 from typing import TYPE_CHECKING, Any, Protocol
 
@@ -164,6 +164,8 @@ class DayLogRepository(Protocol):
     def delete_line_item(self, item: orm.LineItem) -> None: ...
 
     def line_item_macros(self, day: date) -> dict[int, Macros]: ...
+
+    def usage_of(self, consumable_id: int, limit: int = 100) -> Sequence[Mapping[str, Any]]: ...
 
     def draft_days(self) -> Sequence[orm.DayLog]: ...
 

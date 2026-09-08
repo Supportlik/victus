@@ -86,6 +86,31 @@ class PortionOut(Out):
     weight_source: str | None = None
 
 
+class ProductUsageEntryOut(Out):
+    date: date
+    day_status: str
+    meal: str
+    line_item_id: int
+    amount: float | None = None
+    unit_code: str | None = None
+    base_amount: float
+    base_unit: str
+    is_draft: bool
+    estimated: bool
+    kcal: float | None = None
+    protein: float | None = None
+
+
+class ProductUsageOut(Out):
+    product_id: int
+    entries: list[ProductUsageEntryOut]
+    days: int
+    total_base_amount: float
+    total_kcal: float
+    first_date: date | None = None
+    last_date: date | None = None
+
+
 class ProductOut(MacrosOut):
     id: int
     name: str

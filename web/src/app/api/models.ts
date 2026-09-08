@@ -263,6 +263,32 @@ export interface DayMessage {
   transcript?: string | null;
 }
 
+/** One logged occurrence of a product. */
+export interface ProductUsageEntry {
+  date: string;
+  day_status: DayStatus;
+  meal: string;
+  line_item_id: number;
+  amount?: number | null;
+  unit_code?: string | null;
+  base_amount: number;
+  base_unit: 'g' | 'ml';
+  is_draft: boolean;
+  estimated: boolean;
+  kcal?: number | null;
+  protein?: number | null;
+}
+
+export interface ProductUsage {
+  product_id: number;
+  entries: ProductUsageEntry[];
+  days: number;
+  total_base_amount: number;
+  total_kcal: number;
+  first_date?: string | null;
+  last_date?: string | null;
+}
+
 /** A report frozen at a point in time, with the assessment written for those numbers. */
 export interface ReportSnapshot {
   id: string;
