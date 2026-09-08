@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { TenantSettingsForm } from './settings-form';
 
 const DOC = {
-  goal: { weight_kg: 80, date: '2027-01-31', stages: [{ name: 'first', date: '2026-12-01' }] },
+  goal: { weight_kg: 80, date: '2027-01-31', stages: [{ name: 'plan', date: '2026-12-01' }] },
   kcal_per_kg: 7716.17,
   moving_average_days: 7,
   trend_windows: [7, 14, 30],
@@ -14,14 +14,39 @@ const DOC = {
   report_defaults: { period: '14d', palette: { ok: '#00ff00' } },
 };
 
+const MULTI = {
+  ...DOC,
+  goals: [
+    { name: 'plan', weight_kg: 80, date: '2027-01-31', stages: [{ name: 'plan', date: '2026-12-01' }] },
+    { name: 'stretch', weight_kg: 76, date: '2027-06-30', active: true },
+  ],
+};
+
 describe('TenantSettingsForm', () => {
-  it('round-trips the document and keeps keys it does not edit', () => {
+  it('reads a single legacy goal as one active goal', () => {
     const m = TenantSettingsForm.fromData(DOC);
-    expect(m.goalWeight).toBe('80');
+    expect(m.goals).toHaveLength(1);
+    expect(m.goals[0]).toMatchObject({ weight: '80', date: '2027-01-31', active: true });
+    expect(m.goals[0].stages[0].name).toBe('plan');
     expect(m.trendWindows).toBe('7, 14, 30');
     expect(m.language).toBe('en');
-    const out = TenantSettingsForm.mergeInto(DOC, { ...m, goalWeight: '78.5', trendWindows: '7,14,21', vocabulary: 'skyr, quark, rye bread' });
-    expect(out['goal']).toMatchObject({ weight_kg: 78.5, date: '2027-01-31' });
+  });
+
+  it('keeps several goals and marks exactly one active', () => {
+    const m = TenantSettingsForm.fromData(MULTI);
+    expect(m.goals.map((g) => g.name)).toEqual(['plan', 'stretch']);
+    expect(m.goals.filter((g) => g.active).map((g) => g.name)).toEqual(['stretch']);
+  });
+
+  it('writes goals, mirrors the active one into goal, and keeps untouched keys', () => {
+    const m = TenantSettingsForm.fromData(MULTI);
+    const out = TenantSettingsForm.mergeInto(MULTI, {
+      ...m,
+      trendWindows: '7,14,21',
+      vocabulary: 'skyr, quark, rye bread',
+    });
+    expect((out['goals'] as { name: string }[]).map((g) => g.name)).toEqual(['plan', 'stretch']);
+    expect(out['goal']).toMatchObject({ weight_kg: 76, date: '2027-06-30' });
     expect(out['trend_windows']).toEqual([7, 14, 21]);
     expect(out['target_bands']).toEqual(DOC.target_bands);
     expect((out['report_defaults'] as { palette: unknown }).palette).toEqual({ ok: '#00ff00' });
@@ -33,6 +58,7 @@ describe('TenantSettingsForm', () => {
     m.kcalPerKg = '7716.17';
     const out = TenantSettingsForm.mergeInto({ kcal_per_kg: 7716.17 }, m);
     expect(out['goal']).toBeUndefined();
+    expect(out['goals']).toBeUndefined();
     expect(out['body']).toBeUndefined();
     expect(out['calorie_corridor']).toEqual({ asymmetric: true });
   });

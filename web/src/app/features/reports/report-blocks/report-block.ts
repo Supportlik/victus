@@ -110,6 +110,7 @@ import { CHART_PALETTE } from './palette';
             <h3>{{ block().meta.title }} <span class="v-small v-muted">{{ formatSigned(burndown().result.gap, 1, 'kg') }} vs. plan · actual {{ formatSigned(burndown().result.actual_rate_per_week, 2, 'kg/week') }} · required {{ formatSigned(burndown().result.required_rate_per_week, 2, 'kg/week') }}</span></h3>
             <div echarts [options]="burndownChart()" class="echart" aria-label="Planned versus actual weight"></div>
             @if (burndown().result.stages.length) {
+              <p class="v-small v-muted">Below the goal line means ahead of plan. Each dotted line is one of your stages.</p>
               <table class="v-table stages">
                 <thead><tr><th>Stage</th><th>Date</th><th class="num">gap</th><th class="num">required kg / week</th><th class="num">eat kcal / day</th><th>feasible</th></tr></thead>
                 <tbody>@for (st of burndown().result.stages; track st.name) {
@@ -200,18 +201,71 @@ export class ReportBlockView {
     return formatKg(k.value, k.decimals);
   }
 
+  /** Remaining kilograms over time: the goal line, one line per stage, and the actual curve. */
   burndownChart(): EChartsOption {
-    const b = this.burndown().result;
+    const bd = this.burndown();
+    const b = bd.result;
+    const today = b.actual.length ? b.actual[b.actual.length - 1][0] : null;
+    const stageSeries = (b.stages ?? [])
+      .filter((st) => st.path?.length)
+      .map((st, i) => ({
+        name: st.name,
+        type: 'line' as const,
+        showSymbol: false,
+        data: st.path as [string, number][],
+        lineStyle: { type: 'dotted' as const, width: 1.5, color: CHART_PALETTE[(i + 4) % CHART_PALETTE.length] },
+        itemStyle: { color: CHART_PALETTE[(i + 4) % CHART_PALETTE.length] },
+      }));
     return {
       animation: false,
-      grid: { left: 48, right: 16, top: 24, bottom: 32 },
-      tooltip: { trigger: 'axis' },
-      legend: { top: 0 },
-      xAxis: { type: 'time' },
-      yAxis: { type: 'value', scale: true, axisLabel: { formatter: '{value} kg' } },
+      grid: { left: 56, right: 20, top: 8, bottom: 56 },
+      tooltip: {
+        trigger: 'axis',
+        valueFormatter: (v: unknown) => (typeof v === 'number' ? `${v.toFixed(1)} kg` : '–'),
+      },
+      legend: { bottom: 0, type: 'scroll', icon: 'roundRect' },
+      xAxis: {
+        type: 'time',
+        axisLabel: { hideOverlap: true, formatter: { day: '{d}.{MM}.', month: '{MMM}', year: '{yyyy}' } },
+        splitLine: { show: true, lineStyle: { opacity: 0.25 } },
+      },
+      yAxis: {
+        type: 'value',
+        min: 0,
+        name: 'kg above goal',
+        nameLocation: 'end',
+        nameGap: 12,
+        axisLabel: { formatter: '{value}' },
+        splitLine: { lineStyle: { opacity: 0.35 } },
+      },
       series: [
-        { name: 'Plan', type: 'line', showSymbol: false, data: b.target_path, lineStyle: { type: 'dashed', color: CHART_PALETTE[3] }, itemStyle: { color: CHART_PALETTE[3] } },
-        { name: 'Actual (7-day avg.)', type: 'line', showSymbol: false, data: b.actual, lineStyle: { color: CHART_PALETTE[0], width: 2 }, itemStyle: { color: CHART_PALETTE[0] } },
+        {
+          name: `Goal ${bd.goal_date}`,
+          type: 'line',
+          showSymbol: false,
+          data: b.target_path as [string, number][],
+          lineStyle: { type: 'dashed', width: 2, color: CHART_PALETTE[3] },
+          itemStyle: { color: CHART_PALETTE[3] },
+        },
+        ...stageSeries,
+        {
+          name: 'Actual (7-day avg.)',
+          type: 'line',
+          showSymbol: false,
+          data: b.actual as [string, number][],
+          lineStyle: { color: CHART_PALETTE[0], width: 3 },
+          itemStyle: { color: CHART_PALETTE[0] },
+          areaStyle: { opacity: 0.12, color: CHART_PALETTE[0] },
+          markLine: today
+            ? {
+                symbol: 'none',
+                silent: true,
+                label: { formatter: 'today', position: 'insideEndTop', fontSize: 10 },
+                lineStyle: { color: CHART_PALETTE[2], type: 'solid', width: 1 },
+                data: [{ xAxis: today }],
+              }
+            : undefined,
+        },
       ],
     };
   }

@@ -9,12 +9,18 @@ interface Stage {
   note: string;
 }
 
+interface Goal {
+  name: string;
+  weight: string;
+  date: string;
+  active: boolean;
+  note: string;
+  stages: Stage[];
+}
+
 /** Editable fields of the tenant settings document, flattened for the form. */
 export interface SettingsFormModel {
-  goalWeight: string;
-  goalDate: string;
-  goalReference: string;
-  stages: Stage[];
+  goals: Goal[];
   kcalPerKg: string;
   movingAverageDays: string;
   trendWindows: string;
@@ -64,24 +70,33 @@ function obj(v: unknown): Json {
   template: `
     <form class="grid" (ngSubmit)="submit()">
       <fieldset>
-        <legend>Goal</legend>
-        <div class="v-form-row">
-          <label class="v-field"><span>Target weight (kg)</span><input name="gw" type="number" step="0.1" min="1" [(ngModel)]="m.goalWeight" /></label>
-          <label class="v-field"><span>Target date</span><input name="gd" type="date" [(ngModel)]="m.goalDate" /></label>
-          <label class="v-field"><span>Reference stage <span class="v-muted">(name)</span></span><input name="gr" [(ngModel)]="m.goalReference" /></label>
-        </div>
-        <div class="stages">
-          <span class="v-small v-muted">Stages</span>
-          @for (s of m.stages; track $index; let i = $index) {
-            <div class="v-form-row stage">
-              <input name="sn{{ i }}" [(ngModel)]="s.name" placeholder="Name" aria-label="Stage name" />
-              <input name="sd{{ i }}" type="date" [(ngModel)]="s.date" aria-label="Stage date" />
-              <input name="so{{ i }}" [(ngModel)]="s.note" placeholder="Note" aria-label="Stage note" />
-              <button type="button" class="v-btn quiet small danger" (click)="m.stages.splice(i, 1)">remove</button>
+        <legend>Goals</legend>
+        <p class="v-small v-muted">Keep as many goals as you like; the active one drives every report.</p>
+        @for (g of m.goals; track $index; let gi = $index) {
+          <div class="goal" [class.active]="g.active">
+            <div class="v-form-row head">
+              <label class="v-field"><span>Name</span><input name="gn{{ gi }}" [(ngModel)]="g.name" placeholder="main goal" /></label>
+              <label class="v-field"><span>Target weight (kg)</span><input name="gw{{ gi }}" type="number" step="0.1" min="1" [(ngModel)]="g.weight" /></label>
+              <label class="v-field"><span>Target date</span><input name="gd{{ gi }}" type="date" [(ngModel)]="g.date" /></label>
+              <label class="check"><input type="radio" name="activeGoal" [value]="gi" [checked]="g.active" (change)="setActive(gi)" /> active</label>
+              <button type="button" class="v-btn quiet small danger" (click)="removeGoal(gi)">remove</button>
             </div>
-          }
-          <button type="button" class="v-btn small" (click)="m.stages.push({ name: '', date: '', note: '' })">Add stage</button>
-        </div>
+            <label class="v-field"><span>Note</span><input name="gnote{{ gi }}" [(ngModel)]="g.note" /></label>
+            <div class="stages">
+              <span class="v-small v-muted">Stages of this goal</span>
+              @for (s of g.stages; track $index; let i = $index) {
+                <div class="v-form-row stage">
+                  <input name="sn{{ gi }}_{{ i }}" [(ngModel)]="s.name" placeholder="Name, e.g. plan / stretch" aria-label="Stage name" />
+                  <input name="sd{{ gi }}_{{ i }}" type="date" [(ngModel)]="s.date" aria-label="Stage date" />
+                  <input name="so{{ gi }}_{{ i }}" [(ngModel)]="s.note" placeholder="Note" aria-label="Stage note" />
+                  <button type="button" class="v-btn quiet small danger" (click)="g.stages.splice(i, 1)">remove</button>
+                </div>
+              }
+              <button type="button" class="v-btn small" (click)="g.stages.push({ name: '', date: '', note: '' })">Add stage</button>
+            </div>
+          </div>
+        }
+        <button type="button" class="v-btn" (click)="addGoal()">Add goal</button>
       </fieldset>
 
       <fieldset>
@@ -137,6 +152,9 @@ function obj(v: unknown): Json {
     .grid { display: grid; gap: 1rem; }
     fieldset { border: 1px solid var(--v-line); border-radius: var(--v-radius-l); padding: 0.75rem 1rem 1rem; display: grid; gap: 0.75rem; min-width: 0; }
     legend { padding: 0 0.4rem; color: var(--v-ink-2); font-size: var(--v-fs-s); }
+    .goal { display: grid; gap: 0.6rem; padding: 0.6rem; border: 1px solid var(--v-line); border-radius: var(--v-radius); }
+    .goal.active { border-color: var(--v-primary); background: var(--v-primary-soft); }
+    .goal .head { grid-template-columns: minmax(8rem, 1fr) minmax(7rem, 1fr) minmax(8rem, 1fr) auto auto; align-items: end; }
     .stages { display: grid; gap: 0.5rem; }
     .stage { grid-template-columns: 2fr 1fr 2fr auto; align-items: center; }
     .stage input { padding: 0.35rem 0.5rem; border: 1px solid var(--v-line-strong); border-radius: var(--v-radius); background: var(--v-surface); }
@@ -157,9 +175,23 @@ export class TenantSettingsForm {
     });
   }
 
+  addGoal(): void {
+    this.m.goals.push({ name: '', weight: '', date: '', active: this.m.goals.length === 0, note: '', stages: [] });
+  }
+
+  removeGoal(i: number): void {
+    const wasActive = this.m.goals[i]?.active;
+    this.m.goals.splice(i, 1);
+    if (wasActive && this.m.goals.length) this.setActive(0);
+  }
+
+  setActive(i: number): void {
+    this.m.goals.forEach((g, idx) => (g.active = idx === i));
+  }
+
   static empty(): SettingsFormModel {
     return {
-      goalWeight: '', goalDate: '', goalReference: '', stages: [], kcalPerKg: '', movingAverageDays: '',
+      goals: [], kcalPerKg: '', movingAverageDays: '',
       trendWindows: '', tdeeWindows: '', tdeeReferenceWindow: '', corridorMin: '', corridorMax: '',
       corridorAsymmetric: true, birthDate: '', heightCm: '', sex: '', language: '', vocabulary: '', reportPeriod: '',
     };
@@ -171,12 +203,27 @@ export class TenantSettingsForm {
     const body = obj(d['body']);
     const tr = obj(d['transcription']);
     const rd = obj(d['report_defaults']);
-    const stages = Array.isArray(goal['stages']) ? (goal['stages'] as Json[]) : [];
+    const rawGoals =
+      Array.isArray(d['goals']) && (d['goals'] as Json[]).length
+        ? (d['goals'] as Json[])
+        : goal['weight_kg'] !== undefined
+          ? [goal]
+          : [];
+    const goals: Goal[] = rawGoals.map((g, i) => ({
+      name: str(g['name']) || (i === 0 ? 'main goal' : 'goal ' + (i + 1)),
+      weight: str(g['weight_kg']),
+      date: str(g['date']),
+      active: rawGoals.length === 1 ? true : g['active'] === true,
+      note: str(g['note']),
+      stages: (Array.isArray(g['stages']) ? (g['stages'] as Json[]) : []).map((s) => ({
+        name: str(s['name']),
+        date: str(s['date']),
+        note: str(s['note']),
+      })),
+    }));
+    if (goals.length && !goals.some((g) => g.active)) goals[0].active = true;
     return {
-      goalWeight: str(goal['weight_kg']),
-      goalDate: str(goal['date']),
-      goalReference: str(goal['reference']),
-      stages: stages.map((s) => ({ name: str(s['name']), date: str(s['date']), note: str(s['note']) })),
+      goals,
       kcalPerKg: str(d['kcal_per_kg']),
       movingAverageDays: str(d['moving_average_days']),
       trendWindows: Array.isArray(d['trend_windows']) ? (d['trend_windows'] as number[]).join(', ') : '',
@@ -201,17 +248,38 @@ export class TenantSettingsForm {
 
   static mergeInto(current: Json, m: SettingsFormModel): Json {
     const d: Json = JSON.parse(JSON.stringify(current));
-    const goal: Json = { ...obj(d['goal']) };
-    setOrDelete(goal, 'weight_kg', num(m.goalWeight));
-    setOrDelete(goal, 'date', m.goalDate || undefined);
-    setOrDelete(goal, 'reference', m.goalReference.trim() || undefined);
-    const stages = m.stages.filter((s) => s.name.trim() && s.date).map((s) => {
-      const o: Json = { name: s.name.trim(), date: s.date };
-      if (s.note.trim()) o['note'] = s.note.trim();
-      return o;
-    });
-    setOrDelete(goal, 'stages', stages.length ? stages : undefined);
-    setOrDelete(d, 'goal', Object.keys(goal).length ? goal : undefined);
+    const goals: Json[] = m.goals
+      .filter((g) => g.name.trim() && num(g.weight) !== undefined && g.date)
+      .map((g) => {
+        const o: Json = {
+          name: g.name.trim(),
+          weight_kg: num(g.weight),
+          date: g.date,
+          active: g.active,
+        };
+        if (g.note.trim()) o['note'] = g.note.trim();
+        const stages = g.stages
+          .filter((s) => s.name.trim() && s.date)
+          .map((s) => {
+            const st: Json = { name: s.name.trim(), date: s.date };
+            if (s.note.trim()) st['note'] = s.note.trim();
+            return st;
+          });
+        if (stages.length) o['stages'] = stages;
+        return o;
+      });
+    if (goals.length) {
+      if (!goals.some((g) => g['active'])) goals[0]['active'] = true;
+      d['goals'] = goals;
+      // keep the single 'goal' in sync with the active one, for readers of the old shape
+      const activeGoal = goals.find((g) => g['active']) ?? goals[0];
+      const legacy: Json = { weight_kg: activeGoal['weight_kg'], date: activeGoal['date'] };
+      if (activeGoal['stages']) legacy['stages'] = activeGoal['stages'];
+      d['goal'] = legacy;
+    } else {
+      delete d['goals'];
+      delete d['goal'];
+    }
     setOrDelete(d, 'kcal_per_kg', num(m.kcalPerKg));
     setOrDelete(d, 'moving_average_days', num(m.movingAverageDays));
     setOrDelete(d, 'trend_windows', intList(m.trendWindows).length ? intList(m.trendWindows) : undefined);

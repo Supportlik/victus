@@ -47,6 +47,7 @@ class PortionView:
 class ProductView:
     id: int
     name: str
+    icon: str | None
     brand: str | None
     category_id: int | None
     category: str | None
@@ -127,6 +128,7 @@ class LineItemView:
     source_capture_id: str | None
     source_kind: str | None
     category: str | None
+    icon: str | None
     kcal: float | None
     protein: float | None
     carbs: float | None
@@ -364,6 +366,29 @@ class ProductProposalView:
     status: str
     created_at: datetime
     decided_at: datetime | None
+
+
+@dataclass(frozen=True, slots=True)
+class ReportSnapshotView:
+    id: str
+    report_name: str
+    title: str
+    label: str | None
+    period_start: date
+    period_end: date
+    today: date
+    status: str
+    created_at: datetime
+    created_by: str | None
+    assessment_md: str | None
+    assessed_at: datetime | None
+    model: str | None
+    prompt_version: str | None
+    input_tokens: int
+    output_tokens: int
+    cost_usd: float
+    #: the frozen render, only when the detail was asked for
+    result: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True, slots=True)

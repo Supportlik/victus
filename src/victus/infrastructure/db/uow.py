@@ -19,6 +19,7 @@ from victus.infrastructure.db.repositories import (
     ProposalRepo,
     RecipeRepo,
     SettingsRepo,
+    SnapshotRepo,
     TargetBandRepo,
     TenantRepo,
     UserRepo,
@@ -56,6 +57,7 @@ class SqlAlchemyUnitOfWork:
         self.agent = AgentRepo(s, c)
         self.day_messages = DayMessageRepo(s, c)
         self.proposals = ProposalRepo(s, c)
+        self.snapshots = SnapshotRepo(s, c)
         self.audit = AuditRepo(s, c)
         self.backup_jobs = BackupJobRepo(s, c)
         return self

@@ -125,6 +125,20 @@ The tenant is always derived from the principal (session or token); it never app
 | POST | `/captures/{id}/transcribe?force=` | (Re-)transcribe an audio capture; `502` with problem details when the provider fails or none is configured |
 | GET | `/attachments/{id}` | The attachment bytes (image, audio) inline, tenant-checked; `Cache-Control: private` |
 
+### Report snapshots
+
+A snapshot freezes a rendered report: the numbers of that period, stored with the date they were
+computed. One assessment belongs to each snapshot (R57), so an assessment always refers to the
+numbers it actually saw.
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/reports/{name}/snapshots?from=&to=&label=` | Render and freeze; `201` with the snapshot |
+| GET | `/reports/snapshots?report=&limit=` | Snapshots, newest first, without the frozen payload |
+| GET | `/reports/snapshots/{id}` | One snapshot including its frozen `result` and its assessment |
+| POST | `/reports/snapshots/{id}/assess` | Attach the assessment `{markdown}`; `409` when it already has one |
+| DELETE | `/reports/snapshots/{id}` | Remove a snapshot |
+
 ### Product proposals
 
 The agent never changes a product on its own: what it reads from a label photo or a spoken

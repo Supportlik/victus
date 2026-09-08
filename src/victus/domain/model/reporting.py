@@ -5,6 +5,7 @@ Plain dataclasses so the report engine, the API and the tests share one shape.
 
 from __future__ import annotations
 
+import datetime as dt
 from dataclasses import dataclass, field
 from datetime import date
 
@@ -128,6 +129,8 @@ class StageRow:
     required_pct_per_week: float
     eat_kcal_per_day: float | None
     feasible: bool
+    #: the stage's own planned line (anchor → zero on the stage date), for the chart
+    path: list[tuple[dt.date, float]] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)

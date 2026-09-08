@@ -55,10 +55,15 @@ def approve(day: date, body: ApproveIn, ctx: Ctx, uow: Uow) -> DayOut:
 def approve_line_item(
     item_id: int, ctx: Ctx, uow: Uow, body: ApproveItemIn | None = None
 ) -> LineItemOut:
-    correction = None
-    if body is not None and body.model_dump(exclude_none=True):
-        correction = uc.DraftCorrection(line_item_id=item_id, **body.model_dump(exclude_none=True))
-    return line_item_out(uc.ApproveLineItem(uow, ctx).execute(item_id, correction))
+    fields = body.model_dump(exclude_none=True) if body is not None else {}
+    meal_id = fields.pop("meal_id", None)
+    meal_name = fields.pop("meal_name", None)
+    correction = uc.DraftCorrection(line_item_id=item_id, **fields) if fields else None
+    return line_item_out(
+        uc.ApproveLineItem(uow, ctx).execute(
+            item_id, correction, meal_id=meal_id, meal_name=meal_name
+        )
+    )
 
 
 @router.post("/drafts/{day}/discard", response_model=DiscardOut)

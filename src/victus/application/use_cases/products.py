@@ -17,6 +17,7 @@ from victus.domain.values import ConsumableKind, MatchCandidate
 from victus.infrastructure.db import orm
 
 PRODUCT_FIELDS = (
+    "icon",
     "brand",
     "category_id",
     "reference_amount",
@@ -39,6 +40,7 @@ PRODUCT_FIELDS = (
 @dataclass(frozen=True, slots=True)
 class ProductInput:
     name: str
+    icon: str | None = None
     brand: str | None = None
     category_id: int | None = None
     category: str | None = None

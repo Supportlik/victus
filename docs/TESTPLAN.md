@@ -233,6 +233,12 @@ The pyramid is deliberate: most cases are `T-DOM`/`T-SVC`; E2E covers the two fl
 | T-SVC-054 | Prompt echo | transcript empty or all vocabulary words | `TranscribeCapture` | transcript stored empty, capture `failed`, audit entry | service | yes | 3 |
 | T-API-026 | Proposal endpoints | product + product capture | list, approve with correction | 200 with diff, product verified, capture processed, re-decide 409 | api | yes | 3 |
 | T-API-027 | Proposal isolation | Alice's proposal | Bob lists / unknown id | empty list / 404 | api | yes | 3 |
+| T-SVC-055 | Accept one item | day with two drafted items | `ApproveLineItem` with a correction | item accepted, day stays draft, capture still assigned; second call 409 | service | yes | 3 |
+| T-SVC-056 | Last item accepted | one drafted item left | `ApproveLineItem` | day leaves draft, becomes reliable, capture processed | service | yes | 3 |
+| T-SVC-057 | Freeze a report | rendered result | `FreezeReport` twice | newest first, list without payload, detail with payload, empty result 422 | service | yes | 2 |
+| T-SVC-058 | One assessment | frozen snapshot | `AssessSnapshot` twice | text trimmed and stored, second call 409, blank 422, foreign tenant 404 | service | yes | 3 |
+| T-SVC-059 | Delete a snapshot | frozen snapshot | `DeleteSnapshot` | gone | service | yes | 2 |
+| T-SVC-060 | Active goal | legacy `goal`, `goals` with an active entry | `settings_from_data` | the active goal drives the settings; without a flag the first wins | service | yes | 2 |
 | T-MCP-008 | captures_open scope | one product capture, one day capture | `captures_open(scope=product|day|all)` | product scope returns only captures with `product_id`; day scope none of them | registry | yes | 3 |
 | T-MCP-009 | product_update from label | product + capture | `product_update(kcal, protein, source)` then `capture_mark(processed)` | values written, `verified=false`, `source` kept, capture processed | registry | yes | 3 |
 | T-MCP-007 | stdio smoke | installed CLI | `victus mcp --help`, `victus agent --help` | commands and flags listed; exit 0 | – | yes | 3 |

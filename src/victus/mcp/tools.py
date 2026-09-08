@@ -44,6 +44,7 @@ from victus.application.use_cases import drafts as draft_uc
 from victus.application.use_cases import products as product_uc
 from victus.application.use_cases import proposals as proposal_uc
 from victus.application.use_cases import recipes as recipe_uc
+from victus.application.use_cases import snapshots as snapshot_uc
 from victus.application.use_cases import weights as weight_uc
 from victus.application.use_cases._base import UowFactory
 from victus.config.server import ServerConfig
@@ -231,6 +232,38 @@ class LineItemApproveIn(_In):
     amount: float | None = None
     unit_code: str | None = None
     consumable_id: int | None = None
+    meal_id: int | None = Field(default=None, description="Move it to this meal of the same day.")
+    meal_name: str | None = Field(
+        default=None, description="Move it to the meal with this name, creating it if needed."
+    )
+
+
+class ReportSnapshotCreateIn(_In):
+    name: str = Field(default="checkup", description="Report definition to freeze.")
+    period: str | None = Field(default=None, description="e.g. '14d'; omit for the report default.")
+    start: dt.date | None = Field(default=None, description="Explicit period start.")
+    end: dt.date | None = Field(default=None, description="Explicit period end.")
+    label: str | None = None
+
+
+class ReportSnapshotsListIn(_In):
+    report: str | None = None
+    limit: int = Field(default=20, ge=1, le=200)
+
+
+class ReportSnapshotGetIn(_In):
+    snapshot_id: str
+
+
+class ReportAssessIn(_In):
+    snapshot_id: str
+    assessment_md: str = Field(
+        description=(
+            "Your assessment of this snapshot in the tenant's language: where the numbers stand, "
+            "how the trajectory looks against the goal, what to change. Markdown, a few short "
+            "paragraphs or bullets."
+        )
+    )
 
 
 class MealUpdateIn(_In):
@@ -646,10 +679,67 @@ def _line_item_delete(tc: ToolContext, inp: LineItemDeleteIn) -> ToolResult:
 def _line_item_approve(tc: ToolContext, inp: LineItemApproveIn) -> ToolResult:
     fields = inp.model_dump(exclude_none=True)
     fields.pop("line_item_id", None)
+    meal_id = fields.pop("meal_id", None)
+    meal_name = fields.pop("meal_name", None)
     correction = (
         draft_uc.DraftCorrection(line_item_id=inp.line_item_id, **fields) if fields else None
     )
-    view = draft_uc.ApproveLineItem(tc.uow_factory, tc.ctx).execute(inp.line_item_id, correction)
+    view = draft_uc.ApproveLineItem(tc.uow_factory, tc.ctx).execute(
+        inp.line_item_id, correction, meal_id=meal_id, meal_name=meal_name
+    )
+    return cast(dict[str, Any], jsonable(view))
+
+
+def _report_snapshot_create(tc: ToolContext, inp: ReportSnapshotCreateIn) -> ToolResult:
+    definition = ReportRegistry().get(inp.name)
+    today = datetime.now(UTC).date()
+    if inp.start and inp.end:
+        period = Period(inp.start, inp.end)
+    elif inp.period:
+        period = parse_period_token(inp.period, today)
+    else:
+        period = definition.default_period(today)
+    with tc.uow_factory(tc.ctx) as uow:
+        source = SqlAlchemyReportDataSource(cast(SqlAlchemyUnitOfWork, uow))
+        result = ReportEngine(source).render(definition, period, today=today)
+    payload = to_dict(result)
+    payload["from"] = period.start.isoformat()
+    payload["to"] = period.end.isoformat()
+    payload["today"] = today.isoformat()
+    view = snapshot_uc.FreezeReport(tc.uow_factory, tc.ctx).execute(
+        definition.name,
+        definition.title,
+        payload,
+        period_start=period.start,
+        period_end=period.end,
+        today=today,
+        label=inp.label,
+    )
+    out = cast(dict[str, Any], jsonable(view))
+    out["result"] = payload  # so the caller can assess without a second read
+    return out
+
+
+def _report_snapshots_list(tc: ToolContext, inp: ReportSnapshotsListIn) -> ToolResult:
+    rows = snapshot_uc.ListSnapshots(tc.uow_factory, tc.ctx).execute(
+        report_name=inp.report, limit=inp.limit
+    )
+    return cast(list[Any], jsonable(rows))
+
+
+def _report_snapshot_get(tc: ToolContext, inp: ReportSnapshotGetIn) -> ToolResult:
+    view = snapshot_uc.GetSnapshot(tc.uow_factory, tc.ctx).execute(inp.snapshot_id)
+    return cast(dict[str, Any], jsonable(view))
+
+
+def _report_assess(tc: ToolContext, inp: ReportAssessIn) -> ToolResult:
+    view = snapshot_uc.AssessSnapshot(tc.uow_factory, tc.ctx).execute(
+        inp.snapshot_id,
+        inp.assessment_md,
+        model=tc.config.agent.model if tc.config else None,
+        prompt_version="external",
+        run_id=tc.run_id,
+    )
     return cast(dict[str, Any], jsonable(view))
 
 
@@ -901,6 +991,38 @@ TOOLS: tuple[ToolSpec, ...] = (
         read_only=False,
     ),
     _spec(
+        "report_snapshot_create",
+        "Freeze a report as a snapshot: the numbers of that period, stored with today's date. "
+        "Returns the frozen result so you can assess it right away with report_assess.",
+        SCOPE_READ,
+        ReportSnapshotCreateIn,
+        _report_snapshot_create,
+        read_only=False,
+    ),
+    _spec(
+        "report_snapshots_list",
+        "Snapshots, newest first, with their assessment status.",
+        SCOPE_READ,
+        ReportSnapshotsListIn,
+        _report_snapshots_list,
+    ),
+    _spec(
+        "report_snapshot_get",
+        "One snapshot with its frozen numbers and its assessment.",
+        SCOPE_READ,
+        ReportSnapshotGetIn,
+        _report_snapshot_get,
+    ),
+    _spec(
+        "report_assess",
+        "Write your assessment of a frozen snapshot. The numbers stay as they were; a snapshot "
+        "carries exactly one assessment.",
+        SCOPE_AGENT_WRITE,
+        ReportAssessIn,
+        _report_assess,
+        read_only=False,
+    ),
+    _spec(
         "line_item_approve",
         "Accept one drafted line item (optionally correcting amount, unit or product). "
         "The rest of the day stays a draft.",
@@ -981,6 +1103,8 @@ WORKER_TOOLS: frozenset[str] = frozenset(
         "days_list",
         "day_thread_get",
         "report_render",
+        "report_snapshot_create",
+        "report_assess",
         "captures_open",
         "capture_get",
         "capture_mark",

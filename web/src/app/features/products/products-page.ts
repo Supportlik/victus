@@ -42,7 +42,7 @@ import { ProductSearch } from '../../shared/product-search';
             <tbody>
               @for (p of recent(); track p.id) {
                 <tr>
-                  <td><v-food-icon [name]="p.name" [category]="p.category ?? null" kind="product" /> <a [routerLink]="['/products', p.id]">{{ p.name }}</a></td>
+                  <td><v-food-icon [name]="p.name" [category]="p.category ?? null" kind="product" [icon]="p.icon" /> <a [routerLink]="['/products', p.id]">{{ p.name }}</a></td>
                   <td class="v-muted">{{ p.brand }}</td>
                   <td class="num">{{ p.kcal | macro: 'kcal' }}</td><td class="num">{{ p.protein | macro: 'protein' }}</td><td class="num">{{ p.carbs | macro: 'carbs' }}</td><td class="num">{{ p.fat | macro: 'fat' }}</td><td class="num">{{ p.fiber | macro: 'fiber' }}</td><td class="num">{{ p.salt | macro: 'salt' }}</td>
                   <td>@if (p.verified) { <span class="v-tag ok">label</span> } @else { <span class="v-tag warn">estimate</span> } <span class="v-small v-muted">{{ p.source }}</span></td>

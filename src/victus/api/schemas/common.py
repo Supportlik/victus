@@ -89,6 +89,7 @@ class PortionOut(Out):
 class ProductOut(MacrosOut):
     id: int
     name: str
+    icon: str | None = None
     brand: str | None = None
     category_id: int | None = None
     category: str | None = None
@@ -130,6 +131,7 @@ class LineItemOut(MacrosOut):
     source_capture_id: str | None = None
     source_kind: str | None = None
     category: str | None = None
+    icon: str | None = None
 
 
 class MealOut(Out):

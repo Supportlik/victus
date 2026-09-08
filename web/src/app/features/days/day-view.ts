@@ -157,7 +157,7 @@ import { DayThread } from './day-thread';
                       @for (it of meal.line_items; track it.id) {
                         <tr [class.draft]="it.is_draft" [class.estimated]="it.estimated || it.amount_estimated" [attr.data-item]="it.id">
                           <td>
-                            <v-food-icon [name]="it.consumable_name" [category]="it.category" [kind]="it.consumable_kind" />
+                            <v-food-icon [name]="it.consumable_name" [category]="it.category" [kind]="it.consumable_kind" [icon]="it.icon" />
                             {{ it.consumable_name }}
                             @if (it.is_draft) { <span class="v-tag draft">draft</span> }
                             @if (it.estimated || it.amount_estimated) { <span class="warn-mark" title="estimated">⚠️</span> }

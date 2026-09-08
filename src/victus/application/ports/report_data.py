@@ -48,6 +48,8 @@ class TenantReportSettings:
     corridor: CalorieCorridor = field(default_factory=lambda: CalorieCorridor(1400, 2000))
     stages: Sequence[Stage] = ()
     burndown_start: date | None = None
+    #: name of the active goal, when the tenant keeps several
+    goal_name: str | None = None
 
 
 class ReportDataSource(Protocol):

@@ -98,7 +98,7 @@ def _day_or_404(uow: UnitOfWork, day: date) -> orm.DayLog:
 
 def build_day_view(uow: UnitOfWork, d: orm.DayLog) -> dto.DayView:
     item_macros = uow.day_logs.line_item_macros(d.date)
-    categories = uow.products.category_names_for(
+    hints = uow.products.display_hints_for(
         [li.consumable_id for m in d.meals for li in m.line_items]
     )
     meals: list[dto.MealView] = []
@@ -107,7 +107,8 @@ def build_day_view(uow: UnitOfWork, d: orm.DayLog) -> dto.DayView:
         items = []
         for li in meal.line_items:
             m = item_macros.get(li.id)
-            items.append(line_item_view(li, m, li.consumable, categories.get(li.consumable_id)))
+            category, icon = hints.get(li.consumable_id, (None, None))
+            items.append(line_item_view(li, m, li.consumable, category, icon))
             has_drafts = has_drafts or bool(li.is_draft)
         totals = sum_macros(item_macros[li.id] for li in meal.line_items if li.id in item_macros)
         meals.append(
@@ -326,8 +327,10 @@ class DeleteMeal(UseCase):
 
 def _item_view(uow: UnitOfWork, li: orm.LineItem, day: date) -> dto.LineItemView:
     macros = uow.day_logs.line_item_macros(day).get(li.id)
-    category = uow.products.category_names_for([li.consumable_id]).get(li.consumable_id)
-    return line_item_view(li, macros, li.consumable, category)
+    category, icon = uow.products.display_hints_for([li.consumable_id]).get(
+        li.consumable_id, (None, None)
+    )
+    return line_item_view(li, macros, li.consumable, category, icon)
 
 
 class AddLineItem(UseCase):

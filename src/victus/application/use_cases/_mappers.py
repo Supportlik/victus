@@ -32,6 +32,7 @@ def product_view(
     return dto.ProductView(
         id=p.id,
         name=p.name,
+        icon=p.icon,
         brand=p.brand,
         category_id=p.category_id,
         category=category_name,
@@ -168,6 +169,7 @@ def line_item_view(
     macros: Macros | None,
     consumable: orm.Consumable | None,
     category: str | None = None,
+    icon: str | None = None,
 ) -> dto.LineItemView:
     m = macros or Macros()
     return dto.LineItemView(
@@ -191,6 +193,7 @@ def line_item_view(
         source_capture_id=li.source_capture_id,
         source_kind=li.source_kind,
         category=category,
+        icon=icon,
         kcal=m.kcal,
         protein=m.protein,
         carbs=m.carbs,

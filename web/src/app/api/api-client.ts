@@ -33,6 +33,7 @@ import {
   RecipeIngredient,
   ReportDefinition,
   ReportResult,
+  ReportSnapshot,
   TargetBand,
   TenantSettingsVersion,
   Unit,
@@ -255,6 +256,21 @@ export class ApiClient {
   }
   deleteCapture(id: string): Observable<void> {
     return this.http.delete<void>(`${API_BASE}/captures/${id}`);
+  }
+  snapshots(report?: string, limit = 50): Observable<ReportSnapshot[]> {
+    return this.http.get<ReportSnapshot[]>(`${API_BASE}/reports/snapshots`, { params: params({ report, limit }) });
+  }
+  snapshot(id: string): Observable<ReportSnapshot> {
+    return this.http.get<ReportSnapshot>(`${API_BASE}/reports/snapshots/${id}`);
+  }
+  createSnapshot(report: string, range: { from?: string | null; to?: string | null; label?: string } = {}): Observable<ReportSnapshot> {
+    return this.http.post<ReportSnapshot>(`${API_BASE}/reports/${report}/snapshots`, {}, { params: params({ from: range.from, to: range.to, label: range.label }) });
+  }
+  assessSnapshot(id: string, markdown: string): Observable<ReportSnapshot> {
+    return this.http.post<ReportSnapshot>(`${API_BASE}/reports/snapshots/${id}/assess`, { markdown });
+  }
+  deleteSnapshot(id: string): Observable<void> {
+    return this.http.delete<void>(`${API_BASE}/reports/snapshots/${id}`);
   }
   proposals(params_: { status?: string; product_id?: number } = {}): Observable<ProductProposal[]> {
     return this.http.get<ProductProposal[]>(`${API_BASE}/proposals`, { params: params({ status: params_.status ?? 'pending', product_id: params_.product_id }) });

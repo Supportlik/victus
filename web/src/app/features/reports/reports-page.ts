@@ -4,12 +4,13 @@ import { ApiClient, ReportBlock, ReportDefinition, ReportResult } from '../../ap
 import { describeError } from '../../core/problem';
 import { isoDate, shiftDate } from '../../shared/format';
 import { ReportBlockView } from './report-blocks/report-block';
+import { SnapshotList } from './snapshot-list';
 
 /** Report dashboard: pick a definition and a period, render the blocks. */
 @Component({
   selector: 'v-reports-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, ReportBlockView],
+  imports: [FormsModule, ReportBlockView, SnapshotList],
   template: `
     <div class="v-page">
       <header class="v-page-head">
@@ -38,6 +39,7 @@ import { ReportBlockView } from './report-blocks/report-block';
           <section class="tiles">@for (b of tiles(); track $index) { <v-report-block [block]="b" /> }</section>
         }
         <section class="blocks">@for (b of others(); track $index) { <v-report-block [block]="b" /> }</section>
+        <v-snapshot-list [report]="name()" [from]="from()" [to]="to()" />
       } @else if (!error()) {
         <p class="v-muted">Rendering…</p>
       }

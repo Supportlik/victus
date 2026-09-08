@@ -204,6 +204,28 @@ def _leave_draft_status(uow: UnitOfWork, d: orm.DayLog) -> None:
         d.reliable = True
 
 
+def _resolve_meal(
+    uow: UnitOfWork, d: orm.DayLog, meal_id: int | None, meal_name: str | None
+) -> orm.Meal | None:
+    """The meal an accepted item should live in: an existing one or a new one."""
+    if meal_id is not None:
+        meal = next((m for m in d.meals if m.id == meal_id), None)
+        if meal is None:
+            raise NotFound(f"meal {meal_id} is not part of {d.date.isoformat()}")
+        return meal
+    name = (meal_name or "").strip()
+    if not name:
+        return None
+    existing = next((m for m in d.meals if (m.name or "").strip().lower() == name.lower()), None)
+    if existing is not None:
+        return existing
+    position = (max((m.position for m in d.meals), default=0)) + 1
+    meal = uow.day_logs.add_meal(orm.Meal(day_log_id=d.id, position=position, name=name))
+    d.meals.append(meal)
+    uow.flush()
+    return meal
+
+
 class ApproveLineItem(UseCase):
     """Accept one drafted item, optionally with a correction (SPEC R56).
 
@@ -211,7 +233,14 @@ class ApproveLineItem(UseCase):
     last drafted item is accepted.
     """
 
-    def execute(self, item_id: int, correction: DraftCorrection | None = None) -> dto.LineItemView:
+    def execute(
+        self,
+        item_id: int,
+        correction: DraftCorrection | None = None,
+        *,
+        meal_id: int | None = None,
+        meal_name: str | None = None,
+    ) -> dto.LineItemView:
         self.ctx.require(SCOPE_APPROVE)
         with self._uow() as uow:
             li = uow.day_logs.get_line_item(item_id)
@@ -220,6 +249,12 @@ class ApproveLineItem(UseCase):
             if not li.is_draft:
                 raise Conflict(f"line item {item_id} is not a draft")
             d = li.meal.day_log
+            target = _resolve_meal(uow, d, meal_id, meal_name)
+            if target is not None and target.id != li.meal_id:
+                li.position = (max((x.position for x in target.line_items), default=0)) + 1
+                li.meal_id = target.id
+                li.meal = target
+                uow.flush()
             if correction is not None:
                 if correction.delete:
                     raise ValidationFailed("use DELETE on the line item to drop it")
@@ -242,8 +277,10 @@ class ApproveLineItem(UseCase):
             )
             uow.flush()
             macros = uow.day_logs.line_item_macros(d.date).get(li.id)
-            category = uow.products.category_names_for([li.consumable_id]).get(li.consumable_id)
-            view = line_item_view(li, macros, li.consumable, category)
+            category, icon = uow.products.display_hints_for([li.consumable_id]).get(
+                li.consumable_id, (None, None)
+            )
+            view = line_item_view(li, macros, li.consumable, category, icon)
             uow.commit()
             return view
 

@@ -59,9 +59,26 @@ def band_from_orm(row: orm.TargetBand) -> TargetBand:
     )
 
 
+def active_goal(data: Mapping[str, Any]) -> Mapping[str, Any]:
+    """The goal the reports run on.
+
+    A tenant may keep several goals; the active one wins, otherwise the first
+    entry, otherwise the single legacy ``goal`` object.
+    """
+    goals = data.get("goals")
+    if isinstance(goals, list) and goals:
+        chosen = next((g for g in goals if isinstance(g, dict) and g.get("active")), None)
+        first = next((g for g in goals if isinstance(g, dict)), None)
+        picked = chosen or first
+        if picked is not None:
+            return picked
+    single = data.get("goal")
+    return single if isinstance(single, dict) else {}
+
+
 def settings_from_data(data: Mapping[str, Any]) -> TenantReportSettings:
     """Build the engine's settings subset from the tenant settings document."""
-    goal = data.get("goal") or {}
+    goal = active_goal(data)
     corridor = data.get("calorie_corridor") or {}
     stages = [
         Stage(name=str(s["name"]), date=date.fromisoformat(str(s["date"])))
@@ -83,6 +100,7 @@ def settings_from_data(data: Mapping[str, Any]) -> TenantReportSettings:
         ),
         stages=tuple(stages),
         burndown_start=date.fromisoformat(str(burndown)) if burndown else None,
+        goal_name=str(goal["name"]) if goal.get("name") else None,
     )
 
 
@@ -163,4 +181,4 @@ class SqlAlchemyReportDataSource:
         return None
 
 
-__all__ = ["SqlAlchemyReportDataSource", "band_from_orm", "settings_from_data"]
+__all__ = ["SqlAlchemyReportDataSource", "active_goal", "band_from_orm", "settings_from_data"]

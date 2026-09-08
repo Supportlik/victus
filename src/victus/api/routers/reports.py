@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Query, Response, status
 from pydantic import BaseModel
 
 from victus.api.deps import Ctx, Uow
+from victus.application.use_cases import snapshots as snap_uc
 from victus.domain.values import Period
 from victus.infrastructure.db.uow import SqlAlchemyUnitOfWork
 from victus.infrastructure.reports.sqlalchemy_source import SqlAlchemyReportDataSource
@@ -20,6 +21,34 @@ from victus.reports.render.markdown import to_markdown
 
 router = APIRouter(tags=["reports"])
 _registry = ReportRegistry()
+
+
+class SnapshotOut(BaseModel):
+    id: str
+    report_name: str
+    title: str
+    label: str | None = None
+    period_start: date
+    period_end: date
+    today: date
+    status: str
+    created_at: datetime
+    created_by: str | None = None
+    assessment_md: str | None = None
+    assessed_at: datetime | None = None
+    model: str | None = None
+    prompt_version: str | None = None
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cost_usd: float = 0.0
+    result: dict[str, Any] | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class AssessIn(BaseModel):
+    markdown: str
+    model: str | None = None
 
 
 class PeriodSpecOut(BaseModel):
@@ -86,6 +115,78 @@ def _render(
     payload["to"] = period.end.isoformat()
     payload["today"] = today.isoformat()
     return payload
+
+
+def _freeze(
+    ctx: Any, uow_factory: Any, name: str, from_: date | None, to: date | None, label: str | None
+) -> Any:
+    """Render the report and store it as a snapshot (the numbers never change again)."""
+    definition = _definition(name)
+    today = datetime.now(UTC).date()
+    period = _period(definition, from_, to, today)
+    with uow_factory(ctx) as uow:
+        source = SqlAlchemyReportDataSource(cast(SqlAlchemyUnitOfWork, uow))
+        result = ReportEngine(source).render(definition, period, today=today)
+    payload = to_dict(result)
+    payload["from"] = period.start.isoformat()
+    payload["to"] = period.end.isoformat()
+    payload["today"] = today.isoformat()
+    return snap_uc.FreezeReport(uow_factory, ctx).execute(
+        definition.name,
+        definition.title,
+        payload,
+        period_start=period.start,
+        period_end=period.end,
+        today=today,
+        label=label,
+    )
+
+
+@router.post(
+    "/reports/{name}/snapshots",
+    response_model=SnapshotOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Freeze a report as a snapshot the agent can assess",
+)
+def create_snapshot(
+    name: str,
+    ctx: Ctx,
+    uow: Uow,
+    from_: Annotated[date | None, Query(alias="from")] = None,
+    to: date | None = None,
+    label: Annotated[str | None, Query(max_length=200)] = None,
+) -> SnapshotOut:
+    return SnapshotOut.model_validate(_freeze(ctx, uow, name, from_, to, label))
+
+
+@router.get("/reports/snapshots", response_model=list[SnapshotOut])
+def list_snapshots(
+    ctx: Ctx,
+    uow: Uow,
+    report: Annotated[str | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> list[SnapshotOut]:
+    rows = snap_uc.ListSnapshots(uow, ctx).execute(report_name=report, limit=limit)
+    return [SnapshotOut.model_validate(r) for r in rows]
+
+
+@router.get("/reports/snapshots/{snapshot_id}", response_model=SnapshotOut)
+def get_snapshot(snapshot_id: str, ctx: Ctx, uow: Uow) -> SnapshotOut:
+    return SnapshotOut.model_validate(snap_uc.GetSnapshot(uow, ctx).execute(snapshot_id))
+
+
+@router.post("/reports/snapshots/{snapshot_id}/assess", response_model=SnapshotOut)
+def assess_snapshot(snapshot_id: str, body: AssessIn, ctx: Ctx, uow: Uow) -> SnapshotOut:
+    view = snap_uc.AssessSnapshot(uow, ctx).execute(
+        snapshot_id, body.markdown, model=body.model, prompt_version="manual"
+    )
+    return SnapshotOut.model_validate(view)
+
+
+@router.delete("/reports/snapshots/{snapshot_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_snapshot(snapshot_id: str, ctx: Ctx, uow: Uow) -> Response:
+    snap_uc.DeleteSnapshot(uow, ctx).execute(snapshot_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/reports", response_model=list[ReportInfo], summary="Available report definitions")

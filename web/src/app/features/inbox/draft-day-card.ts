@@ -13,6 +13,9 @@ interface Row {
   meal: string;
   amount: number;
   consumableId: number;
+  /** Meal to accept into: an existing id, or 'new' with `newMeal`. */
+  mealChoice: number | 'new';
+  newMeal: string;
   source: Capture | null;
   busy: boolean;
 }
@@ -54,7 +57,7 @@ interface Row {
           <li class="row" [attr.data-item]="r.item.id">
             <div class="what">
               <div class="head">
-                <v-food-icon [name]="r.item.consumable_name" [category]="r.item.category ?? null" [kind]="r.item.consumable_kind" />
+                <v-food-icon [name]="r.item.consumable_name" [category]="r.item.category ?? null" [kind]="r.item.consumable_kind" [icon]="r.item.icon" />
                 @if (r.item.alternatives?.length && r.item.alternatives!.length > 1) {
                   <select [name]="'c' + r.item.id" [(ngModel)]="r.consumableId" class="pick">
                     <option [ngValue]="r.item.consumable_id">{{ r.item.consumable_name }}</option>
@@ -74,7 +77,15 @@ interface Row {
                   <span class="unit">{{ r.item.unit_code ?? r.item.base_unit }}</span>
                 </label>
                 <span class="kcal">{{ r.item.kcal | macro: 'kcal' }} kcal</span>
-                <span class="v-small v-muted">{{ r.meal }}</span>
+                <label class="meal"><span class="v-small v-muted">Meal</span>
+                  <select [name]="'m' + r.item.id" [(ngModel)]="r.mealChoice">
+                    @for (m of meals(); track m.id) { <option [ngValue]="m.id">{{ m.name }}</option> }
+                    <option ngValue="new">new meal…</option>
+                  </select>
+                  @if (r.mealChoice === 'new') {
+                    <input [name]="'mn' + r.item.id" [(ngModel)]="r.newMeal" placeholder="Meal name" aria-label="New meal name" />
+                  }
+                </label>
               </div>
               @if (r.item.rationale) { <p class="why v-small v-muted">{{ r.item.rationale }}</p> }
               <div class="v-actions">
@@ -117,6 +128,8 @@ interface Row {
     .pick { max-width: 22rem; padding: 0.25rem 0.4rem; border: 1px solid var(--v-line-strong); border-radius: var(--v-radius); background: var(--v-surface); }
     .conf { font-size: var(--v-fs-xs); color: var(--v-ink-3); } .conf.low { color: var(--v-warn); }
     .numbers { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; font-size: var(--v-fs-s); }
+    .meal { display: inline-flex; gap: 0.35rem; align-items: center; }
+    .meal select, .meal input { padding: 0.25rem 0.4rem; border: 1px solid var(--v-line-strong); border-radius: var(--v-radius); background: var(--v-surface); max-width: 11rem; }
     .qty { display: inline-flex; gap: 0.35rem; align-items: center; }
     .qty input { width: 5.5rem; padding: 0.25rem 0.4rem; border: 1px solid var(--v-line-strong); border-radius: var(--v-radius); background: var(--v-surface); text-align: right; }
     .kcal { font-variant-numeric: tabular-nums; }
@@ -167,6 +180,8 @@ export class DraftDayCard {
                 meal: m.name,
                 amount: item.amount ?? item.base_amount,
                 consumableId: item.consumable_id,
+                mealChoice: item.meal_id as number | 'new',
+                newMeal: '',
                 source: item.source_capture_id ? (byId.get(item.source_capture_id) ?? null) : null,
                 busy: false,
               })),
@@ -177,10 +192,24 @@ export class DraftDayCard {
     });
   }
 
+  /** Meals of the drafted day, for the per-item meal picker. */
+  meals(): { id: number; name: string }[] {
+    return (this.day()?.meals ?? []).map((m) => ({ id: m.id, name: m.name }));
+  }
+
   approve(r: Row): void {
     const body: Record<string, unknown> = {};
     if (r.amount !== (r.item.amount ?? r.item.base_amount)) body['amount'] = r.amount;
     if (r.consumableId !== r.item.consumable_id) body['consumable_id'] = r.consumableId;
+    if (r.mealChoice === 'new') {
+      if (!r.newMeal.trim()) {
+        this.error.set('Give the new meal a name.');
+        return;
+      }
+      body['meal_name'] = r.newMeal.trim();
+    } else if (r.mealChoice !== r.item.meal_id) {
+      body['meal_id'] = r.mealChoice;
+    }
     r.busy = true;
     this.api.approveLineItem(r.item.id, body).subscribe({
       next: () => this.done(),

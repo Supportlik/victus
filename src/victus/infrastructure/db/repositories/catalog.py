@@ -148,17 +148,28 @@ class ProductRepo(Repo):
         self.session.flush()
 
     # ── categories ──
-    def category_names_for(self, product_ids: Sequence[int]) -> dict[int, str]:
-        """{product id: category name} for the given products, in one query."""
+    def display_hints_for(
+        self, product_ids: Sequence[int]
+    ) -> dict[int, tuple[str | None, str | None]]:
+        """{product id: (category name, icon)} for the given products, in one query."""
         if not product_ids:
             return {}
         stmt = (
-            select(orm.Product.id, orm.Category.name)
+            select(orm.Product.id, orm.Category.name, orm.Product.icon)
             .join(orm.Consumable, orm.Consumable.id == orm.Product.id)
-            .join(orm.Category, orm.Category.id == orm.Product.category_id)
+            .outerjoin(orm.Category, orm.Category.id == orm.Product.category_id)
             .where(orm.Consumable.tenant_id == self.tenant_id, orm.Product.id.in_(product_ids))
         )
-        return {int(i): str(n) for i, n in self.session.execute(stmt).all()}
+        return {
+            int(i): (str(n) if n is not None else None, str(ic) if ic else None)
+            for i, n, ic in self.session.execute(stmt).all()
+        }
+
+    def category_names_for(self, product_ids: Sequence[int]) -> dict[int, str]:
+        """{product id: category name} for the given products."""
+        return {
+            pid: name for pid, (name, _icon) in self.display_hints_for(product_ids).items() if name
+        }
 
     def categories(self) -> Sequence[orm.Category]:
         return self.session.scalars(

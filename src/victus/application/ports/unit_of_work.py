@@ -16,6 +16,7 @@ from victus.application.ports.repositories import (
     ProposalRepository,
     RecipeRepository,
     SettingsRepository,
+    SnapshotRepository,
     TargetBandRepository,
     TenantRepository,
     UserRepository,
@@ -62,6 +63,9 @@ class UnitOfWork(Protocol):
 
     @property
     def proposals(self) -> ProposalRepository: ...
+
+    @property
+    def snapshots(self) -> SnapshotRepository: ...
 
     @property
     def audit(self) -> AuditRepository: ...

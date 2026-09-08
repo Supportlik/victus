@@ -59,6 +59,16 @@ All notable changes to Victus are documented here. The format follows
 - Small category icons in front of every logged item, a redesigned sign-in page and readable agent summaries
   (wide markdown tables scroll instead of breaking).
 
+- Report snapshots (R57): freeze a report's numbers as a moment, then attach one assessment
+  (`/reports/{name}/snapshots`, `/reports/snapshots/…`, MCP `report_snapshot_create` and `report_assess`);
+  the reports page lists moments and opens them in place.
+- Several goals per tenant, exactly one active (R58); the settings form manages them with their stages.
+- Products carry their own icon (R59), editable in a reworked product form; every logged item shows it.
+- Burndown chart reworked: one dotted line per stage next to the goal line, a today marker, day/month
+  axis labels and no more uneven sampling.
+- Accepting a drafted item can move it to another meal or create one (`meal_id` / `meal_name`).
+- Agent run details open below the table instead of beside it.
+
 ### Changed
 - No importer in the product (ADR 0011): existing data enters through the backup archive format, REST or MCP.
 - One model session per day (ADR 0009) and a resumable per-day thread (ADR 0010); lock TTL 5 minutes;

@@ -37,6 +37,10 @@ HTTP responses: missing or invalid token → `401`; token lacks the tool's scope
 | `day_message_add(date, text)` | `write` | `AddDayMessage` | message added; `follow_up` queued when applicable |
 | `draft_summary(date)` | `read` | `DraftSummary` | Markdown + JSON summary |
 | `report_render(name, period="14d", format="markdown")` | `read` | `ReportEngine` | rendered report (`period` like `7d`/`14d`/`30d`, or `from`/`to`) |
+| `report_snapshot_create(name, period?, start?, end?, label?)` | `read` | `FreezeReport` | the frozen snapshot **and** its numbers, ready to assess |
+| `report_snapshots_list(report?, limit?)` | `read` | `ListSnapshots` | snapshots, newest first |
+| `report_snapshot_get(snapshot_id)` | `read` | `GetSnapshot` | one snapshot with its numbers and assessment |
+| `report_assess(snapshot_id, assessment_md)` | `agent:write` | `AssessSnapshot` | the assessment attached to that moment |
 | `captures_open(run_id?)` | `capture:read` | `ListCaptures` | captures with `status=new`; with `run_id` scoped to the run's locked days |
 | `capture_get(id)` | `capture:read` | `GetCapture` / `TranscribeCapture` / `GetAttachment` | text or transcript; images as image content; audio is transcribed lazily when a transcription provider is configured |
 | `capture_mark(id, status?, target_date?, product_id?)` | `capture:write` | `UpdateCapture` | updated capture |

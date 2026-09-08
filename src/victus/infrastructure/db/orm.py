@@ -239,6 +239,8 @@ class Product(Base):
     reference_amount: Mapped[float] = mapped_column(Float, nullable=False, default=100.0)
     reference_unit: Mapped[str] = mapped_column(String(2), nullable=False, default="g")
     density_g_per_ml: Mapped[float | None] = mapped_column(Float)
+    #: one or two characters shown in front of the item; overrides the guessed glyph
+    icon: Mapped[str | None] = mapped_column(String(8))
     kcal: Mapped[float | None] = mapped_column(Float)
     protein: Mapped[float | None] = mapped_column(Float)
     carbs: Mapped[float | None] = mapped_column(Float)
@@ -815,6 +817,41 @@ class ProductProposal(Base):
     created_at: Mapped[datetime] = mapped_column(TS, nullable=False, default=utcnow)
     decided_at: Mapped[datetime | None] = mapped_column(TS)
     decided_by: Mapped[str | None] = mapped_column(ID)
+
+
+class ReportSnapshot(Base):
+    """A rendered report frozen at a point in time, plus its written assessment."""
+
+    __tablename__ = "report_snapshot"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('frozen','assessed','failed')", name="ck_report_snapshot_status"
+        ),
+        Index("ix_report_snapshot_tenant_created", "tenant_id", "created_at"),
+        Index("ix_report_snapshot_tenant_status", "tenant_id", "status"),
+    )
+
+    id: Mapped[str] = mapped_column(ID, primary_key=True, default=new_id)
+    tenant_id: Mapped[str] = mapped_column(ID, ForeignKey("tenant.id"), nullable=False)
+    report_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    label: Mapped[str | None] = mapped_column(String(200))
+    period_start: Mapped[date] = mapped_column(Date, nullable=False)
+    period_end: Mapped[date] = mapped_column(Date, nullable=False)
+    today: Mapped[date] = mapped_column(Date, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="frozen")
+    #: the rendered report exactly as it was computed (reports/render/json.py)
+    result: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    assessment_md: Mapped[str | None] = mapped_column(Text)
+    assessed_at: Mapped[datetime | None] = mapped_column(TS)
+    model: Mapped[str | None] = mapped_column(String(100))
+    prompt_version: Mapped[str | None] = mapped_column(String(64))
+    input_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    output_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    cost_usd: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    run_id: Mapped[str | None] = mapped_column(ID)
+    created_at: Mapped[datetime] = mapped_column(TS, nullable=False, default=utcnow)
+    created_by: Mapped[str | None] = mapped_column(String(16))
 
 
 # ── Backup and audit ────────────────────────────────────────────────────────

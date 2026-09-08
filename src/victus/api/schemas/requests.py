@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 class ProductIn(BaseModel):
     name: str = Field(min_length=1, max_length=300)
+    icon: str | None = Field(None, max_length=8)
     brand: str | None = None
     category_id: int | None = None
     category: str | None = None
@@ -32,6 +33,7 @@ class ProductIn(BaseModel):
 
 class ProductPatch(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=300)
+    icon: str | None = Field(None, max_length=8)
     brand: str | None = None
     category_id: int | None = None
     category: str | None = None
@@ -169,11 +171,17 @@ class ApproveIn(BaseModel):
 
 
 class ApproveItemIn(BaseModel):
-    """Optional correction applied while accepting a single drafted item."""
+    """Corrections applied while accepting a single drafted item.
+
+    ``meal_id`` moves it to another meal of that day; ``meal_name`` picks a meal by
+    name and creates it when it does not exist yet.
+    """
 
     amount: float | None = Field(default=None, ge=0)
     unit_code: str | None = None
     consumable_id: int | None = None
+    meal_id: int | None = None
+    meal_name: str | None = Field(default=None, max_length=200)
 
 
 class WeightIn(BaseModel):

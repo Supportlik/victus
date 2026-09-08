@@ -49,7 +49,7 @@ import { MarkdownPipe } from '../../shared/markdown.pipe';
         </div>
 
         @if (selected(); as r) {
-          <aside class="v-panel detail" aria-live="polite">
+          <section class="v-panel detail" aria-live="polite">
             <h3>Run {{ r.id.slice(0, 8) }} · {{ r.status.replace('_', ' ') }}</h3>
             <p class="v-small v-muted">
               {{ r.mode.replace('_', ' ') }} · {{ r.runner ?? 'worker' }} · model {{ r.model ?? '–' }} · prompt {{ r.prompt_version ?? '–' }}
@@ -78,7 +78,7 @@ import { MarkdownPipe } from '../../shared/markdown.pipe';
             } @else if (active(r)) {
               <p class="v-muted v-small">Still working — the summary appears when the run finishes.</p>
             }
-          </aside>
+          </section>
         }
       </section>
 
@@ -111,7 +111,7 @@ import { MarkdownPipe } from '../../shared/markdown.pipe';
   `,
   styles: `
     .grid { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); margin-bottom: 1rem; }
-    @media (min-width: 70rem) { .grid:has(.detail) { grid-template-columns: minmax(0, 3fr) minmax(20rem, 2fr); } }
+    .detail { margin-top: 0.75rem; }
     .v-scroll { overflow-x: auto; }
     .num { text-align: right; font-variant-numeric: tabular-nums; }
     .days { max-width: 14rem; white-space: normal; }

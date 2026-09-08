@@ -18,15 +18,17 @@ MIN_EAT_KCAL = 1200.0
 
 
 def planned_path(
-    anchor: date, remaining_at_anchor: float, stage_date: date, step: int = 3
+    anchor: date, remaining_at_anchor: float, stage_date: date, step: int | None = None
 ) -> list[tuple[date, float]]:
     """Linear planned line from the anchor to zero on ``stage_date``.
 
-    The end point is appended explicitly: ``range(…, step)`` does not land on
-    the last day unless ``days % step == 0`` and the line would end above zero.
+    Two points are enough for a straight line on a time axis, and they keep the
+    chart free of the uneven spacing a fixed step produced. ``step`` (in days)
+    still samples the line for consumers that need intermediate points; the end
+    point is always included so the line lands exactly on zero.
     """
     days = (stage_date - anchor).days
-    if days <= 0:
+    if days <= 0 or step is None:
         return [(anchor, remaining_at_anchor), (stage_date, 0.0)]
     pts = [
         (anchor + timedelta(days=i), remaining_at_anchor * (1 - i / days))
@@ -86,6 +88,7 @@ def burndown(
                 required_pct_per_week=pct,
                 eat_kcal_per_day=eat,
                 feasible=feasible,
+                path=planned_path(anchor, remaining0, st.date),
             )
         )
 

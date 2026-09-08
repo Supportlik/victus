@@ -51,7 +51,13 @@ const CATEGORY_RULES: readonly [RegExp, string][] = [
 ];
 
 /** The glyph for one item; exported so tables can use it without the component. */
-export function foodGlyph(name: string | null | undefined, category?: string | null, kind?: string | null): string {
+export function foodGlyph(
+  name: string | null | undefined,
+  category?: string | null,
+  kind?: string | null,
+  icon?: string | null,
+): string {
+  if (icon && icon.trim()) return icon.trim();
   for (const [re, glyph] of NAME_RULES) if (name && re.test(name)) return glyph;
   for (const [re, glyph] of CATEGORY_RULES) if (category && re.test(category)) return glyph;
   if (kind === 'recipe_batch') return '🍲';
@@ -70,5 +76,7 @@ export class FoodIcon {
   readonly name = input<string | null | undefined>(null);
   readonly category = input<string | null | undefined>(null);
   readonly kind = input<string | null | undefined>(null);
-  readonly glyph = computed(() => foodGlyph(this.name(), this.category(), this.kind()));
+  /** Set on the product itself; wins over every rule. */
+  readonly icon = input<string | null | undefined>(null);
+  readonly glyph = computed(() => foodGlyph(this.name(), this.category(), this.kind(), this.icon()));
 }

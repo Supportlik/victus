@@ -107,6 +107,22 @@ blocks:
     source: agent
 ```
 
+## Snapshots: a moment, assessed
+
+A rendered report is a live view; a **snapshot** is a moment. Freezing one stores the numbers of
+that period together with the date they were computed, and later data never changes them (R57).
+Each snapshot carries exactly one written assessment, so the words always belong to the numbers
+they were written for.
+
+| Step | Web app | Chat / MCP |
+|---|---|---|
+| Freeze | "Freeze this period" on the report page | `report_snapshot_create(name, period)` returns the frozen numbers |
+| Assess | the agent writes it, or you write your own note | `report_assess(snapshot_id, assessment_md)` |
+| Read back | the "Moments" list, newest first, opens in place | `report_snapshots_list`, `report_snapshot_get` |
+
+Day-level consistency checks (`source_balance_drift` and friends) are a different thing: they are
+findings *about one day's data*, shown on the day view. An assessment is about the trajectory.
+
 ## Renderers
 
 | Format | Consumer | Notes |

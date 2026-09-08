@@ -14,7 +14,7 @@ pytestmark = pytest.mark.service
 
 
 def test_upgrade_reaches_head_and_is_idempotent(engine: Engine) -> None:
-    assert runner.current(engine=engine) == runner.head() == "0003"
+    assert runner.current(engine=engine) == runner.head() == "0005"
     runner.upgrade(engine=engine)  # second run is a no-op
     assert runner.is_up_to_date(engine=engine)
 

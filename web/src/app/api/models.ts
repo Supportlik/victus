@@ -98,6 +98,7 @@ export interface Portion {
 export interface Product extends Macros {
   id: number;
   name: string;
+  icon?: string | null;
   brand?: string | null;
   category_id?: number | null;
   category?: string | null;
@@ -170,6 +171,8 @@ export interface LineItem extends Macros {
   source_kind?: 'transcript' | 'image' | 'text' | null;
   /** Product category name; drives the small icon in front of the item. */
   category?: string | null;
+  /** The product's own icon, which wins over the guessed one. */
+  icon?: string | null;
 }
 
 export interface Meal {
@@ -258,6 +261,29 @@ export interface DayMessage {
   attachment_id?: string | null;
   attachment_mime?: string | null;
   transcript?: string | null;
+}
+
+/** A report frozen at a point in time, with the assessment written for those numbers. */
+export interface ReportSnapshot {
+  id: string;
+  report_name: string;
+  title: string;
+  label?: string | null;
+  period_start: string;
+  period_end: string;
+  today: string;
+  status: 'frozen' | 'assessed' | 'failed';
+  created_at: string;
+  created_by?: string | null;
+  assessment_md?: string | null;
+  assessed_at?: string | null;
+  model?: string | null;
+  prompt_version?: string | null;
+  input_tokens?: number;
+  output_tokens?: number;
+  cost_usd?: number;
+  /** The frozen render; only the detail carries it. */
+  result?: Record<string, unknown> | null;
 }
 
 /** A product change the agent read from a label photo or note; a person decides. */
@@ -495,6 +521,8 @@ export interface ForecastBlock extends BlockBase {
 }
 
 export interface StageRow {
+  /** The stage's own planned line: [date, remaining kg]. */
+  path?: [string, number][];
   name: string;
   date: string;
   planned_remaining_today: number;
