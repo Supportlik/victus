@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Supportlik/victus/schemas/backup-manifest.schema.json",
+  "title": "Victus backup manifest",
+  "description": "manifest.json inside a Victus backup archive (victus-<tenant|all>-<UTC>.zip). Data is stored dialect-neutral as data/<table>.jsonl, attachments as blobs/<sha256>, optionally a SQLite snapshot (VACUUM INTO).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["manifest_version", "victus_version", "schema_revision", "created_at", "tenant", "tables", "blobs", "includes_sqlite_snapshot", "sha256_total"],
+  "properties": {
+    "manifest_version": { "type": "integer", "const": 1 },
+    "victus_version": { "type": "string", "description": "Version of the exporting instance (PEP 440)." },
+    "schema_revision": { "type": "string", "description": "Alembic revision id of the database at export time." },
+    "created_at": { "type": "string", "format": "date-time" },
+    "database_dialect": { "type": "string", "enum": ["sqlite", "postgresql"] },
+    "tenant": {
+      "oneOf": [
+        { "type": "null", "description": "null = archive contains every tenant" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "slug"],
+          "properties": {
+            "id": { "type": "string" },
+            "slug": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+            "name": { "type": "string" }
+          }
+        }
+      ]
+    },
+    "tables": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "rows", "file", "sha256"],
+        "properties": {
+          "name": { "type": "string" },
+          "rows": { "type": "integer", "minimum": 0 },
+          "file": { "type": "string", "pattern": "^data/[a-z_]+\\.jsonl$" },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        }
+      }
+    },
+    "blobs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sha256", "size", "mime"],
+        "properties": {
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "size": { "type": "integer", "minimum": 0 },
+          "mime": { "type": "string" },
+          "file": { "type": "string", "pattern": "^blobs/[0-9a-f]{64}$" }
+        }
+      }
+    },
+    "includes_sqlite_snapshot": { "type": "boolean" },
+    "sqlite_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file", "sha256", "size"],
+      "properties": {
+        "file": { "type": "string", "const": "victus.db" },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "size": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "sha256_total": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "sha256 over the sorted list of all file hashes — quick integrity check without reading every file." },
+    "notes": { "type": "string" }
+  },
+  "examples": [
+    {
+      "manifest_version": 1,
+      "victus_version": "0.1.0",
+      "schema_revision": "0001_initial",
+      "created_at": "2026-09-08T03:00:04Z",
+      "database_dialect": "sqlite",
+      "tenant": { "id": "01J7Z0000000000000000000M", "slug": "demo", "name": "Demo tenant" },
+      "tables": [
+        { "name": "day_log", "rows": 134, "file": "data/day_log.jsonl", "sha256": "0000000000000000000000000000000000000000000000000000000000000000" }
+      ],
+      "blobs": [],
+      "includes_sqlite_snapshot": true,
+      "sqlite_snapshot": { "file": "victus.db", "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "size": 655360 },
+      "sha256_total": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ]
+}

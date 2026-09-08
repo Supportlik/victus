@@ -1,0 +1,22 @@
+<header class="topbar">
+  <h1>{{ title() }}</h1>
+  <p class="tagline">Self-hosted nutrition tracking</p>
+</header>
+
+<main class="content">
+  <section class="card" aria-live="polite">
+    <h2>API</h2>
+    @if (health(); as h) {
+      <p class="status ok">
+        <span class="dot"></span>
+        {{ h.status }} · version {{ h.version }}
+      </p>
+    } @else if (apiError(); as err) {
+      <p class="status error"><span class="dot"></span>{{ err }}</p>
+    } @else {
+      <p class="status pending"><span class="dot"></span>checking…</p>
+    }
+  </section>
+
+  <router-outlet />
+</main>

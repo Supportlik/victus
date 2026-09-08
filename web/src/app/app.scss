@@ -1,0 +1,62 @@
+:host {
+  display: block;
+  min-height: 100vh;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color: light-dark(#1f1f1c, #ebebe6);
+  background: light-dark(#fcfcfb, #141413);
+}
+
+.topbar {
+  padding: 2rem 1.5rem 1rem;
+  border-bottom: 1px solid light-dark(#e6e5e0, #2a2a28);
+
+  h1 {
+    margin: 0;
+    font-size: 1.75rem;
+    letter-spacing: 0.01em;
+  }
+
+  .tagline {
+    margin: 0.25rem 0 0;
+    color: light-dark(#52514e, #a3a29c);
+  }
+}
+
+.content {
+  padding: 1.5rem;
+  display: grid;
+  gap: 1rem;
+  max-width: 48rem;
+}
+
+.card {
+  padding: 1rem 1.25rem;
+  border: 1px solid light-dark(#e6e5e0, #2a2a28);
+  border-radius: 0.75rem;
+
+  h2 {
+    margin: 0 0 0.5rem;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: light-dark(#8a8983, #7c7b75);
+  }
+}
+
+.status {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  .dot {
+    width: 0.6rem;
+    height: 0.6rem;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  &.ok { color: #1baf7a; }
+  &.error { color: #d9534f; }
+  &.pending { color: light-dark(#8a8983, #7c7b75); }
+}

@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Runtime data — never commit health data or blobs
+data/
+*.db
+*.db-wal
+*.db-shm
+backups/
+
+# Secrets and local config
+.env
+.env.*
+!.env.example
+victus.yaml
+!examples/victus.yaml
+deploy/docker-compose.override.yml
+
+# Angular / Node
+web/node_modules/
+web/dist/
+web/.angular/
+web/coverage/
+web/.nx/
+npm-debug.log*
+
+# Editors / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Claude Code: agent instructions and local settings stay out of the public repo
+CLAUDE.md
+.claude/

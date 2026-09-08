@@ -1,0 +1,38 @@
+# Local development override.
+#
+#   cp deploy/docker-compose.override.example.yml deploy/docker-compose.override.yml
+#   docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.override.yml up
+#
+# Differences from production: ports on all interfaces (reachable from a phone
+# in the LAN — note that WebAuthn will NOT work over http://<LAN-IP>, only over
+# http://localhost or HTTPS), source tree bind-mounted with auto-reload, debug
+# logging, backups into a local folder, worker disabled by default.
+
+services:
+  api:
+    command: ["serve", "--host", "0.0.0.0", "--port", "8000", "--migrate", "--reload"]
+    ports:
+      - "0.0.0.0:${API_PORT:-8090}:8000"
+    volumes:
+      - ../src:/app/src:ro
+      - victus_data:/data
+      - victus_blobs:/data/blobs
+    environment:
+      VICTUS_LOG_LEVEL: debug
+      VICTUS_AUTH__RP_ID: localhost
+      VICTUS_AUTH__ORIGIN: http://localhost:4200
+
+  web:
+    ports:
+      - "0.0.0.0:${WEB_PORT:-8091}:80"
+
+  worker:
+    # Run the worker on demand only:
+    #   docker compose ... run --rm worker worker --once
+    profiles: ["worker"]
+
+  backup:
+    volumes:
+      - victus_data:/data:ro
+      - victus_blobs:/data/blobs:ro
+      - ./.backups:/backups

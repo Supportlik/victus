@@ -1,0 +1,40 @@
+# Standalone Caddy for Victus (compose profile `caddy`).
+# Certificate via Cloudflare DNS-01: the A record may point at a Tailscale IP
+# (100.64.0.0/10) that is unreachable from the internet — issuance still works.
+# Cloudflare proxy must be OFF ("DNS only") for that record.
+
+{
+    email {$ACME_EMAIL:admin@example.com}
+    admin 0.0.0.0:2019
+}
+
+{$VICTUS_DOMAIN:victus.example.com} {
+    tls {
+        dns cloudflare {env.CF_API_TOKEN}
+    }
+
+    encode zstd gzip
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        -Server
+    }
+
+    # MCP over Streamable HTTP: VPN clients only (100.64.0.0/10 = Tailscale CGNAT range).
+    @mcp_outside {
+        path /mcp*
+        not remote_ip 100.64.0.0/10 127.0.0.1/32
+    }
+    respond @mcp_outside 403
+
+    # Long-lived MCP streams must not be buffered.
+    @mcp path /mcp*
+    reverse_proxy @mcp web:8080 {
+        flush_interval -1
+        transport http {
+            read_timeout 1h
+        }
+    }
+
+    reverse_proxy web:8080
+}

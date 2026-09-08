@@ -1,0 +1,169 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Supportlik/victus/schemas/report-definition.schema.json",
+  "title": "Victus report definition",
+  "description": "Declarative report (dashboard / check-up) built from blocks. Rendered to JSON (web), Markdown (chat, vault) or SVG.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["name", "title", "blocks"],
+  "$defs": {
+    "period_token": { "type": "string", "pattern": "^([0-9]+d|custom)$" },
+    "block_id": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+    "kpi_tile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "id", "source"],
+      "properties": {
+        "type": { "const": "kpi_tile" },
+        "id": { "$ref": "#/$defs/block_id" },
+        "title": { "type": "string" },
+        "source": { "type": "string", "description": "Provider path, e.g. weight.ma7, tdee.rolling_14, goal.rate_kg_per_week, goal.deficit_kcal", "pattern": "^[a-z_]+\\.[a-z0-9_]+$" },
+        "unit": { "type": "string" },
+        "decimals": { "type": "integer", "minimum": 0, "maximum": 3 },
+        "delta_to": { "type": "string", "description": "Optional second provider path for a delta display." }
+      }
+    },
+    "band_distribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "macros"],
+      "properties": {
+        "type": { "const": "band_distribution" },
+        "id": { "$ref": "#/$defs/block_id" },
+        "title": { "type": "string" },
+        "macros": { "type": "array", "minItems": 1, "items": { "type": "string", "enum": ["kcal", "protein", "carbs", "fat", "fiber", "salt"] } }
+      }
+    },
+    "tdee_windows": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "const": "tdee_windows" },
+        "id": { "$ref": "#/$defs/block_id" },
+        "title": { "type": "string" },
+        "windows": { "type": "array", "items": { "type": "integer", "minimum": 2 } },
+        "show_quality": { "type": "boolean", "default": true }
+      }
+    },
+    "trend": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "const": "trend" },
+        "id": { "$ref": "#/$defs/block_id" },
+        "title": { "type": "string" },
+        "windows": { "type": "array", "items": { "type": "integer", "minimum": 2 } }
+      }
+    },
+    "forecast": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "const": "forecast" },
+        "id": { "$ref": "#/$defs/block_id" },
+        "title": { "type": "string" },
+        "horizons": { "type": "array", "items": { "type": "string", "pattern": "^[0-9]+m$" }, "default": ["1m", "3m", "6m"] },
+        "with_eta": { "type": "boolean", "default": true }
+      }
+    },
+    "burndown": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "const": "burndown" },
+        "id": { "$ref": "#/$defs/block_id" },
+        "title": { "type": "string" },
+        "start": { "type": "string", "format": "date" },
+        "stages": { "oneOf": [ { "const": "from_settings" }, { "type": "array", "items": { "type": "string" } } ], "default": "from_settings" }
+      }
+    },
+    "weekly_chart": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "const": "weekly_chart" },
+        "id": { "$ref": "#/$defs/block_id" },
+        "title": { "type": "string" },
+        "weeks": { "type": "integer", "minimum": 1, "default": 12 },
+        "series": { "type": "array", "items": { "type": "string", "enum": ["kcal", "weight", "tdee"] }, "default": ["kcal", "tdee"] }
+      }
+    },
+    "day_list": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "const": "day_list" },
+        "id": { "$ref": "#/$defs/block_id" },
+        "title": { "type": "string" },
+        "columns": { "type": "array", "items": { "type": "string", "enum": ["kcal", "protein", "carbs", "fat", "fiber", "salt", "weight", "training", "status", "reliable"] } },
+        "limit": { "type": "integer", "minimum": 1, "default": 14 }
+      }
+    },
+    "text_finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "id"],
+      "properties": {
+        "type": { "const": "text_finding" },
+        "id": { "$ref": "#/$defs/block_id" },
+        "title": { "type": "string" },
+        "source": { "type": "string", "enum": ["agent", "manual", "agent|manual"], "default": "agent|manual" },
+        "max_items": { "type": "integer", "minimum": 1, "maximum": 10, "default": 5 }
+      }
+    }
+  },
+  "properties": {
+    "name": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+    "title": { "type": "string" },
+    "description": { "type": "string" },
+    "period": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "default": { "$ref": "#/$defs/period_token" },
+        "options": { "type": "array", "items": { "$ref": "#/$defs/period_token" } }
+      }
+    },
+    "blocks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/kpi_tile" },
+          { "$ref": "#/$defs/band_distribution" },
+          { "$ref": "#/$defs/tdee_windows" },
+          { "$ref": "#/$defs/trend" },
+          { "$ref": "#/$defs/forecast" },
+          { "$ref": "#/$defs/burndown" },
+          { "$ref": "#/$defs/weekly_chart" },
+          { "$ref": "#/$defs/day_list" },
+          { "$ref": "#/$defs/text_finding" }
+        ]
+      }
+    }
+  },
+  "examples": [
+    {
+      "name": "checkup",
+      "title": "Am I on track?",
+      "period": { "default": "14d", "options": ["7d", "14d", "30d", "90d", "custom"] },
+      "blocks": [
+        { "type": "kpi_tile", "id": "current_weight", "source": "weight.ma7", "unit": "kg" },
+        { "type": "kpi_tile", "id": "required_rate", "source": "goal.rate_kg_per_week", "unit": "kg/week" },
+        { "type": "tdee_windows", "windows": [7, 14, 30], "show_quality": true },
+        { "type": "band_distribution", "macros": ["kcal", "protein", "fiber", "salt"] },
+        { "type": "trend", "windows": [7, 14, 21, 30] },
+        { "type": "forecast", "horizons": ["1m", "3m", "6m"], "with_eta": true },
+        { "type": "burndown", "start": "2026-01-01", "stages": "from_settings" },
+        { "type": "day_list", "columns": ["kcal", "protein", "fiber", "weight", "status"] },
+        { "type": "text_finding", "id": "finding", "source": "agent|manual" }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,106 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Tuesday 06:23 UTC — advisories arrive without a push happening.
+    - cron: "23 6 * * 2"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pip-audit:
+    name: Python dependency audit (pip-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          enable-cache: true
+
+      # Audits exactly what ships in the image: the locked runtime set with
+      # every extra, resolved from uv.lock rather than from version ranges.
+      - name: Export the locked runtime dependencies
+        run: uv export --format requirements-txt --all-extras --no-dev --no-emit-project -o requirements.txt
+
+      - name: Audit against the PyPI advisory database
+        run: uvx pip-audit --strict --requirement requirements.txt
+
+  npm-audit:
+    name: npm dependency audit (web)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Node 24
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install the locked dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Audit production dependencies (high and above)
+        run: npm audit --omit=dev --audit-level=high
+
+  trivy:
+    name: Repository scan (Trivy)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Trivy
+        uses: aquasecurity/setup-trivy@v0.3.1
+
+      - name: Scan for vulnerabilities, secrets and misconfigurations
+        run: |
+          trivy fs --scanners vuln,secret,misconfig \
+            --format sarif --output trivy.sarif --exit-code 0 --no-progress .
+
+      - name: Upload the results to GitHub code scanning
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy.sarif
+          category: trivy
+
+  codeql:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [python, javascript-typescript]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: codeql-${{ matrix.language }}

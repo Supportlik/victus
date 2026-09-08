@@ -1,0 +1,231 @@
+# Test plan
+
+Every test case has an ID, a level, and a fixture. Automated cases live under `tests/` (Python) and `web/` (Angular,
+Playwright); manual cases are checklists per stage. This document is the source of truth for *what* is tested;
+the code is the source of truth for *how*.
+
+## Strategy
+
+| Level | Scope | Runner | Data | Speed |
+|---|---|---|---|---|
+| **Domain** (`T-DOM`) | Pure functions: nutrition, TDEE, trend, forecast, burndown, band rating, consistency, matching, quantity parser | pytest, no DB | fixtures in `tests/fixtures/` | ms |
+| **Importer** (`T-IMP`) | Markdown parsers, matching driver, round-trip gate | pytest, in-memory SQLite | anonymised sample logs in `tests/fixtures/vault_sample/` | ms–s |
+| **Service** (`T-SVC`) | Use cases with in-memory SQLite (FK pragma on), in-memory ports | pytest | factories | s |
+| **API** (`T-API`) | FastAPI `TestClient`, two tenants, session and token auth | pytest | factories | s |
+| **Web** (`T-WEB`) | Angular unit tests (Vitest), component and service tests | `npm test` | mocked API | s |
+| **E2E** (`T-E2E`) | Playwright against `docker compose --profile dev`, virtual authenticator | `npx playwright test` | seeded tenant `alice` | min |
+| **Migration** (`T-MIG`) | Full vault import on the sample vault, gate and report | pytest, file SQLite | `tests/fixtures/vault_sample/` | s |
+| **Operations** (`T-OPS`) | Backup/restore, health, Compose smoke | pytest + shell | temp dirs | s–min |
+
+The pyramid is deliberate: most cases are `T-DOM`/`T-SVC`; E2E covers the two flows a user cannot live without
+(login, approving a draft).
+
+## Conventions
+
+| Item | Rule |
+|---|---|
+| ID | `T-<LEVEL>-<3 digits>`, stable; retired cases are marked *retired*, never renumbered |
+| pytest marker | `@pytest.mark.<level>` (`domain`, `importer`, `service`, `api`, `migration`, `ops`) |
+| DB matrix | `--db sqlite` (default) and `--db postgres` (service container in CI) for `T-SVC`, `T-API`, `T-MIG` |
+| Fixtures | Synthetic or anonymised; no real personal or health data (SPEC R48) |
+| Tolerances | kcal ±1, macros ±0.1 g, salt ±0.01 g, weight ±0.01 kg, TDEE ±1 kcal unless stated |
+
+## Domain (`T-DOM`)
+
+| ID | Title | Precondition | Steps | Expected | Fixture | Automated | Stage |
+|---|---|---|---|---|---|---|---|
+| T-DOM-001 | Macros for a line item | product per 100 g, base quantity | `nutrition.macros_for(item, per100)` | `kcal = per100.kcal × base_quantity / 100` etc. | inline | yes | 1 |
+| T-DOM-002 | Pure function equals SQL view | 20 seeded items | compare `macros_for` with `line_item_macros` | identical within tolerance for every row | `service` DB | yes | 1 |
+| T-DOM-003 | Weekly TDEE (predecessor formula) | daily weights and kcal | `tdee.weekly_tdee(daily, kcal, kcal_per_kg)` | per ISO week `raw = avg_kcal + (−Δkg × kcal_per_kg) / days_with_kcal`, smoothed `(raw + prev) / 2`, out of 1000–6000 → `None` | `tdee_reference.json` | yes | 2 |
+| T-DOM-004 | Rolling TDEE windows 3/7/14/21/30/60/90 | same | `tdee.rolling_tdee(...)` | equals reference per window ±1 kcal; divisor = calendar days; Δ from the 7-day MA | `tdee_reference.json` | yes | 2 |
+| T-DOM-005 | Rolling TDEE grade | window results | `reliability.grade(days, coverage, days_without_macros)` | red if days < 7 or coverage < 50 %; yellow if days < 14 or coverage < 70 % or ≥ 2 days without macros; else green | inline | yes | 2 |
+| T-DOM-006 | Moving average | 30 daily values with gaps | `trend.moving_average(series, 7)` | backward window over calendar days, gaps ignored, equals reference | `tdee_reference.json` | yes | 2 |
+| T-DOM-007 | Regression trend per window | MA series | `trend.trend_windows(ma, daily, [7,14,21,30,60,90])` | slope kg/day equals reference ±0.0005 | `tdee_reference.json` | yes | 2 |
+| T-DOM-008 | Forecast horizons and ETA | trend, current MA, goal | `forecast.forecast(...)` | 1/3/6-month projections and weight at goal date ±0.01 kg; ETA `None` when slope ≥ −0.001 | `tdee_reference.json` | yes | 2 |
+| T-DOM-009 | Burndown planned vs. actual | goal, stages, MA series | `burndown.burndown(...)` | planned path linear to each stage; gap and required rate equal reference ±0.01 | `tdee_reference.json` | yes | 2 |
+| T-DOM-010 | Yearly stats | multi-year weights | `trend.yearly_stats` | start/end/delta/min/max/avg per year | inline | yes | 2 |
+| T-DOM-011 | Band distribution | 14 days macros, target band | `band_rating.distribution(values, band)` | counts below min / between / optimal / above max sum to n; average correct | inline | yes | 2 |
+| T-DOM-012 | Asymmetric corridor | kcal series, corridor 1400–2000 asymmetric | rating | below min is not a finding; above max is; average rating uses countable days only | inline | yes | 2 |
+| T-DOM-013 | Consistency type 0 — missing flags | day without `reliable` or `status` | `consistency.check_day` | finding type 0, blocks countability | inline | yes | 1 |
+| T-DOM-014 | Consistency type 1 — source vs. computed drift | `source_kcal` differs by > 3 % | check | finding type 1 with both values | inline | yes | 1 |
+| T-DOM-015 | Consistency type 2 — meal totals vs. items | meal total row off by 10 kcal | check | finding type 2 | inline | yes | 1 |
+| T-DOM-016 | Consistency "not assessable" | meal table without total row | check | result *not assessable*, **not** an error | inline | yes | 1 |
+| T-DOM-017 | Consistency type 3 — gaps | countable day lacking fiber | check | type 3 finding; salt-only gaps flagged as *expected* before salt tracking start | inline | yes | 1 |
+| T-DOM-018 | Quantity parser golden | 40 strings (`346 g`, `0,5 l (1 Flasche)`, `~240 g ⚠️`, `500 g (ganzer Becher)`, `3 Stück`, `½ Dose`, `2 × 300 ml`, `53 g (~2,1 Scoops)`) | `quantity_parser.parse` | value, unit code, estimated flag, portion hint as in golden file | `quantity_golden.yaml` | yes | 1 |
+| T-DOM-019 | Number normalisation | `1.056`, `150,5`, `2.568,25`, `12` | `parse_number` | 1056, 150.5, 2568.25, 12 | inline | yes | 1 |
+| T-DOM-020 | Matcher stage 1 | index with "Potato (raw)" and "Potato (cooked)" | `ProductIndex.find("Potato (raw)")` | stage 1, score 1.0, correct id — parentheses are significant | inline | yes | 1 |
+| T-DOM-021 | Matcher stage 2 uniqueness | short form ambiguous | `find("Potato")` | **no** stage-2 hit; falls through to fuzzy with both candidates | inline | yes | 1 |
+| T-DOM-022 | Matcher substring trap | ingredient "flaxseed (ground)" and recipe "skyr berry flaxseed bowl" | `find("flaxseed (ground)")` | matches the product, not the recipe | inline | yes | 1 |
+| T-DOM-023 | Matcher threshold | coverage 0.61 vs 0.62 | `find` | 0.61 → no match, 0.62 → stage 3 | inline | yes | 1 |
+| T-DOM-024 | Target band for a date and training type | three versions | `target_band.for_date(bands, date, training_type)` | picks the version valid at date; falls back to `rest` when type unknown | inline | yes | 1 |
+| T-DOM-025 | Frozen quantities, propagating nutrients | item with base_quantity; product kcal changed | recompute | base_quantity unchanged, kcal changed | inline | yes | 1 |
+
+## Importer (`T-IMP`)
+
+| ID | Title | Precondition | Steps | Expected | Fixture | Automated | Stage |
+|---|---|---|---|---|---|---|---|
+| T-IMP-001 | Frontmatter macros | log with macro block | `parse_day_log` | six macros read as floats; decimal point | `vault_sample/days/…/frontmatter.md` | yes | 1 |
+| T-IMP-002 | Balance-section fallback | log without frontmatter macros, bold and non-bold rows | parse | values read from the balance table regardless of bold | `…/legacy_balance.md` | yes | 1 |
+| T-IMP-003 | Late meal after the balance section | meal heading after balance | parse | meal included in items and totals | `…/late_meal.md` | yes | 1 |
+| T-IMP-004 | Escaped pipes in wikilinks | `[[x\|Name]]` in cells | split cells | 8 cells, name = display text | `…/wikilinks.md` | yes | 1 |
+| T-IMP-005 | 7- vs 8-column tables | both variants | parse | salt `None` for 7 columns, value for 8 | `…/seven_cols.md`, `…/eight_cols.md` | yes | 1 |
+| T-IMP-006 | Planning sections ignored | headings "Vorschlag", "Restbedarf" | parse | rows under planning headings not counted; "Essensplan" in a meal heading **is** counted | `…/planning.md` | yes | 1 |
+| T-IMP-007 | Flags without defaults | log missing `offen` | parse | `status = None`, reported as type-0 finding, not silently `open` | `…/no_flags.md` | yes | 1 |
+| T-IMP-008 | Food table parsing | sample foods file | `parse_products` | products, categories from headings, salt and portions from free text, `verified` from ✓/label marker, EAN regex | `vault_sample/foods.md` | yes | 1 |
+| T-IMP-009 | Recipe parsing | sample recipe | `parse_recipe` | name, servings, ingredients, per-100 nutrients | `vault_sample/recipes/*.md` | yes | 1 |
+| T-IMP-010 | Weight CSV | `timestamp;weight_kg`, duplicates | import | rows unique per timestamp; out-of-range (< 30, > 400) rejected with report line | `vault_sample/weight/raw.csv` | yes | 1 |
+| T-IMP-011 | Idempotent re-run | import twice | counts | second run writes 0 new rows | sample vault | yes | 1 |
+| T-IMP-012 | `--replace-day` | day modified in source | re-import one day | only that day's meals/items replaced; products untouched | sample vault | yes | 1 |
+| T-IMP-013 | Review list content | unmatched items | report | each with top-3 candidates and scores, day, raw text | sample vault | yes | 1 |
+
+## Service (`T-SVC`)
+
+| ID | Title | Precondition | Steps | Expected | Fixture | Automated | Stage |
+|---|---|---|---|---|---|---|---|
+| T-SVC-001 | FK pragma on | fresh SQLite engine | `PRAGMA foreign_keys` | returns 1 on every pooled connection | – | yes | 1 |
+| T-SVC-002 | Subtype FK safety | insert `line_item` pointing at a batch id with kind `product` | commit | integrity error | factories | yes | 1 |
+| T-SVC-003 | One default portion | second default portion for same product+unit | commit | unique violation | factories | yes | 1 |
+| T-SVC-004 | Cook a batch freezes totals | recipe with ingredients | `CookBatch`; then change an ingredient product | batch totals unchanged | factories | yes | 1 |
+| T-SVC-005 | Close day freezes target band | day open, two band versions | `CloseDay` then add a newer band | `day.target_band_id` unchanged | factories | yes | 1 |
+| T-SVC-006 | Countable view | days with all combinations of `reliable` × `status` | query `countable_days` | only `reliable=1 AND status='closed'` | factories | yes | 1 |
+| T-SVC-007 | Manual weight only | `AddWeight(source='scale_sync')` via API use case | execute | rejected; `manual` accepted; delete of non-manual rejected | factories | yes | 1 |
+| T-SVC-008 | ReassignLineItem | ad-hoc item, product | execute | `consumable_id` changed, `base_quantity` unchanged, macros now from product | factories | yes | 1 |
+| T-SVC-009 | Capture idempotency | same bytes uploaded twice | `CreateCapture` | second call returns existing id, no new row | factories | yes | 3 |
+| T-SVC-010 | Agent lock acquire/conflict | run A holds lock for date | run B `StartAgentRun` same date | B skips the day; `draft_create` by B raises `LockHeldByOtherRun` | factories | yes | 3 |
+| T-SVC-011 | Lock expiry | lock with `locked_until` in the past (TTL default 5 min) | run B starts | B acquires the lock | factories | yes | 3 |
+| T-SVC-012 | CreateDraft | run with lock, transcript | execute | `day_log.status='draft'` or `is_draft=1` items; confidence, reasoning, alternatives stored; captures → `assigned` | factories | yes | 3 |
+| T-SVC-013 | ApproveDay | draft day with 3 items, correction for one | execute with `close=true` | `is_draft=0`, corrected quantity, `estimated` preserved, `status='closed'`, `target_band_id` set, captures `processed`, 1 audit row per change | factories | yes | 3 |
+| T-SVC-014 | ApproveDay keeps day open | as above, `close=false` | execute | `status='open'`, band not frozen | factories | yes | 3 |
+| T-SVC-015 | Budget stop | budget 1000 tokens, usage 1200 | worker loop | run ends `budget_exceeded`, locks kept until expiry, summary written | fake LLM | yes | 3 |
+| T-SVC-016 | Tenant scoping in repositories | two tenants with same product name | `products.search` as tenant A | only A's rows | factories | yes | 1 |
+| T-SVC-017 | Settings versioning | two `PUT /settings` | read for date between versions | version valid at that date | factories | yes | 1 |
+| T-SVC-018 | Salt only in target bands | settings JSON containing `salt` key | validate | schema error | inline | yes | 1 |
+| T-SVC-019 | One session per day | batch run over 3 days with captures | worker loop with recording fake LLM | 3 sessions opened; session for day N receives only day N's captures/transcripts; no message from another day present | fake LLM | yes | 3 |
+| T-SVC-020 | Day assignment precedes drafting | captures without `target_date` | run | classification step sets `target_date` before any drafting session starts; drafting session prompts contain no unassigned capture | fake LLM | yes | 3 |
+| T-SVC-021 | `captures_open` scoped to locked day (MCP) | run holds lock for day A; open captures for A and B | `captures_open(run_id)` | only day A's captures returned | factories | yes | 3 |
+| T-SVC-022 | Follow-up after draft | day with pending draft; new text message | `AddDayMessage` | `follow_up` run queued for that day only; session input contains current draft + thread + new message | fake LLM | yes | 3 |
+| T-SVC-023 | Message during a locked run | day locked by run A; message arrives | run A finishes | message still `new`; a `follow_up` run is queued automatically; no second draft of the same items | fake LLM | yes | 3 |
+| T-SVC-024 | Agent question round-trip | draft with `open_questions` | run finishes; user replies via message | question stored as `day_message(kind=question)`; reply queues follow-up; draft updated incrementally | fake LLM | yes | 3 |
+
+## API (`T-API`)
+
+| ID | Title | Precondition | Steps | Expected | Fixture | Automated | Stage |
+|---|---|---|---|---|---|---|---|
+| T-API-001 | Passkey registration | invitation session, virtual authenticator (`soft-webauthn`) | options → verify | credential stored, `sign_count` 0 | client | yes | 1 |
+| T-API-002 | Passkey login | registered credential | options → verify | session cookie set, `HttpOnly; Secure; SameSite=Lax` | client | yes | 1 |
+| T-API-003 | Replay / sign-count regression | assertion with lower `sign_count` | verify | 401, credential flagged | client | yes | 1 |
+| T-API-004 | CSRF on writes | session without `X-CSRF-Token` | `POST /days/2026-09-01/meals` | 403 | client | yes | 1 |
+| T-API-005 | RP_ID pin | first passkey registered with `rp_id=a` | restart app with `rp_id=b` | startup fails with `RP_ID mismatch` | client | yes | 1 |
+| T-API-006 | Recovery code | valid code | `POST /auth/recovery` | 15-minute session; only `/auth/passkeys` and `/auth/me` allowed | client | yes | 1 |
+| T-API-007 | Token creation and single display | `POST /auth/tokens` | response | secret present once; `GET` shows prefix only | client | yes | 1 |
+| T-API-008 | Token scopes | token `read` | `POST /products` | 403; `GET /products` 200 | client | yes | 1 |
+| T-API-009 | Token expiry | expired token | any call | 401 | client | yes | 1 |
+| T-API-010 | Token revocation | revoked token | any call | 401 immediately | client | yes | 1 |
+| T-API-011 | Foreign tenant → 404 (parametrised over every router) | tenant B resource id | GET/PATCH/DELETE as A | 404, no body leak | two tenants | yes | 1 |
+| T-API-012 | Search endpoint | products seeded | `GET /products?q=` | ranked, includes `stage`, `score` | client | yes | 1 |
+| T-API-013 | Day detail computes macros | day with items | `GET /days/{date}` | macros equal view; target band and findings present | client | yes | 1 |
+| T-API-014 | Problem+json errors | invalid body | any POST | `application/problem+json`, field paths | client | yes | 1 |
+| T-API-015 | Health | running app | `GET /health` | `db`, `storage`, `scheduler`, `backup_age_hours` | client | yes | 1 |
+| T-API-016 | OpenAPI client drift | generated client committed | regenerate in CI | no diff | CI | yes | 1 |
+| T-API-017 | Capture upload | multipart audio | `POST /captures` | 201, hash, transcript job queued; second upload → 200 existing | client | yes | 3 |
+| T-API-018 | MCP HTTP auth | `/mcp` without token / with `read` token | tool call `day_approve` | 401 / 403 | client | yes | 3 |
+| T-API-019 | MCP CIDR allow-list | request from outside `mcp.allowed_cidrs` | any `/mcp` call | 403 | client | yes | 3 |
+| T-API-020 | Rate limit | > `rate_limit_per_minute` calls | `/mcp` | 429 | client | yes | 3 |
+
+## Web (`T-WEB`)
+
+| ID | Title | Precondition | Steps | Expected | Fixture | Automated | Stage |
+|---|---|---|---|---|---|---|---|
+| T-WEB-001 | Day view renders macros and traffic lights | mocked `GET /days/{date}` | render component | values, ⚠️ on estimated items, band colours | mock | yes | 1 |
+| T-WEB-002 | Product search debounce | typing | 300 ms debounce, one request per pause | mock | yes | 1 |
+| T-WEB-003 | Draft approval form | mocked drafts | edit quantity, approve | request body contains corrections and `close` | mock | yes | 3 |
+| T-WEB-004 | Report dashboard blocks | mocked `ReportResult` | render | every block type has a component; unknown type shows a placeholder | mock | yes | 2 |
+| T-WEB-005 | Passkey nudge | `passkeys.length < 2` | login | banner shown; hidden at 2 | mock | yes | 1 |
+
+## E2E (`T-E2E`)
+
+| ID | Title | Precondition | Steps | Expected | Fixture | Automated | Stage |
+|---|---|---|---|---|---|---|---|
+| T-E2E-001 | Login with passkey | dev stack, seeded tenant `alice`, Playwright virtual authenticator | open app → login | dashboard visible; cookie set | seed | yes | 1 |
+| T-E2E-002 | Log a day | logged in | add meal, search product, add item, close day | day shows computed macros; `countable_days` includes it | seed | yes | 1 |
+| T-E2E-003 | Approve a draft | seeded draft | open Drafts → correct quantity → approve | day closed; audit entry visible in history | seed | yes | 3 |
+| T-E2E-004 | Manual weight entry | logged in | add weight | listed with `manual` badge; delete works; scale_sync rows have no delete button | seed | yes | 1 |
+
+## Migration (`T-MIG`)
+
+| ID | Title | Precondition | Steps | Expected | Fixture | Automated | Stage |
+|---|---|---|---|---|---|---|---|
+| T-MIG-001 | Full sample import | sample vault | `import vault --dry-run --report` | report produced; counts match the fixture manifest | `vault_sample/` | yes | 1 |
+| T-MIG-002 | Round-trip gate | after import | gate | ≥ 90 % of sample days within 3 % (sample is curated); failures listed | `vault_sample/` | yes | 1 |
+| T-MIG-003 | Baseline guard | gate below baseline | real import | refused without `--force` | mocked gate | yes | 1 |
+| T-MIG-004 | Target-band seeding | settings JSON with contradicting salt bands | import | one `target_band` per training type; contradiction listed as review item | `vault_sample/config.json` | yes | 1 |
+| T-MIG-005 | Real vault (owner-only, manual) | the operator's own vault | dry run | match rate and gate ≥ the numbers recorded before Victus existed | – | manual | 1 |
+
+## Operations (`T-OPS`)
+
+| ID | Title | Precondition | Steps | Expected | Fixture | Automated | Stage |
+|---|---|---|---|---|---|---|---|
+| T-OPS-001 | Backup create | seeded DB with blobs | `backup create --tenant alice` | ZIP with manifest, one JSONL per table, blobs by hash; manifest counts equal DB counts | temp dir | yes | 1 |
+| T-OPS-002 | Backup verify | archive | `backup verify` | exit 0; tampered JSONL → exit 1 with table name | temp dir | yes | 1 |
+| T-OPS-003 | Restore round trip | archive, empty DB | `backup restore` | row counts and a sample of rows identical; FK check passes | temp dir | yes | 1 |
+| T-OPS-004 | Restore into another tenant | archive | `restore --as alice-test` | new tenant with same counts; original untouched | temp dir | yes | 1 |
+| T-OPS-005 | Cross-dialect restore | SQLite archive | restore into PostgreSQL (CI service) | counts identical | CI | yes | 1 |
+| T-OPS-006 | Retention | 30 archives with dates | `backup prune` | keeps 7 daily / 8 weekly / 12 monthly + newest + failed-verify | temp dir | yes | 3 |
+| T-OPS-007 | Health backup age | old archive only | `GET /health` | `backup_age_hours` > threshold → `warn` | temp dir | yes | 1 |
+| T-OPS-008 | Compose smoke | `docker compose up` (CI) | wait for health | `api`, `web`, `worker` healthy; `/health` 200 through `web` | CI | yes | 0–1 |
+| T-OPS-009 | Migration downgrade | head | `alembic downgrade -1 && upgrade head` | no error; row counts unchanged | temp DB | yes | 1 |
+| T-OPS-010 | Restore drill (manual, quarterly) | production archive | follow BACKUP.md "clone" steps | app opens on the drill tenant; delete afterwards | – | manual | ops |
+
+## Reference values
+
+| Item | Detail |
+|---|---|
+| Source | The predecessor's report script (private) run once on a **synthetic** daily weight and kcal series derived from — but not equal to — real data (shifted, scaled, re-dated) |
+| File | `tests/fixtures/tdee_reference.json`: `{inputs: {daily_weight, daily_kcal, daily_protein, kcal_per_kg, goal}, expected: {weeks, rolling, trends, forecast, years, burndown}}` |
+| Frozen | Date and script revision recorded in the file header |
+| Tolerances | TDEE ±1 kcal, slopes ±0.0005 kg/day, weights ±0.01 kg |
+| Re-freezing | Only with a `CHANGELOG.md` entry explaining the intended change; the PR must show the diff of expected values |
+
+## Running the tests
+
+```bash
+uv run pytest                                # everything except e2e and ops-manual
+uv run pytest -m domain                      # pure functions only (fast)
+uv run pytest -m "service or api" --db sqlite
+uv run pytest -m "service or api or migration" --db postgres   # needs DATABASE_URL_TEST
+uv run pytest -m ops
+uv run ruff check . && uv run mypy src/victus/domain src/victus/application
+cd web && npm test                           # Vitest
+cd web && npx playwright test                # needs the dev stack: docker compose --profile dev up
+```
+
+CI runs the Python matrix (3.12–3.14 × SQLite/PostgreSQL), lint, type check, Angular build and unit tests, Compose
+smoke, security scans (`.github/workflows/`).
+
+## Manual acceptance per stage
+
+### Stage 0
+- [ ] `uv run victus --version` prints the version from `pyproject.toml`
+- [ ] `cd web && npm ci && npm run build` succeeds
+- [ ] CI green on `main`
+- [ ] `grep -rniE "<personal terms>" .` finds nothing outside LICENSE/author fields
+
+### Stage 1
+- [ ] Dry-run import of the operator's vault: report readable, review list plausible
+- [ ] Real import; `countable_days` count equals the expected number of closed reliable days
+- [ ] Two passkeys registered from two devices over HTTPS; recovery code stored
+- [ ] One day logged end-to-end in the web app on a phone
+- [ ] `backup create` → `verify` OK; `/health` shows `backup_age_hours`
+
+### Stage 2
+- [ ] `checkup` Markdown compared side by side with the predecessor's status output for the same window
+- [ ] Dashboard renders every block on desktop and phone
+- [ ] Reference tests green on both dialects
+
+### Stage 3
+- [ ] Voice note → capture → worker run → draft visible in app and via `drafts_list`
+- [ ] Chat summary → `day_approve` → day closed; audit log lists the corrections
+- [ ] External runner (Claude Code over HTTP MCP) processes a day while the worker is paused; then both enabled — no double draft
+- [ ] Cost of a typical run recorded and below budget
+- [ ] Weekend catch-up (3 days) shows three `agent_session` rows; no item in day 2's draft references a product only mentioned on day 1
+- [ ] Type a correction on a drafted day in the app → follow-up run changes only that item; type a message while a run is active → shown as waiting, processed after the lock is released

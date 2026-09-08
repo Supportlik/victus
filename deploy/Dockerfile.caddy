@@ -1,0 +1,12 @@
+# Caddy with the Cloudflare DNS module (DNS-01 challenge; no inbound port 80
+# needed for certificate issuance — required behind DS-Lite/CGNAT).
+# Only used with `--profile caddy`. Behind a central reverse proxy use
+# Caddyfile.snippet instead.
+
+FROM caddy:2-builder AS builder
+RUN xcaddy build --with github.com/caddy-dns/cloudflare
+
+FROM caddy:2
+LABEL org.opencontainers.image.source="https://github.com/Supportlik/victus" \
+      org.opencontainers.image.licenses="MIT"
+COPY --from=builder /usr/bin/caddy /usr/bin/caddy

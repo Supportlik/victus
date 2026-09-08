@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Supportlik/victus/schemas/victus-server-config.schema.json",
+  "title": "Victus server configuration",
+  "description": "Instance-wide settings (victus.yaml). Every key can be overridden by an environment variable VICTUS_<SECTION>__<KEY>. Tenant-specific settings (target bands, goals) live in tenant-settings.schema.json.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "server": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "host": { "type": "string", "default": "127.0.0.1" },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535, "default": 8000 },
+        "log_level": { "type": "string", "enum": ["debug", "info", "warning", "error"], "default": "info" },
+        "cors_origins": { "type": "array", "items": { "type": "string", "format": "uri" }, "default": [] }
+      }
+    },
+    "database": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url"],
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "SQLAlchemy URL. SQLite is opened in WAL mode with foreign keys enforced on every connection; PostgreSQL via psycopg.",
+          "examples": ["sqlite:////data/victus.db", "postgresql+psycopg://victus:secret@postgres:5432/victus"]
+        },
+        "echo": { "type": "boolean", "default": false }
+      }
+    },
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "backend": { "type": "string", "enum": ["fs", "s3"], "default": "fs" },
+        "path": { "type": "string", "description": "Root for attachments when backend = fs. Layout: <tenant>/<yyyy>/<mm>/<sha256>", "default": "/data/blobs" },
+        "max_upload_mb": { "type": "integer", "minimum": 1, "default": 50 }
+      }
+    },
+    "auth": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rp_id", "origin"],
+      "properties": {
+        "rp_id": { "type": "string", "description": "WebAuthn relying-party ID. Must be fixed before the first passkey; changing it invalidates all passkeys.", "examples": ["victus.example.com"] },
+        "rp_name": { "type": "string", "default": "Victus" },
+        "origin": { "type": "string", "format": "uri", "examples": ["https://victus.example.com"] },
+        "session_ttl_days": { "type": "integer", "minimum": 1, "maximum": 365, "default": 30 },
+        "token_max_ttl_days": { "type": "integer", "minimum": 1, "maximum": 365, "default": 365 },
+        "invite_only": { "type": "boolean", "default": true }
+      }
+    },
+    "providers": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "openai_api_key": { "type": ["string", "null"], "default": null },
+        "anthropic_api_key": { "type": ["string", "null"], "default": null }
+      }
+    },
+    "transcription": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "provider": { "type": "string", "enum": ["openai", "null"], "default": "openai" },
+        "model": { "type": "string", "default": "gpt-4o-transcribe" },
+        "max_file_mb": { "type": "integer", "minimum": 1, "default": 25 },
+        "ffmpeg_path": { "type": "string", "default": "ffmpeg" }
+      }
+    },
+    "agent": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean", "default": false },
+        "cron": { "type": ["string", "null"], "description": "Five-field cron expression for the worker runner; null disables the schedule (runs start on demand only).", "default": "0 * * * *" },
+        "model": { "type": "string", "default": "claude-sonnet-5" },
+        "prompt_dir": { "type": "string", "default": "builtin" },
+        "budget": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "max_input_tokens": { "type": "integer", "minimum": 1000, "default": 200000 },
+            "max_output_tokens": { "type": "integer", "minimum": 256, "default": 16000 },
+            "max_usd_per_run": { "type": "number", "minimum": 0, "default": 0.5 },
+            "max_images_per_run": { "type": "integer", "minimum": 0, "default": 12 },
+            "image_max_px": { "type": "integer", "minimum": 256, "default": 1024 }
+          }
+        },
+        "lock_ttl_minutes": { "type": "integer", "minimum": 1, "default": 5, "description": "Lock horizon per day; one day is drafted well within this." }
+      }
+    },
+    "mcp": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "http_enabled": { "type": "boolean", "default": false },
+        "http_path": { "type": "string", "default": "/mcp" },
+        "allowed_cidrs": { "type": "array", "items": { "type": "string" }, "default": ["100.64.0.0/10"], "description": "Source networks allowed to reach /mcp (default: the Tailscale CGNAT range)." },
+        "rate_limit_per_minute": { "type": "integer", "minimum": 1, "default": 120 }
+      }
+    },
+    "backup": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": { "type": "string", "default": "/backups" },
+        "cron": { "type": "string", "default": "0 3 * * *" },
+        "include_sqlite_snapshot": { "type": "boolean", "default": true },
+        "retention": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "daily": { "type": "integer", "minimum": 0, "default": 7 },
+            "weekly": { "type": "integer", "minimum": 0, "default": 8 },
+            "monthly": { "type": "integer", "minimum": 0, "default": 12 }
+          }
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "database": { "url": "sqlite:////data/victus.db" },
+      "storage": { "backend": "fs", "path": "/data/blobs" },
+      "auth": { "rp_id": "victus.example.com", "origin": "https://victus.example.com" },
+      "transcription": { "provider": "openai", "model": "gpt-4o-transcribe" },
+      "agent": { "enabled": true, "cron": "0 * * * *", "budget": { "max_usd_per_run": 0.5 } },
+      "mcp": { "http_enabled": true, "allowed_cidrs": ["100.64.0.0/10"] },
+      "backup": { "path": "/backups", "cron": "0 3 * * *", "retention": { "daily": 7, "weekly": 8, "monthly": 12 } }
+    }
+  ]
+}

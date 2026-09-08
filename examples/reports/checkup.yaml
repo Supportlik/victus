@@ -1,0 +1,37 @@
+# Built-in report "checkup" — the "am I on track?" status page.
+# Reference: docs/REPORTS.md · Schema: schemas/report-definition.schema.json
+
+name: checkup
+title: "Am I on track?"
+period:
+  default: 14d
+  options: [7d, 14d, 30d, 90d, custom]
+
+blocks:
+  - type: kpi_tile
+    id: current_weight
+    source: weight.ma7
+  - type: kpi_tile
+    id: required_rate
+    source: goal.rate_kg_per_week
+  - type: kpi_tile
+    id: required_deficit
+    source: goal.deficit_kcal
+  - type: tdee_windows
+    windows: [7, 14, 30]
+    show_quality: true
+  - type: band_distribution
+    macros: [kcal, protein, fiber, salt]
+  - type: trend
+    windows: [7, 14, 21, 30]
+  - type: forecast
+    horizons: [1m, 3m, 6m]
+    with_eta: true
+  - type: burndown
+    start: "2026-01-01"
+    stages: from_settings
+  - type: day_list
+    columns: [kcal, protein, fiber, weight, status]
+  - type: text_finding
+    id: finding
+    source: agent

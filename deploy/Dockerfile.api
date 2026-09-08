@@ -1,0 +1,61 @@
+# Victus API / worker / backup image.
+# Build context is the repository root:  docker build -f deploy/Dockerfile.api .
+# The same image runs `victus serve`, `victus worker`, `victus backup …` and `victus mcp`.
+
+# ── Stage 1: resolve and install the locked dependency set ──────────────────
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
+
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PROJECT_ENVIRONMENT=/app/.venv
+
+WORKDIR /app
+
+# Dependencies first so the layer is cached until pyproject/uv.lock change.
+COPY pyproject.toml uv.lock README.md ./
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --locked --no-dev --no-install-project
+
+# Then the project itself.
+COPY src ./src
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --locked --no-dev
+
+# ── Stage 2: slim runtime ───────────────────────────────────────────────────
+FROM python:3.12-slim-bookworm AS runtime
+
+ARG VERSION=dev
+LABEL org.opencontainers.image.title="victus-api" \
+      org.opencontainers.image.description="Victus — self-hosted nutrition tracking (API, worker, backup, MCP)" \
+      org.opencontainers.image.source="https://github.com/Supportlik/victus" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.version="${VERSION}"
+
+# ffmpeg: audio conversion for transcription (e.g. Telegram .oga → mp3).
+# tini:   proper signal handling / zombie reaping for the scheduler processes.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ffmpeg tini ca-certificates \
+ && rm -rf /var/lib/apt/lists/* \
+ && groupadd --gid 1000 victus \
+ && useradd --uid 1000 --gid 1000 --create-home --shell /usr/sbin/nologin victus \
+ && mkdir -p /data /data/blobs /backups \
+ && chown -R victus:victus /data /backups
+
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    VICTUS_DATABASE__URL=sqlite:////data/victus.db \
+    VICTUS_STORAGE__PATH=/data/blobs
+
+WORKDIR /app
+COPY --from=builder --chown=victus:victus /app /app
+
+USER victus
+VOLUME ["/data"]
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=5 \
+  CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=3).status == 200 else 1)" || exit 1
+
+ENTRYPOINT ["/usr/bin/tini", "--", "victus"]
+CMD ["serve", "--host", "0.0.0.0", "--port", "8000", "--migrate"]

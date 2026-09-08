@@ -1,0 +1,56 @@
+# Example tenant settings (one document per tenant, versioned in the database).
+# All numbers below are illustrative defaults, not a recommendation for any person.
+# Reference: docs/CONFIGURATION.md · Schema: schemas/tenant-settings.schema.json
+
+goal:
+  weight_kg: 85.0
+  date: "2027-03-31"
+  stages:
+    - { name: "Stretch", date: "2027-01-31" }
+    - { name: "Target", date: "2027-03-31" }
+    - { name: "Minimum", date: "2027-06-30" }
+  reference: "Target"
+
+kcal_per_kg: 7716.17            # energy per kg of body mass used by the TDEE estimate
+moving_average_days: 7
+trend_windows: [7, 14, 21, 30, 60, 90]
+tdee_windows: [3, 7, 14, 21, 30, 60, 90]
+
+calorie_corridor:
+  min: 1800
+  max: 2200
+  asymmetric: true              # only exceeding max is a finding; being below min is fine
+
+# One complete band profile per training type. Salt has exactly one source: this list.
+target_bands:
+  - name: Rest day
+    training_type: rest
+    valid_from: "2026-01-01"
+    protein: { min: 105, opt_min: 150, opt_max: 185, target: 165, max: 200, stretch: 185 }
+    carbs:   { min: 120, opt_min: 155, opt_max: 200, target: 180, max: 230 }
+    fat:     { min: 45,  opt_min: 55,  opt_max: 70,  target: 58,  max: 75 }
+    fiber:   { min: 25,  opt_min: 32,  opt_max: 38,  target: 35,  max: 50, stretch: 38 }
+    salt:    { min: 4,   opt_min: 6,   opt_max: 8,   target: 7,   max: 15 }
+  - name: Strength day
+    training_type: strength
+    valid_from: "2026-01-01"
+    protein: { min: 105, opt_min: 150, opt_max: 185, target: 165, max: 200, stretch: 185 }
+    carbs:   { min: 120, opt_min: 155, opt_max: 200, target: 180, max: 230 }
+    fat:     { min: 45,  opt_min: 55,  opt_max: 70,  target: 58,  max: 75 }
+    fiber:   { min: 25,  opt_min: 32,  opt_max: 38,  target: 35,  max: 50, stretch: 38 }
+    salt:    { min: 4,   opt_min: 8,   opt_max: 10,  target: 9,   max: 15 }
+  - name: Martial arts day
+    training_type: martial_arts
+    valid_from: "2026-01-01"
+    protein: { min: 105, opt_min: 150, opt_max: 185, target: 165, max: 200, stretch: 185 }
+    carbs:   { min: 120, opt_min: 155, opt_max: 200, target: 180, max: 230 }
+    fat:     { min: 45,  opt_min: 55,  opt_max: 70,  target: 58,  max: 75 }
+    fiber:   { min: 25,  opt_min: 32,  opt_max: 38,  target: 35,  max: 50, stretch: 38 }
+    salt:    { min: 4,   opt_min: 9,   opt_max: 10,  target: 9.5, max: 15 }
+
+transcription:
+  language: en
+  vocabulary_prompt: "quark, skyr, oat milk, whey isolate, sourdough"
+
+report_defaults:
+  period: 14d

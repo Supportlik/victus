@@ -1,0 +1,151 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Tests (Python ${{ matrix.python-version }}, ${{ matrix.db }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13", "3.14"]
+        db: [sqlite, postgres]
+    services:
+      # Only used when matrix.db == postgres; harmless otherwise.
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: victus_test
+          POSTGRES_USER: victus
+          POSTGRES_PASSWORD: victus
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U victus -d victus_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # The test suite reads this to pick the dialect; empty = in-memory SQLite.
+      VICTUS_TEST_DATABASE_URL: ${{ matrix.db == 'postgres' && 'postgresql+psycopg://victus:victus@localhost:5432/victus_test' || '' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          enable-cache: true
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install the locked dependencies
+        run: uv sync --locked --all-extras --dev
+
+      - name: Lint (ruff)
+        run: uv run --no-sync ruff check .
+
+      - name: Format check (ruff)
+        run: uv run --no-sync ruff format --check .
+
+      - name: Type check (mypy)
+        run: uv run --no-sync mypy src
+
+      - name: Run the test suite
+        run: uv run --no-sync pytest -q
+
+  schemas:
+    name: JSON schemas & examples
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          enable-cache: true
+
+      - name: Schemas are valid JSON Schema (2020-12)
+        run: |
+          for schema in schemas/*.schema.json; do
+            echo "::group::$schema"
+            uvx check-jsonschema --check-metaschema "$schema"
+            echo "::endgroup::"
+          done
+
+      # examples/<name>.yaml is validated against schemas/<name>.schema.json when
+      # both exist; report definitions under examples/reports/ against the report schema.
+      - name: Examples validate against their schema
+        run: |
+          set -e
+          for schema in schemas/*.schema.json; do
+            name=$(basename "$schema" .schema.json)
+            for ex in "examples/$name.yaml" "examples/$name.json"; do
+              if [ -f "$ex" ]; then
+                echo "::group::$ex ⇢ $schema"
+                uvx check-jsonschema --schemafile "$schema" "$ex"
+                echo "::endgroup::"
+              fi
+            done
+          done
+          if ls examples/reports/*.yaml >/dev/null 2>&1; then
+            echo "::group::examples/reports/*.yaml ⇢ report-definition"
+            uvx check-jsonschema --schemafile schemas/report-definition.schema.json examples/reports/*.yaml
+            echo "::endgroup::"
+          fi
+          if ls src/victus/reports/builtin/*.yaml >/dev/null 2>&1; then
+            echo "::group::builtin reports ⇢ report-definition"
+            uvx check-jsonschema --schemafile schemas/report-definition.schema.json src/victus/reports/builtin/*.yaml
+            echo "::endgroup::"
+          fi
+
+  package:
+    name: Package metadata
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          enable-cache: true
+
+      - name: Build the sdist and the wheel
+        run: uv build
+
+      - name: Check the distribution metadata
+        run: uvx twine check --strict dist/*
+
+      - name: Verify the version stamp matches the package metadata
+        run: |
+          uv run --no-project --with dist/*.whl python -c "
+          import victus, importlib.metadata as md, sys
+          stamp, meta = victus.__version__, md.version('victus')
+          print(f'__version__={stamp} metadata={meta}')
+          sys.exit(0 if stamp == meta else 1)"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/
+
+  privacy:
+    name: No personal data in the tree (SPEC R48)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # Generic patterns only (routable IPs, private e-mail providers, body metrics
+      # next to dates). The maintainer's private denylist is applied locally via
+      # VICTUS_PRIVACY_DENYLIST and is deliberately not part of the repository.
+      - name: Run the privacy check
+        run: python3 scripts/privacy_check.py

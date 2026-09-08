@@ -1,0 +1,33 @@
+# Snippet for a central Caddy instance on the host (replace the domain).
+# Victus web is bound to 127.0.0.1:${WEB_PORT:-8091} and proxies /api and /mcp
+# to the API container itself, so a single upstream is enough here.
+
+victus.example.com {
+    tls {
+        dns cloudflare {env.CF_API_TOKEN}
+    }
+
+    encode zstd gzip
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        -Server
+    }
+
+    # MCP over Streamable HTTP: VPN clients only (100.64.0.0/10 = Tailscale CGNAT range).
+    @mcp_outside {
+        path /mcp*
+        not remote_ip 100.64.0.0/10 127.0.0.1/32
+    }
+    respond @mcp_outside 403
+
+    @mcp path /mcp*
+    reverse_proxy @mcp localhost:8091 {
+        flush_interval -1
+        transport http {
+            read_timeout 1h
+        }
+    }
+
+    reverse_proxy localhost:8091
+}

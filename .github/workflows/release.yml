@@ -1,0 +1,75 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: GitHub release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          enable-cache: true
+
+      - name: Build the sdist and the wheel
+        run: uv build
+
+      - name: Verify the tag matches the version stamp
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          stamp=$(uv run --no-project --with dist/*.whl python -c "import victus; print(victus.__version__)")
+          echo "tag=$tag stamp=$stamp"
+          [ "$tag" = "$stamp" ] || { echo "::error::tag v$tag does not match __version__ $stamp"; exit 1; }
+
+      # Extracts the "## [X.Y.Z]" section from CHANGELOG.md (Keep a Changelog format).
+      - name: Extract the changelog section
+        id: notes
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '
+            $0 ~ "^## \\[" v "\\]" { on=1; next }
+            on && /^## \[/ { exit }
+            on { print }
+          ' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "No changelog section for $version — see CHANGELOG.md." > release-notes.md
+          fi
+          cat release-notes.md
+
+      - name: Create the GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Victus ${{ github.ref_name }}
+          body_path: release-notes.md
+          files: |
+            dist/*
+          draft: false
+          prerelease: ${{ contains(github.ref_name, 'a') || contains(github.ref_name, 'b') || contains(github.ref_name, 'rc') }}
+
+  # PyPI publishing is intentionally disabled for now. Victus is a server
+  # application deployed as container images (see docker.yml). If a PyPI
+  # release is ever wanted, enable Trusted Publishing for this repository on
+  # pypi.org and uncomment the job below — no API token is needed.
+  #
+  # pypi:
+  #   name: Publish to PyPI
+  #   needs: release
+  #   runs-on: ubuntu-latest
+  #   environment: pypi
+  #   permissions:
+  #     id-token: write
+  #   steps:
+  #     - uses: actions/checkout@v7
+  #     - uses: astral-sh/setup-uv@v10.0.1
+  #     - run: uv build
+  #     - uses: pypa/gh-action-pypi-publish@release/v1

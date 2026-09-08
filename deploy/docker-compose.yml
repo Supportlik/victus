@@ -1,0 +1,195 @@
+# Victus — complete Docker Compose stack
+#
+# Services (default profile):
+#   api     FastAPI + MCP (Streamable HTTP under /mcp). Runs `alembic upgrade head`
+#           on start because `victus serve --migrate` applies pending migrations
+#           before binding the port. Bound to 127.0.0.1 only — a reverse proxy
+#           (Caddy) terminates TLS in front of it.
+#   web     nginx (unprivileged, port 8080) serving the Angular build; proxies
+#           /api and /mcp to `api`.
+#   worker  Agent runs (hourly cron), FeelFit weight sync, report caching.
+#   backup  `victus backup schedule --daemon` — writes tenant exports to the
+#           bind-mounted BACKUP_DIR (e.g. a mounted HDD path) and enforces the
+#           retention policy. One-shot use:
+#             docker compose -f deploy/docker-compose.yml run --rm backup backup create --all
+#
+# Optional profiles:
+#   postgres  `--profile postgres` — PostgreSQL 17; set VICTUS_DATABASE__URL accordingly.
+#   caddy     `--profile caddy`    — standalone TLS termination with caddy-dns/cloudflare.
+#                                     Not needed behind a central reverse proxy (see Caddyfile.snippet).
+#   dev       `--profile dev`      — API with --reload and the source tree bind-mounted.
+#
+# Quick start (home server):
+#   cp deploy/.env.example deploy/.env && $EDITOR deploy/.env
+#   docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d
+#   docker compose -f deploy/docker-compose.yml logs -f api worker
+#
+# Conventions: no `version:` key, restart: unless-stopped,
+# env_file: .env, named volumes, mandatory healthchecks, host ports on 127.0.0.1.
+
+x-api-image: &api-image
+  image: ghcr.io/supportlik/victus-api:${VICTUS_VERSION:-latest}
+  build:
+    context: ..
+    dockerfile: deploy/Dockerfile.api
+
+x-api-env: &api-env
+  env_file: .env
+  environment:
+    VICTUS_DATABASE__URL: ${VICTUS_DATABASE__URL:-sqlite:////data/victus.db}
+    VICTUS_STORAGE__PATH: ${VICTUS_STORAGE__PATH:-/data/blobs}
+    VICTUS_LOG_LEVEL: ${VICTUS_LOG_LEVEL:-info}
+    TZ: ${TZ:-Europe/Berlin}
+
+services:
+  api:
+    <<: [*api-image, *api-env]
+    container_name: victus-api
+    command: ["serve", "--host", "0.0.0.0", "--port", "8000", "--migrate"]
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${API_PORT:-8090}:8000"
+    volumes:
+      - victus_data:/data
+      - victus_blobs:/data/blobs
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=3).status == 200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    depends_on: {}
+
+  web:
+    image: ghcr.io/supportlik/victus-web:${VICTUS_VERSION:-latest}
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web
+    container_name: victus-web
+    restart: unless-stopped
+    # nginx runs unprivileged and listens on 8080 inside the container.
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8091}:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  worker:
+    <<: [*api-image, *api-env]
+    container_name: victus-worker
+    command: ["worker"]
+    restart: unless-stopped
+    volumes:
+      - victus_data:/data
+      - victus_blobs:/data/blobs
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      # The worker touches /tmp/victus-worker.alive on every scheduler tick.
+      test: ["CMD", "sh", "-c", "test -f /tmp/victus-worker.alive && test $(( $(date +%s) - $(stat -c %Y /tmp/victus-worker.alive) )) -lt 900"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+  backup:
+    <<: [*api-image, *api-env]
+    container_name: victus-backup
+    command: ["backup", "schedule", "--daemon", "--target", "/backups"]
+    restart: unless-stopped
+    volumes:
+      - victus_data:/data:ro
+      - victus_blobs:/data/blobs:ro
+      - ${BACKUP_DIR:-./backups}:/backups
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      # The daemon refreshes /backups/.victus-backup.alive after every tick and
+      # after every completed export; stale marker (> 25h) means backups stopped.
+      test: ["CMD", "sh", "-c", "test -f /backups/.victus-backup.alive && test $(( $(date +%s) - $(stat -c %Y /backups/.victus-backup.alive) )) -lt 90000"]
+      interval: 5m
+      timeout: 5s
+      retries: 3
+      start_period: 2m
+
+  postgres:
+    image: postgres:17-alpine
+    container_name: victus-postgres
+    profiles: ["postgres"]
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-victus}
+      POSTGRES_USER: ${POSTGRES_USER:-victus}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - victus_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-victus} -d ${POSTGRES_DB:-victus}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  caddy:
+    build:
+      context: .
+      dockerfile: Dockerfile.caddy
+    image: victus-caddy:local
+    container_name: victus-caddy
+    profiles: ["caddy"]
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      CF_API_TOKEN: ${CF_API_TOKEN:?set CF_API_TOKEN in .env (Cloudflare Zone/DNS/Edit)}
+      VICTUS_DOMAIN: ${VICTUS_DOMAIN:-victus.example.com}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:2019/metrics"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  dev:
+    <<: [*api-image, *api-env]
+    container_name: victus-dev
+    profiles: ["dev"]
+    command: ["serve", "--host", "0.0.0.0", "--port", "8000", "--migrate", "--reload"]
+    environment:
+      VICTUS_LOG_LEVEL: debug
+    ports:
+      - "127.0.0.1:${API_PORT:-8090}:8000"
+    volumes:
+      - ../src:/app/src:ro
+      - victus_data:/data
+      - victus_blobs:/data/blobs
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=3).status == 200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+volumes:
+  victus_data:
+  victus_blobs:
+  victus_pg:
+  caddy_data:
+  caddy_config:

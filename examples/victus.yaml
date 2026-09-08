@@ -1,0 +1,55 @@
+# Example server configuration for Victus.
+# Environment variables (VICTUS_SECTION__KEY) override anything set here.
+# Reference: docs/CONFIGURATION.md · Schema: schemas/victus-server-config.schema.json
+
+database:
+  url: sqlite:///data/victus.db          # PostgreSQL: postgresql+psycopg://victus:secret@postgres/victus
+  echo: false
+
+storage:
+  backend: fs
+  path: data/blobs
+
+auth:
+  rp_id: victus.example.com              # Pin BEFORE the first passkey is registered (ADR 0006)
+  rp_name: Victus
+  origin: https://victus.example.com
+  session_ttl_days: 30
+
+providers:
+  openai_api_key: null                   # set via VICTUS_PROVIDERS__OPENAI_API_KEY
+  anthropic_api_key: null                # set via VICTUS_PROVIDERS__ANTHROPIC_API_KEY
+
+transcription:
+  provider: openai
+  model: gpt-4o-transcribe
+  max_file_mb: 25
+  ffmpeg_path: ffmpeg
+
+agent:
+  enabled: false
+  cron: "0 * * * *"
+  model: claude-sonnet-5
+  budget:
+    max_input_tokens: 400000
+    max_output_tokens: 40000
+    max_usd_per_run: 2.0
+    max_images_per_run: 12
+
+mcp:
+  http_enabled: false
+  allowed_cidrs: ["100.64.0.0/10"]       # Tailscale CGNAT range
+  rate_limit_per_minute: 120
+
+backup:
+  path: /backups
+  cron: "0 3 * * *"
+  retention:
+    daily: 7
+    weekly: 8
+    monthly: 12
+
+server:
+  host: 127.0.0.1
+  port: 8000
+  log_level: info
