@@ -32,6 +32,7 @@ async def upload_capture(
     transcription: Transcription,
     text: Annotated[str | None, Form()] = None,
     target_date: Annotated[date | None, Form()] = None,
+    product_id: Annotated[int | None, Form()] = None,
     file: Annotated[UploadFile | None, File()] = None,
 ) -> Response:
     data: bytes | None = None
@@ -50,7 +51,14 @@ async def upload_capture(
         if not data:
             data = None
     view = uc.UploadCapture(uow, ctx, blobs).execute(
-        uc.UploadInput(text=text, data=data, filename=filename, mime=mime, target_date=target_date)
+        uc.UploadInput(
+            text=text,
+            data=data,
+            filename=filename,
+            mime=mime,
+            target_date=target_date,
+            product_id=product_id,
+        )
     )
     if view.created and view.kind == CaptureKind.AUDIO.value and transcription is not None:
         try:
@@ -68,9 +76,12 @@ def list_captures(
     uow: Uow,
     status_: Annotated[str | None, Query(alias="status")] = None,
     day: Annotated[date | None, Query(alias="date")] = None,
+    product_id: Annotated[int | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=1000)] = 200,
 ) -> list[CaptureOut]:
-    rows = uc.ListCaptures(uow, ctx).execute(status=status_, target_date=day, limit=limit)
+    rows = uc.ListCaptures(uow, ctx).execute(
+        status=status_, target_date=day, limit=limit, product_id=product_id
+    )
     return [CaptureOut.model_validate(c) for c in rows]
 
 

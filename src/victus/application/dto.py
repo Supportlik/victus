@@ -337,6 +337,7 @@ class CaptureView:
     content_hash: str
     processed_at: datetime | None
     agent_run_id: str | None
+    product_id: int | None = None  # set for captures about one product (label photo)
     created: bool = True  # False when the upload was a duplicate (content hash)
 
 

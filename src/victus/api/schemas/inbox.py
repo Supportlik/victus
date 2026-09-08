@@ -26,6 +26,7 @@ class CaptureOut(Out):
     content_hash: str
     processed_at: datetime | None = None
     agent_run_id: str | None = None
+    product_id: int | None = None
     created: bool = True
 
 
@@ -34,6 +35,7 @@ class CapturePatch(BaseModel):
     target_date: date | None = None
     # PATCH semantics: only keys present in the body are applied.
     model_config = {"extra": "forbid"}
+    product_id: int | None = None
 
 
 class AgentSessionOut(Out):

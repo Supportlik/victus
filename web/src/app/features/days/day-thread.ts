@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, effect, inject, input, signal } fro
 import { FormsModule } from '@angular/forms';
 import { ApiClient, DayMessage } from '../../api';
 import { describeError } from '../../core/problem';
+import { CaptureInput } from '../../shared/capture-input';
 import { MarkdownPipe } from '../../shared/markdown.pipe';
 
 /**
@@ -11,11 +12,11 @@ import { MarkdownPipe } from '../../shared/markdown.pipe';
 @Component({
   selector: 'v-day-thread',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, MarkdownPipe],
+  imports: [FormsModule, MarkdownPipe, CaptureInput],
   template: `
     <aside class="thread">
-      <h3>Notes for this day</h3>
-      <p class="v-small v-muted">Add what you ate or correct the draft. The agent picks it up for this day only.</p>
+      <h3>Talk to this day</h3>
+      <p class="v-small v-muted">Everything you write, say or photograph here is a capture for this day. The agent reads it on its next run and answers in this thread.</p>
       @if (error(); as e) { <div class="v-error">{{ e }}</div> }
       <ol class="messages" aria-live="polite">
         @for (m of messages(); track m.id) {
@@ -37,12 +38,15 @@ import { MarkdownPipe } from '../../shared/markdown.pipe';
             }
           </li>
         } @empty {
-          <li class="v-muted v-small">No notes yet.</li>
+          <li class="v-muted v-small">No messages yet.</li>
         }
       </ol>
       <form (ngSubmit)="send()" class="composer">
         <textarea name="text" [(ngModel)]="text" rows="2" placeholder="e.g. the chicken was 300 g, not 400" [disabled]="sending()"></textarea>
-        <button type="submit" class="v-btn primary" [disabled]="sending() || !text.trim()">Add note</button>
+        <div class="v-actions">
+          <button type="submit" class="v-btn primary" [disabled]="sending() || !text.trim()">Send</button>
+          <v-capture-input [targetDate]="date()" [compact]="true" (uploaded)="onCapture()" />
+        </div>
       </form>
     </aside>
   `,
@@ -81,6 +85,10 @@ export class DayThread {
 
   kindClass(kind: DayMessage['kind']): string {
     return kind === 'question' ? 'warn' : kind === 'summary' ? 'closed' : kind === 'correction' ? 'draft' : '';
+  }
+
+  onCapture(): void {
+    this.api.dayMessages(this.date()).subscribe({ next: (m) => this.messages.set(m), error: () => undefined });
   }
 
   send(): void {

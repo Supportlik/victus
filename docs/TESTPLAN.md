@@ -220,6 +220,14 @@ The pyramid is deliberate: most cases are `T-DOM`/`T-SVC`; E2E covers the two fl
 | T-MCP-004 | HTTP auth | `mcp.http_enabled`, no token / `read` token | `POST /mcp` | 401 / tool with `approve` scope → 403 | client | yes | 3 |
 | T-MCP-005 | HTTP CIDR | client address outside `allowed_cidrs` | `POST /mcp` with a valid token | 403 | client | yes | 3 |
 | T-MCP-006 | HTTP rate limit | more than `rate_limit_per_minute` calls | `POST /mcp` | 429 | client | yes | 3 |
+| T-SVC-044 | Meal rename/time | day with meal | `UpdateMeal(name, time)` | meal renamed, time set | service | yes | 3 |
+| T-SVC-045 | Meal delete guard | meal with one item | `DeleteMeal` | 409 Conflict; after deleting the item the meal is deleted | service | yes | 3 |
+| T-SVC-046 | Meal tenant isolation | Alice's meal | Bob calls `UpdateMeal`/`DeleteMeal` | 404 | service | yes | 3 |
+| T-SVC-047 | Product capture | product, PNG | `UploadCapture(product_id, target_date)` | `target_date` dropped, no follow-up queued, listed by `product_id`, absent from the day context | service | yes | 3 |
+| T-SVC-048 | Product capture ownership | Bob's context / unknown id | `UploadCapture(product_id)` | 404 | service | yes | 3 |
+| T-SVC-049 | Capture re-link | text capture | `UpdateCapture(product_id)` set and cleared | `product_id` follows | service | yes | 3 |
+| T-MCP-008 | captures_open scope | one product capture, one day capture | `captures_open(scope=product|day|all)` | product scope returns only captures with `product_id`; day scope none of them | registry | yes | 3 |
+| T-MCP-009 | product_update from label | product + capture | `product_update(kcal, protein, source)` then `capture_mark(processed)` | values written, `verified=false`, `source` kept, capture processed | registry | yes | 3 |
 | T-MCP-007 | stdio smoke | installed CLI | `victus mcp --help`, `victus agent --help` | commands and flags listed; exit 0 | – | yes | 3 |
 
 ## E2E (`T-E2E`)

@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ApiClient, AgentRun, Capture } from '../../api';
 import { describeError } from '../../core/problem';
+import { CaptureInput } from '../../shared/capture-input';
 import { MarkdownPipe } from '../../shared/markdown.pipe';
 
 /**
@@ -13,7 +14,7 @@ import { MarkdownPipe } from '../../shared/markdown.pipe';
 @Component({
   selector: 'v-captures-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, RouterLink, MarkdownPipe],
+  imports: [FormsModule, RouterLink, MarkdownPipe, CaptureInput],
   template: `
     <div class="v-page">
       <header class="v-page-head">
@@ -40,12 +41,12 @@ import { MarkdownPipe } from '../../shared/markdown.pipe';
 
       <form class="v-panel upload" (ngSubmit)="upload()">
         <h3>Add a capture</h3>
-        <label class="v-field"><span>Text</span><textarea name="text" [(ngModel)]="text" placeholder="e.g. lunch: 400 g quark with berries, two slices of rye bread"></textarea></label>
         <div class="v-form-row">
-          <label class="v-field"><span>Voice note or photo</span><input name="file" type="file" accept="audio/*,image/*" (change)="onFile($event)" /></label>
-          <label class="v-field"><span>For which day? <span class="v-muted">(optional)</span></span><input name="date" type="date" [(ngModel)]="targetDate" /></label>
+          <label class="v-field"><span>For which day? <span class="v-muted">(optional — the agent can infer it)</span></span><input name="date" type="date" [(ngModel)]="targetDate" /></label>
         </div>
-        <button type="submit" class="v-btn" [disabled]="busy() || (!text.trim() && !file)">Save capture</button>
+        <v-capture-input [targetDate]="targetDate || null" (uploaded)="load()" />
+        <label class="v-field"><span>…or type it</span><textarea name="text" [(ngModel)]="text" placeholder="e.g. lunch: 400 g quark with berries, two slices of rye bread"></textarea></label>
+        <div class="v-actions"><button type="submit" class="v-btn" [disabled]="busy() || !text.trim()">Save text</button></div>
       </form>
 
       <section class="list">
@@ -66,6 +67,7 @@ import { MarkdownPipe } from '../../shared/markdown.pipe';
                       <button type="button" class="v-btn small primary" (click)="saveDay(c)">Save</button>
                       <button type="button" class="v-btn small quiet" (click)="editing.set(null)">Cancel</button>
                     </span>
+                  } @else if (c.product_id) { <a [routerLink]="['/products', c.product_id]">product #{{ c.product_id }}</a>
                   } @else if (c.target_date) { <a [routerLink]="['/days', c.target_date]">{{ c.target_date }}</a> } @else { <span class="v-muted">–</span> }
                 </td>
                 <td class="content">
@@ -80,7 +82,7 @@ import { MarkdownPipe } from '../../shared/markdown.pipe';
                 </td>
                 <td><span class="v-tag" [class]="'v-tag ' + tagClass(c.status)">{{ c.status.replace('_', ' ') }}</span></td>
                 <td class="actions">
-                  @if (c.status === 'new' || c.status === 'failed') {
+                  @if ((c.status === 'new' || c.status === 'failed') && !c.product_id) {
                     <button type="button" class="v-btn small" (click)="editing.set(c.id); pendingDate = c.target_date ?? ''">Set day</button>
                     <button type="button" class="v-btn small quiet" (click)="discard(c)">Discard</button>
                   }
@@ -118,7 +120,6 @@ export class CapturesPage {
   text = '';
   targetDate = '';
   pendingDate = '';
-  file: File | null = null;
   private timer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
@@ -129,14 +130,10 @@ export class CapturesPage {
     this.api.captures(this.status() || undefined).subscribe({ next: (c) => this.captures.set(c), error: (e: unknown) => this.error.set(describeError(e)) });
   }
 
-  onFile(ev: Event): void {
-    this.file = (ev.target as HTMLInputElement).files?.[0] ?? null;
-  }
-
   upload(): void {
+    if (!this.text.trim()) return;
     const form = new FormData();
-    if (this.text.trim()) form.append('text', this.text.trim());
-    if (this.file) form.append('file', this.file);
+    form.append('text', this.text.trim());
     if (this.targetDate) form.append('target_date', this.targetDate);
     this.busy.set(true);
     this.error.set(null);
@@ -145,7 +142,6 @@ export class CapturesPage {
       next: (c) => {
         if (c.created === false) this.notice.set('This capture already exists (same content) — nothing was added.');
         this.text = '';
-        this.file = null;
         this.busy.set(false);
         this.load();
       },

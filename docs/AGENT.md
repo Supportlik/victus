@@ -92,6 +92,17 @@ Surfaces: `GET/POST /days/{date}/messages`, MCP `day_thread_get(date)` / `day_me
 the chat panel on the day view (agent messages are tagged `summary`, `question`, `note`; your captures show
 "waiting for the agent" or "in draft").
 
+## Product captures
+
+A capture uploaded with `product_id` (the product page's "Label photos & notes", or `POST /captures` with
+`product_id`) is about one product, never about a day. It is processed in its own short step, outside any
+day session: `captures_open(scope="product")` → `capture_get` (image or transcript) → `product_get` →
+`product_update` with the legible label values and `source = "label photo, capture <id>"` (plus
+`portion_create` when the label states a portion) → `capture_mark(processed)`. Values that cannot be read
+are left untouched and the capture is marked `failed` with a note in the summary. Corrected nutrients
+propagate to every logged quantity of that product by design; `verified` stays false until a person
+confirms the product in the review list.
+
 ## Modes
 
 | `mode` | Behaviour | Use |

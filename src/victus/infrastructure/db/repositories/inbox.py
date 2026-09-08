@@ -36,12 +36,15 @@ class CaptureRepo(Repo):
         status: str | None = None,
         target_date: date | None = None,
         limit: int | None = None,
+        product_id: int | None = None,
     ) -> Sequence[orm.Capture]:
         stmt = self.scoped(select(orm.Capture), orm.Capture)
         if status:
             stmt = stmt.where(orm.Capture.status == status)
         if target_date:
             stmt = stmt.where(orm.Capture.target_date == target_date)
+        if product_id is not None:
+            stmt = stmt.where(orm.Capture.product_id == product_id)
         stmt = stmt.order_by(orm.Capture.captured_at.desc() if limit else orm.Capture.captured_at)
         if limit:
             stmt = stmt.limit(limit)

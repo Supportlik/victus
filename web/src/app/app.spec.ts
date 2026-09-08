@@ -17,6 +17,7 @@ const me: Me = {
 };
 
 describe('App', () => {
+  beforeEach(() => localStorage.clear());
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [App],

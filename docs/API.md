@@ -76,6 +76,8 @@ The tenant is always derived from the principal (session or token); it never app
 | POST | `/days/{date}` | Create the day (`reliable` required, `training_type`, `notes`) |
 | PUT | `/days/{date}` | Flags (`reliable`, `training_type`), notes; 404 if the day does not exist |
 | POST | `/days/{date}/meals` | Add meal |
+| PATCH | `/meals/{id}` | Rename a meal or change its time (`{name?, time?}`) |
+| DELETE | `/meals/{id}` | Delete an **empty** meal; `409` while it still has line items (R53) |
 | POST | `/meals/{id}/line-items` | Add line item |
 | PATCH / DELETE | `/line-items/{id}` | Edit / remove line item |
 | POST | `/days/{date}/close` | `open → closed`, freeze `target_band_id` |
@@ -115,9 +117,9 @@ The tenant is always derived from the principal (session or token); it never app
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/captures` | Multipart: `text` and/or `file` (audio, image), optional `target_date`. `201` with the capture; an upload whose content hash already exists returns `200` with the existing capture and `created: false` (no-op, R35). Audio is transcribed right away when a transcription provider is configured; a failed transcription leaves the capture `failed` and the upload still succeeds |
-| GET | `/captures?status=&date=&limit=` | List (newest first) |
-| GET / PATCH | `/captures/{id}` | Detail incl. `transcript`, `attachment_id`, `attachment_mime` / change `status` (e.g. `discarded`) or `target_date`. Re-targeting a `new` capture to a drafted or locked day queues a `follow_up` run |
+| POST | `/captures` | Multipart: `text` and/or `file` (audio, image), optional `target_date` or `product_id` (a capture about one product: label photo or spoken correction, R52; it never has a day). `201` with the capture; an upload whose content hash already exists returns `200` with the existing capture and `created: false` (no-op, R35). Audio is transcribed right away when a transcription provider is configured; a failed transcription leaves the capture `failed` and the upload still succeeds |
+| GET | `/captures?status=&date=&product_id=&limit=` | List (newest first) |
+| GET / PATCH | `/captures/{id}` | Detail incl. `transcript`, `attachment_id`, `attachment_mime` / change `status` (e.g. `discarded`), `target_date` or `product_id`. Re-targeting a `new` capture to a drafted or locked day queues a `follow_up` run |
 | POST | `/captures/{id}/transcribe?force=` | (Re-)transcribe an audio capture; `502` with problem details when the provider fails or none is configured |
 | GET | `/attachments/{id}` | The attachment bytes (image, audio) inline, tenant-checked; `Cache-Control: private` |
 

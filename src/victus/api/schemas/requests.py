@@ -127,6 +127,11 @@ class MealIn(BaseModel):
     time: dt.time | None = None
 
 
+class MealPatch(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    time: dt.time | None = None
+
+
 class LineItemIn(BaseModel):
     consumable_id: int
     amount: float = Field(ge=0)

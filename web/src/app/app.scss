@@ -49,6 +49,19 @@
     &.active { color: var(--v-ink); background: var(--v-surface-2); font-weight: 500; }
   }
   .glyph { width: 1.1rem; text-align: center; color: var(--v-ink-3); font-size: var(--v-fs-s); }
+  .badge {
+    margin-left: auto;
+    min-width: 1.35rem;
+    padding: 0 0.35rem;
+    border-radius: 999px;
+    background: var(--v-primary);
+    color: #fff;
+    font-size: var(--v-fs-xs);
+    line-height: 1.35rem;
+    text-align: center;
+    font-weight: 600;
+  }
+  .foot-actions { display: flex; gap: 0.25rem; flex-wrap: wrap; }
 
   .foot {
     margin-top: auto;
@@ -68,6 +81,7 @@
 .content { min-width: 0; }
 .bare { min-height: 100vh; display: grid; place-items: center; padding: 1.5rem; }
 .passkey-nudge, .recovery-notice { margin: 1rem 2rem 0; }
+.passkey-nudge { display: flex; justify-content: space-between; gap: 1rem; align-items: start; }
 
 @media (max-width: 52rem) {
   .shell { grid-template-columns: 1fr; }
@@ -86,7 +100,8 @@
     .brand, .foot { display: none; }
     .today { margin: 0; padding: 0.35rem 0.6rem; font-size: var(--v-fs-s); }
     ul { display: flex; }
-    li a { flex-direction: column; gap: 0.1rem; padding: 0.25rem 0.5rem; font-size: var(--v-fs-xs); }
+    li a { flex-direction: column; gap: 0.1rem; padding: 0.25rem 0.5rem; font-size: var(--v-fs-xs); position: relative; min-width: 3.4rem; }
+    .badge { position: absolute; top: 0; right: 0.1rem; margin: 0; min-width: 1.1rem; line-height: 1.1rem; font-size: 0.65rem; }
   }
   .content { padding-bottom: 4.5rem; }
   .passkey-nudge, .recovery-notice { margin: 1rem 1rem 0; }

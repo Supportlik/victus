@@ -17,6 +17,7 @@ from victus.api.schemas.requests import (
     LineItemIn,
     LineItemPatch,
     MealIn,
+    MealPatch,
 )
 from victus.application.use_cases import day_logs as uc
 
@@ -56,6 +57,17 @@ def update_day(day: date, body: DayFlags, ctx: Ctx, uow: Uow) -> DayOut:
 @router.post("/days/{day}/meals", response_model=MealOut, status_code=status.HTTP_201_CREATED)
 def add_meal(day: date, body: MealIn, ctx: Ctx, uow: Uow) -> MealOut:
     return meal_out(uc.AddMeal(uow, ctx).execute(day, body.name, body.time))
+
+
+@router.patch("/meals/{meal_id}", response_model=MealOut)
+def update_meal(meal_id: int, body: MealPatch, ctx: Ctx, uow: Uow) -> MealOut:
+    return meal_out(uc.UpdateMeal(uow, ctx).execute(meal_id, body.model_dump(exclude_unset=True)))
+
+
+@router.delete("/meals/{meal_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_meal(meal_id: int, ctx: Ctx, uow: Uow) -> Response:
+    uc.DeleteMeal(uow, ctx).execute(meal_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post(

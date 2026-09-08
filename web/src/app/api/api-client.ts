@@ -168,6 +168,12 @@ export class ApiClient {
   updateDay(date: string, body: DayFlags): Observable<DayLog> {
     return this.http.put<DayLog>(`${API_BASE}/days/${date}`, body);
   }
+  updateMeal(mealId: number, body: { name?: string; time?: string | null }): Observable<Meal> {
+    return this.http.patch<Meal>(`${API_BASE}/meals/${mealId}`, body);
+  }
+  deleteMeal(mealId: number): Observable<void> {
+    return this.http.delete<void>(`${API_BASE}/meals/${mealId}`);
+  }
   addMeal(date: string, body: { name: string; time?: string | null }): Observable<Meal> {
     return this.http.post<Meal>(`${API_BASE}/days/${date}/meals`, body);
   }
@@ -237,8 +243,8 @@ export class ApiClient {
   }
 
   // captures & agent
-  captures(status?: string, date?: string): Observable<Capture[]> {
-    return this.http.get<Capture[]>(`${API_BASE}/captures`, { params: params({ status, date }) });
+  captures(status?: string, date?: string, productId?: number): Observable<Capture[]> {
+    return this.http.get<Capture[]>(`${API_BASE}/captures`, { params: params({ status, date, product_id: productId }) });
   }
   capture(id: string): Observable<Capture> {
     return this.http.get<Capture>(`${API_BASE}/captures/${id}`);

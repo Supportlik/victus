@@ -267,6 +267,60 @@ class AddMeal(UseCase):
             return view
 
 
+class UpdateMeal(UseCase):
+    """Rename a meal or change its time."""
+
+    def execute(self, meal_id: int, changes: dict[str, Any]) -> dto.MealView:
+        self.ctx.require(SCOPE_WRITE)
+        with self._uow() as uow:
+            meal = uow.day_logs.get_meal(meal_id)
+            if meal is None:
+                raise NotFound(f"meal {meal_id} not found")
+            diff: dict[str, Any] = {}
+            if changes.get("name") is not None:
+                name = str(changes["name"]).strip()
+                if not name:
+                    raise ValidationFailed("meal name must not be empty")
+                diff["name"] = [meal.name, name]
+                meal.name = name
+            if "time" in changes:
+                diff["time"] = [
+                    meal.time.isoformat() if meal.time else None,
+                    changes["time"].isoformat() if changes["time"] else None,
+                ]
+                meal.time = changes["time"]
+            uow.audit.record("meal.update", "meal", str(meal.id), diff)
+            uow.flush()
+            view = build_day_view(uow, meal.day_log)
+            result = next(m for m in view.meals if m.id == meal.id)
+            uow.commit()
+            return result
+
+
+class DeleteMeal(UseCase):
+    """Remove an empty meal. A meal with line items is never deleted implicitly."""
+
+    def execute(self, meal_id: int) -> None:
+        self.ctx.require(SCOPE_WRITE)
+        with self._uow() as uow:
+            meal = uow.day_logs.get_meal(meal_id)
+            if meal is None:
+                raise NotFound(f"meal {meal_id} not found")
+            if meal.line_items:
+                raise Conflict(
+                    f"meal {meal_id} still has {len(meal.line_items)} line item(s); "
+                    "delete or move them first"
+                )
+            uow.audit.record(
+                "meal.delete",
+                "meal",
+                str(meal.id),
+                {"name": meal.name, "date": meal.day_log.date.isoformat()},
+            )
+            uow.day_logs.delete_meal(meal)
+            uow.commit()
+
+
 def _item_view(uow: UnitOfWork, li: orm.LineItem, day: date) -> dto.LineItemView:
     macros = uow.day_logs.line_item_macros(day).get(li.id)
     return line_item_view(li, macros, li.consumable)

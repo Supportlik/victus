@@ -1,15 +1,16 @@
 import { ChangeDetectionStrategy, Component, effect, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { ApiClient, Portion, Product } from '../../api';
+import { ApiClient, Capture, Portion, Product } from '../../api';
 import { describeError } from '../../core/problem';
+import { CaptureInput } from '../../shared/capture-input';
 import { MacroPipe } from '../../shared/format';
 import { ProductForm } from './product-form';
 
 @Component({
   selector: 'v-product-detail',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, FormsModule, MacroPipe, ProductForm],
+  imports: [RouterLink, FormsModule, MacroPipe, ProductForm, CaptureInput],
   template: `
     <div class="v-page">
       @if (error(); as e) { <div class="v-error">{{ e }}</div> }
@@ -44,6 +45,29 @@ import { ProductForm } from './product-form';
           </section>
         }
 
+        <section class="captures v-panel">
+          <h3>Label photos &amp; notes</h3>
+          <p class="v-small v-muted">Photograph the nutrition label or say what is wrong. The agent reads it on its next run and corrects this product; the values then apply to every day that logged it.</p>
+          <v-capture-input [productId]="p.id" (uploaded)="onCapture($event)" />
+          @if (captures().length) {
+            <ul class="cap-list">
+              @for (c of captures(); track c.id) {
+                <li>
+                  @if (c.kind === 'image' && c.attachment_id) {
+                    <a [href]="api.attachmentUrl(c.attachment_id)" target="_blank" rel="noopener"><img class="thumb" [src]="api.attachmentUrl(c.attachment_id)" alt="label photo" loading="lazy" /></a>
+                  } @else if (c.kind === 'audio' && c.attachment_id) {
+                    <audio controls preload="none" [src]="api.attachmentUrl(c.attachment_id)"></audio>
+                  }
+                  <div>
+                    <div class="v-small">{{ c.text ?? c.transcript ?? (c.kind === 'image' ? 'photo' : c.kind) }}</div>
+                    <div class="v-small v-muted">{{ c.captured_at.replace('T', ' ').slice(0, 16) }} · <span class="v-tag" [class]="'v-tag ' + (c.status === 'processed' ? 'closed' : c.status === 'failed' ? 'bad' : 'warn')">{{ c.status.replace('_', ' ') }}</span></div>
+                  </div>
+                </li>
+              }
+            </ul>
+          }
+        </section>
+
         <section class="portions">
           <h3>Portions</h3>
           <p class="v-small v-muted">Piece weights live only here. One default portion per unit.</p>
@@ -76,16 +100,21 @@ import { ProductForm } from './product-form';
     dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr)); gap: 0.75rem; margin: 0.5rem 0; }
     dt { font-size: var(--v-fs-xs); color: var(--v-ink-3); } dd { margin: 0; font-size: var(--v-fs-l); font-weight: 560; }
     .portions { margin-top: 1.5rem; } .add { margin-top: 0.75rem; align-items: end; }
+    .captures { margin-top: 1.5rem; display: grid; gap: 0.6rem; }
+    .cap-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
+    .cap-list li { display: flex; gap: 0.75rem; align-items: center; }
+    .thumb { max-width: 6rem; max-height: 6rem; border-radius: var(--v-radius); display: block; }
     .check { grid-template-columns: 1fr auto; align-items: center; }
   `,
 })
 export class ProductDetail {
-  private readonly api = inject(ApiClient);
+  readonly api = inject(ApiClient);
   private readonly router = inject(Router);
   readonly id = input.required<string>();
   readonly product = signal<Product | null>(null);
   readonly editing = signal(false);
   readonly error = signal<string | null>(null);
+  readonly captures = signal<Capture[]>([]);
   np: Omit<Portion, 'id' | 'product_id'> = { label: '', unit_code: 'piece', amount: 0, amount_unit: 'g', is_default: false, weight_source: 'weighed' };
 
   constructor() {
@@ -93,6 +122,10 @@ export class ProductDetail {
   }
   load(id: number): void {
     this.api.product(id).subscribe({ next: (p) => this.product.set(p), error: (e: unknown) => this.error.set(describeError(e)) });
+    this.api.captures(undefined, undefined, id).subscribe({ next: (c) => this.captures.set(c), error: () => undefined });
+  }
+  onCapture(c: Capture): void {
+    this.captures.update((list) => [c, ...list]);
   }
   onSaved(p: Product): void {
     this.product.set({ ...p, portions: this.product()?.portions ?? p.portions });

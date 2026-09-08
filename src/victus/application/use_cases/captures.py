@@ -104,6 +104,7 @@ def capture_view(
         content_hash=cap.content_hash,
         processed_at=cap.processed_at,
         agent_run_id=cap.agent_run_id,
+        product_id=cap.product_id,
         created=created,
     )
 
@@ -149,6 +150,7 @@ class UploadInput:
     mime: str | None = None
     target_date: date | None = None
     captured_at: datetime | None = None
+    product_id: int | None = None  # a capture about one product has no target day
 
 
 class UploadCapture(UseCase):
@@ -165,6 +167,8 @@ class UploadCapture(UseCase):
             raise ValidationFailed("a capture needs text or a file")
         ts = inp.captured_at or now()
         with self._uow() as uow:
+            if inp.product_id is not None and uow.products.get(inp.product_id) is None:
+                raise NotFound(f"product {inp.product_id} not found")
             attachment: orm.Attachment | None = None
             if inp.data:
                 mime = sniff_mime(inp.mime, inp.filename)
@@ -199,16 +203,17 @@ class UploadCapture(UseCase):
                     user_id=self.ctx.user_id,
                     kind=kind.value,
                     captured_at=ts,
-                    target_date=inp.target_date,
+                    target_date=None if inp.product_id is not None else inp.target_date,
                     text=text,
                     status=CaptureStatus.NEW.value,
                     attachment_id=attachment.id if attachment else None,
                     content_hash=content_hash,
+                    product_id=inp.product_id,
                 )
             )
             if attachment is not None:
                 cap.attachment = attachment
-            if inp.target_date is not None:
+            if inp.target_date is not None and inp.product_id is None:
                 queue_follow_up_if_needed(uow, self.ctx, inp.target_date, [cap.id], ts)
             uow.audit.record(
                 "capture.create",
@@ -217,6 +222,7 @@ class UploadCapture(UseCase):
                 {
                     "kind": kind.value,
                     "target_date": inp.target_date.isoformat() if inp.target_date else None,
+                    "product_id": inp.product_id,
                 },
             )
             view = capture_view(cap, None)
@@ -226,13 +232,20 @@ class UploadCapture(UseCase):
 
 class ListCaptures(UseCase):
     def execute(
-        self, *, status: str | None = None, target_date: date | None = None, limit: int = 200
+        self,
+        *,
+        status: str | None = None,
+        target_date: date | None = None,
+        limit: int = 200,
+        product_id: int | None = None,
     ) -> list[dto.CaptureView]:
         self.ctx.require(SCOPE_CAPTURE_READ)
         if status is not None and status not in {s.value for s in CaptureStatus}:
             raise ValidationFailed(f"unknown capture status '{status}'")
         with self._uow() as uow:
-            rows = uow.captures.list(status=status, target_date=target_date, limit=limit)
+            rows = uow.captures.list(
+                status=status, target_date=target_date, limit=limit, product_id=product_id
+            )
             return [capture_view(c, uow.captures.transcript_for(c.id)) for c in rows]
 
 
@@ -264,6 +277,12 @@ class UpdateCapture(UseCase):
                 if status in (CaptureStatus.PROCESSED.value, CaptureStatus.DISCARDED.value):
                     cap.processed_at = now()
                 diff["status"] = status
+            if "product_id" in changes:
+                pid = changes["product_id"]
+                if pid is not None and uow.products.get(int(pid)) is None:
+                    raise NotFound(f"product {pid} not found")
+                cap.product_id = int(pid) if pid is not None else None
+                diff["product_id"] = cap.product_id
             if "target_date" in changes:
                 new_day = changes["target_date"]
                 cap.target_date = new_day

@@ -480,7 +480,7 @@ class GetDayContext(UseCase):
             caps = [
                 capture_view(c, uow.captures.transcript_for(c.id))
                 for c in uow.captures.list(target_date=day)
-                if wanted is None or c.status in wanted
+                if c.product_id is None and (wanted is None or c.status in wanted)
             ]
             holder = uow.agent.lock_holder(day, now())
             return dto.DayContextView(

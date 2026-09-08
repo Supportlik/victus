@@ -138,6 +138,12 @@ class DayLogRepo(Repo):
         )
         return self.session.scalar(stmt)
 
+    def delete_meal(self, meal: orm.Meal) -> None:
+        if self.get(meal.day_log_id) is None:
+            raise PermissionError("day log not in tenant")
+        self.session.delete(meal)
+        self.session.flush()
+
     def add_line_item(self, item: orm.LineItem) -> orm.LineItem:
         if self.get_meal(item.meal_id) is None:
             raise PermissionError("meal not in tenant")

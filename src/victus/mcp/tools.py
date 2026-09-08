@@ -203,6 +203,13 @@ class CapturesOpenIn(_In):
     date: dt.date | None = Field(
         default=None, description="Only captures for this day (defaults to the run's locked days)."
     )
+    scope: Literal["day", "product", "all"] = Field(
+        default="day",
+        description=(
+            "day: captures about days (default). product: captures attached to one product "
+            "(label photos, corrections) that carry product_id. all: both."
+        ),
+    )
 
 
 class CaptureGetIn(_In):
@@ -215,6 +222,37 @@ class CaptureMarkIn(_In):
         None
     )
     target_date: dt.date | None = None
+    product_id: int | None = None
+
+
+class MealUpdateIn(_In):
+    meal_id: int
+    name: str | None = None
+    time: dt.time | None = None
+
+
+class MealDeleteIn(_In):
+    meal_id: int
+
+
+class ProductUpdateIn(_In):
+    product_id: int
+    name: str | None = None
+    brand: str | None = None
+    kcal: float | None = None
+    protein: float | None = None
+    carbs: float | None = None
+    fat: float | None = None
+    fiber: float | None = None
+    salt: float | None = None
+    reference_amount: float | None = None
+    reference_unit: Literal["g", "ml"] | None = None
+    ean: str | None = None
+    note: str | None = None
+    source: str | None = Field(
+        default=None,
+        description="Where the values come from, e.g. 'label photo, capture <id>'. Always set it.",
+    )
 
 
 class AgentRunStartIn(_In):
@@ -453,9 +491,13 @@ def _captures_open(tc: ToolContext, inp: CapturesOpenIn) -> ToolResult:
     rows = capture_uc.ListCaptures(tc.uow_factory, tc.ctx).execute(
         status=CaptureStatus.NEW.value, target_date=inp.date
     )
-    scope_days = _locked_days(tc)
-    if scope_days is not None and inp.date is None:
-        rows = [c for c in rows if c.target_date in scope_days]
+    if inp.scope == "product":
+        rows = [c for c in rows if c.product_id is not None]
+    elif inp.scope == "day":
+        rows = [c for c in rows if c.product_id is None]
+        scope_days = _locked_days(tc)
+        if scope_days is not None and inp.date is None:
+            rows = [c for c in rows if c.target_date in scope_days]
     return cast(list[Any], jsonable(rows))
 
 
@@ -484,6 +526,8 @@ def _capture_mark(tc: ToolContext, inp: CaptureMarkIn) -> ToolResult:
         changes["status"] = inp.status
     if "target_date" in inp.model_fields_set:
         changes["target_date"] = inp.target_date
+    if "product_id" in inp.model_fields_set:
+        changes["product_id"] = inp.product_id
     view = capture_uc.UpdateCapture(tc.uow_factory, tc.ctx).execute(inp.id, changes)
     return cast(dict[str, Any], jsonable(view))
 
@@ -576,6 +620,24 @@ def _line_item_update(tc: ToolContext, inp: LineItemUpdateIn) -> ToolResult:
 def _line_item_delete(tc: ToolContext, inp: LineItemDeleteIn) -> ToolResult:
     day_uc.DeleteLineItem(tc.uow_factory, tc.ctx).execute(inp.line_item_id)
     return {"deleted": inp.line_item_id}
+
+
+def _meal_update(tc: ToolContext, inp: MealUpdateIn) -> ToolResult:
+    changes = {k: v for k, v in inp.model_dump().items() if k != "meal_id" and v is not None}
+    view = day_uc.UpdateMeal(tc.uow_factory, tc.ctx).execute(inp.meal_id, changes)
+    return cast(dict[str, Any], jsonable(view))
+
+
+def _meal_delete(tc: ToolContext, inp: MealDeleteIn) -> ToolResult:
+    day_uc.DeleteMeal(tc.uow_factory, tc.ctx).execute(inp.meal_id)
+    return {"deleted": inp.meal_id}
+
+
+def _product_update(tc: ToolContext, inp: ProductUpdateIn) -> ToolResult:
+    changes = {k: v for k, v in inp.model_dump().items() if k != "product_id" and v is not None}
+    changes["verified"] = False  # a person confirms label readings in the review list
+    view = product_uc.UpdateProduct(tc.uow_factory, tc.ctx).execute(inp.product_id, changes)
+    return cast(dict[str, Any], jsonable(view))
 
 
 def _product_create(tc: ToolContext, inp: ProductCreateIn) -> ToolResult:
@@ -796,6 +858,31 @@ TOOLS: tuple[ToolSpec, ...] = (
         read_only=False,
     ),
     _spec(
+        "meal_update",
+        "Rename a meal or change its time.",
+        SCOPE_WRITE,
+        MealUpdateIn,
+        _meal_update,
+        read_only=False,
+    ),
+    _spec(
+        "meal_delete",
+        "Delete an empty meal (fails while it still has line items).",
+        SCOPE_WRITE,
+        MealDeleteIn,
+        _meal_delete,
+        read_only=False,
+    ),
+    _spec(
+        "product_update",
+        "Correct a product's nutrients per reference amount, e.g. from a label photo capture. "
+        "Values propagate to every logged quantity of that product; set `source`.",
+        SCOPE_WRITE,
+        ProductUpdateIn,
+        _product_update,
+        read_only=False,
+    ),
+    _spec(
         "product_create",
         "Create a product with nutrients per reference amount (100 g/ml).",
         SCOPE_WRITE,
@@ -838,6 +925,7 @@ WORKER_TOOLS: frozenset[str] = frozenset(
         "capture_mark",
         "draft_create",
         "product_create",
+        "product_update",
         "portion_create",
     }
 )

@@ -27,6 +27,7 @@
   --v-warn-soft: light-dark(#fbf1d9, #3e3112);
   --v-bad-soft: light-dark(#fce6dd, #46231a);
   --v-agent-soft: light-dark(#ebe7f7, #2a2450);
+  --v-primary-ink: #fff;
 
   // Type scale (ratio 1.2)
   --v-font: 'IBM Plex Sans Variable', 'IBM Plex Sans', system-ui, sans-serif;
@@ -57,6 +58,65 @@ html {
   ));
   font-size: 16px;
   -webkit-text-size-adjust: 100%;
+}
+
+// ── Appearance: scheme pin and colour palettes (ThemeService sets the attributes) ──
+html[data-scheme="light"] { color-scheme: light; }
+html[data-scheme="dark"] { color-scheme: dark; }
+
+html[data-palette="forest"] {
+  --v-primary: #2f8f5b;
+  --v-primary-soft: light-dark(#e3f3ea, #17372a);
+  --v-agent: #5a6e2d;
+  --v-agent-soft: light-dark(#eef2e0, #2b3318);
+  --v-bg: light-dark(#f4f6f2, #141a16);
+  --v-surface: light-dark(#fcfdfb, #1b221d);
+  --v-surface-2: light-dark(#e9eee6, #242d27);
+}
+html[data-palette="ocean"] {
+  --v-primary: #0f7f9f;
+  --v-primary-soft: light-dark(#dff1f6, #10323c);
+  --v-agent: #3f5fb5;
+  --v-agent-soft: light-dark(#e4e9f8, #1d2748);
+  --v-bg: light-dark(#f2f5f6, #131a1d);
+  --v-surface: light-dark(#fbfdfd, #1a2226);
+  --v-surface-2: light-dark(#e6ecee, #232d32);
+}
+html[data-palette="clay"] {
+  --v-primary: #c2572b;
+  --v-primary-soft: light-dark(#f9e6dd, #46261a);
+  --v-agent: #8a5a3c;
+  --v-agent-soft: light-dark(#f3e8e0, #3a2a20);
+  --v-bg: light-dark(#f7f4f0, #1a1613);
+  --v-surface: light-dark(#fdfbf8, #221d19);
+  --v-surface-2: light-dark(#efe9e2, #2c261f);
+}
+html[data-palette="plum"] {
+  --v-primary: #7b4bb7;
+  --v-primary-soft: light-dark(#eee6f8, #2c1f46);
+  --v-agent: #b0407a;
+  --v-agent-soft: light-dark(#f8e4ee, #45203a);
+  --v-bg: light-dark(#f5f3f7, #171420);
+  --v-surface: light-dark(#fcfbfe, #1f1b29);
+  --v-surface-2: light-dark(#ece8f1, #2a2536);
+}
+html[data-palette="contrast"] {
+  --v-primary: light-dark(#0000d6, #8ab4ff);
+  --v-primary-ink: light-dark(#fff, #000);
+  --v-primary-soft: light-dark(#e0e0ff, #1b2a4a);
+  --v-agent: light-dark(#5a0090, #d9a8ff);
+  --v-agent-soft: light-dark(#f0e0ff, #33184a);
+  --v-bg: light-dark(#ffffff, #000000);
+  --v-surface: light-dark(#ffffff, #0a0a0a);
+  --v-surface-2: light-dark(#eeeeee, #1a1a1a);
+  --v-ink: light-dark(#000000, #ffffff);
+  --v-ink-2: light-dark(#222222, #e0e0e0);
+  --v-ink-3: light-dark(#444444, #bbbbbb);
+  --v-line: light-dark(#808080, #808080);
+  --v-line-strong: light-dark(#000000, #ffffff);
+  --v-ok: light-dark(#006b3f, #4fe3a0);
+  --v-warn: light-dark(#8a5a00, #ffd166);
+  --v-bad: light-dark(#b00020, #ff6b6b);
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -124,7 +184,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   line-height: 1.2;
   &:hover { border-color: var(--v-ink-3); }
   &:disabled { opacity: 0.5; cursor: default; }
-  &.primary { background: var(--v-primary); border-color: var(--v-primary); color: #fff; }
+  &.primary { background: var(--v-primary); border-color: var(--v-primary); color: var(--v-primary-ink); }
   &.primary:hover { filter: brightness(0.95); }
   &.danger { color: var(--v-bad); border-color: var(--v-bad); }
   &.quiet { border-color: transparent; background: transparent; color: var(--v-primary); padding-inline: 0.4rem; }
@@ -215,6 +275,21 @@ button, input, select, textarea { font: inherit; color: inherit; }
   table { border-collapse: collapse; font-size: var(--v-fs-s); margin: 0.5rem 0; }
   th, td { padding: 0.25rem 0.5rem; border-bottom: 1px solid var(--v-line); text-align: left; }
   code { font-size: 0.9em; background: var(--v-surface-2); padding: 0 0.25rem; border-radius: 3px; }
+}
+
+// ── Phones: tighter page padding, larger touch targets, scrollable tables ──
+.v-hide-m { }
+@media (max-width: 52rem) {
+  .v-page { padding: 1rem 1rem 3rem; }
+  .v-page-head { margin-bottom: 0.9rem; }
+  .v-btn { min-height: 2.5rem; }
+  .v-field input, .v-field select, .v-field textarea { min-height: 2.5rem; font-size: 16px; }
+  .v-table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .v-table th, .v-table td { padding: 0.45rem 0.5rem; }
+  .v-hide-m { display: none !important; }
+  .v-panel { padding: 0.85rem 0.9rem; }
+  .v-md table { display: block; overflow-x: auto; }
+  p { max-width: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

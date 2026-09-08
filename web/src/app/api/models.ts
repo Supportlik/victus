@@ -302,6 +302,8 @@ export interface Capture {
   content_hash?: string;
   processed_at?: string | null;
   agent_run_id?: string | null;
+  /** Set when the capture is about one product (label photo, correction). */
+  product_id?: number | null;
   /** False when the upload matched an existing capture by content hash (no-op). */
   created?: boolean;
 }

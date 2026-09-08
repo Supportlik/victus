@@ -11,7 +11,8 @@
           @for (item of nav; track item.path) {
             <li>
               <a [routerLink]="item.path" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: false }">
-                <span class="glyph" aria-hidden="true">{{ item.glyph }}</span>{{ item.label }}
+                <span class="glyph" aria-hidden="true">{{ item.glyph }}</span><span class="label">{{ item.label }}</span>
+                @if (badge(item); as n) { <span class="badge" [attr.aria-label]="n + ' waiting'">{{ n > 99 ? '99+' : n }}</span> }
               </a>
             </li>
           }
@@ -19,7 +20,10 @@
       }
       <div class="foot">
         <span class="user">{{ auth.me()?.user?.display_name }}</span>
-        <button type="button" class="v-btn quiet small" (click)="logout()">Sign out</button>
+        <div class="foot-actions">
+          <button type="button" class="v-btn quiet small" (click)="theme.cycleScheme()" [title]="'Appearance: ' + schemeLabel() + ' — click to change'">◐ {{ schemeLabel() }}</button>
+          <button type="button" class="v-btn quiet small" (click)="logout()">Sign out</button>
+        </div>
         <p class="health" aria-live="polite">
           @if (health(); as h) {
             <span class="dot ok"></span>API {{ h.version }}
@@ -36,10 +40,11 @@
         <div class="v-notice recovery-notice">
           You signed in with a recovery code. This session can only register a new passkey. Add one below, then sign in again with it.
         </div>
-      } @else if (auth.needsSecondPasskey()) {
+      } @else if (showNudge()) {
         <div class="v-notice passkey-nudge">
-          You have one passkey. Add a second one on another device so a lost phone does not lock you out.
-          <a routerLink="/settings" fragment="passkeys">Add a passkey</a>
+          <span>You have one passkey. Add a second one on another device so a lost phone does not lock you out.
+          <a routerLink="/settings" fragment="passkeys">Add a passkey</a></span>
+          <button type="button" class="v-btn quiet small" (click)="dismissNudge()" aria-label="Dismiss">✕</button>
         </div>
       }
       <router-outlet />

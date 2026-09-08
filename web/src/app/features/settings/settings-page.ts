@@ -1,6 +1,8 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
+import { ThemeService } from '../../core/theme.service';
+import { TenantSettingsForm } from './settings-form';
 import { ApiClient, ApiToken, ApiTokenCreated, Health, Passkey, TargetBand, TenantSettingsVersion } from '../../api';
 import { AuthService } from '../../core/auth/auth.service';
 import { describeError } from '../../core/problem';
@@ -15,11 +17,32 @@ interface SchemaLike {
 @Component({
   selector: 'v-settings-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule],
+  imports: [FormsModule, TenantSettingsForm],
   template: `
     <div class="v-page settings">
       <header class="v-page-head"><div><h2>Settings</h2><p class="sub">{{ auth.me()?.tenant?.name }} · signed in as {{ auth.me()?.user?.display_name }}</p></div></header>
       @if (error(); as e) { <div class="v-error">{{ e }}</div> }
+
+      <section class="v-panel" id="appearance">
+        <h3>Appearance</h3>
+        <p class="v-small v-muted">Stored in this browser only.</p>
+        <div class="v-form-row">
+          <label class="v-field"><span>Light / dark</span>
+            <select name="scheme" [ngModel]="theme.scheme()" (ngModelChange)="theme.scheme.set($event)">
+              <option value="system">Follow the device</option><option value="light">Light</option><option value="dark">Dark</option>
+            </select>
+          </label>
+          <div class="v-field"><span>Palette</span>
+            <div class="palettes">
+              @for (p of theme.palettes; track p.id) {
+                <button type="button" class="swatch" [class.active]="theme.palette() === p.id" (click)="theme.palette.set(p.id)" [attr.aria-pressed]="theme.palette() === p.id">
+                  <span class="dot" [style.background]="p.swatch"></span>{{ p.label }}
+                </button>
+              }
+            </div>
+          </div>
+        </div>
+      </section>
 
       <section class="v-panel" id="passkeys">
         <h3>Passkeys</h3>
@@ -52,10 +75,16 @@ interface SchemaLike {
 
       <section class="v-panel">
         <h3>Tenant settings <span class="v-small v-muted">@if (settings(); as s) { version {{ s.version }} since {{ s.valid_from }} }</span></h3>
-        <p class="v-small v-muted">Goal, calorie corridor, windows, target bands and transcription vocabulary as one document. Saving creates a new version.</p>
-        <textarea class="json" [(ngModel)]="settingsJson" name="settings" rows="18" spellcheck="false"></textarea>
-        @if (jsonError(); as je) { <div class="v-error">{{ je }}</div> }
-        <div class="v-actions"><button type="button" class="v-btn primary" (click)="saveSettings()">Save as new version</button></div>
+        <p class="v-small v-muted">Goal, calculation windows, calorie corridor, body data and transcription vocabulary. Saving creates a new version; older versions stay readable.</p>
+        @if (settings(); as s) {
+          <v-tenant-settings-form [data]="s.data" (save)="saveSettingsData($event)" />
+        } @else { <p class="v-muted v-small">Loading…</p> }
+        <details class="advanced">
+          <summary>Advanced: edit the document as JSON</summary>
+          <textarea class="json" [(ngModel)]="settingsJson" name="settings" rows="18" spellcheck="false"></textarea>
+          @if (jsonError(); as je) { <div class="v-error">{{ je }}</div> }
+          <div class="v-actions"><button type="button" class="v-btn" (click)="saveSettings()">Save JSON as new version</button></div>
+        </details>
       </section>
 
       <section class="v-panel" id="tokens">
@@ -97,6 +126,11 @@ interface SchemaLike {
   styles: `
     .settings { display: grid; gap: 1.25rem; }
     .add { margin-top: 0.75rem; display: grid; gap: 0.75rem; align-items: end; }
+    .palettes { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+    .swatch { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.35rem 0.7rem; border: 1px solid var(--v-line-strong); border-radius: 999px; background: var(--v-surface); cursor: pointer; font-size: var(--v-fs-s); }
+    .swatch.active { border-color: var(--v-primary); box-shadow: 0 0 0 1px var(--v-primary) inset; }
+    .dot { width: 0.8rem; height: 0.8rem; border-radius: 50%; display: inline-block; }
+    .advanced { margin-top: 1rem; } .advanced summary { cursor: pointer; color: var(--v-ink-2); font-size: var(--v-fs-s); }
     .json { width: 100%; font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; font-size: var(--v-fs-s); padding: 0.6rem; border: 1px solid var(--v-line-strong); border-radius: var(--v-radius); background: var(--v-surface); margin: 0.5rem 0; }
     .scopes { border: 1px solid var(--v-line); border-radius: var(--v-radius); padding: 0.5rem 0.75rem; display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; }
     .revoked td { opacity: 0.5; }
@@ -108,6 +142,7 @@ export class SettingsPage {
   private readonly api = inject(ApiClient);
   private readonly http = inject(HttpClient);
   readonly auth = inject(AuthService);
+  readonly theme = inject(ThemeService);
   readonly passkeys = signal<Passkey[]>([]);
   readonly bands = signal<TargetBand[]>([]);
   readonly settings = signal<TenantSettingsVersion | null>(null);
@@ -184,7 +219,18 @@ export class SettingsPage {
   saveSettings(): void {
     const data = this.validateSettings(this.settingsJson);
     if (!data) return;
-    this.api.putSettings(data).subscribe({ next: (s) => this.settings.set(s), error: (e: unknown) => this.error.set(describeError(e)) });
+    this.saveSettingsData(data);
+  }
+
+  saveSettingsData(data: Record<string, unknown>): void {
+    this.error.set(null);
+    this.api.putSettings(data).subscribe({
+      next: (s) => {
+        this.settings.set(s);
+        this.settingsJson = JSON.stringify(s.data, null, 2);
+      },
+      error: (e: unknown) => this.error.set(describeError(e)),
+    });
   }
 
   toggleScope(s: string, on: boolean): void {

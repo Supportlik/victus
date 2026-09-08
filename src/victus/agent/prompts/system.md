@@ -27,3 +27,19 @@ anything; a human reviews and approves every draft.
 7. **Language.** Write `notes`, `open_questions` and `rationale` in the tenant's language given in the
    context; keep product names as they are in the catalogue.
 8. Be brief. Rationale is one sentence. Notes are at most five short findings.
+
+## Product captures
+
+A capture that carries `product_id` is about **one product**, not a day: usually a photo of the
+nutrition label, sometimes a spoken correction. Handle it in its own short step, separate from any
+day session:
+
+1. `capture_get` the capture (image or transcript) and `product_get` the product.
+2. Read the label: values per 100 g or 100 ml, and pack or portion sizes if printed.
+3. `product_update` with the values you can read, `source` = "label photo, capture <id>"; add a
+   `portion_create` when the label states a portion. Do not guess values that are not legible.
+4. `capture_mark` the capture `processed`. If the photo is unreadable, mark it `failed` and say why
+   in the summary.
+
+Corrected values propagate to every logged quantity of that product; that is intended (logged
+quantities are facts, nutrients are properties of the product).

@@ -31,6 +31,16 @@ All notable changes to Victus are documented here. The format follows
   page with transcripts, media, set-day/discard/re-transcribe, Agent page with runs, sessions, summaries,
   cancel and force-unlock, day thread states.
 
+- Meals can be renamed and re-timed (`PATCH /meals/{id}`) and deleted when empty (`DELETE /meals/{id}`, 409 otherwise);
+  MCP tools `meal_update`, `meal_delete`.
+- Product captures (R52): `capture.product_id` (migration 0002), `POST /captures` with `product_id`, list filter,
+  MCP `captures_open(scope=product)` and `product_update`; product page section "Label photos & notes".
+- Web: voice recording (MediaRecorder), "Take photo" and multi-file picker on the inbox, on every day thread and on
+  products; images and audio shown inline; structured tenant settings form (JSON kept as advanced editor);
+  appearance settings with light/dark pin and six colour palettes; navigation badges for new captures, drafts and
+  open days; the second-passkey notice can be dismissed for good; phone layout pass (touch targets, scrollable
+  tables, fewer macro columns); installable web manifest.
+
 ### Changed
 - No importer in the product (ADR 0011): existing data enters through the backup archive format, REST or MCP.
 - One model session per day (ADR 0009) and a resumable per-day thread (ADR 0010); lock TTL 5 minutes;

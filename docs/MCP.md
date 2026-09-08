@@ -39,12 +39,14 @@ HTTP responses: missing or invalid token → `401`; token lacks the tool's scope
 | `report_render(name, period="14d", format="markdown")` | `read` | `ReportEngine` | rendered report (`period` like `7d`/`14d`/`30d`, or `from`/`to`) |
 | `captures_open(run_id?)` | `capture:read` | `ListCaptures` | captures with `status=new`; with `run_id` scoped to the run's locked days |
 | `capture_get(id)` | `capture:read` | `GetCapture` / `TranscribeCapture` / `GetAttachment` | text or transcript; images as image content; audio is transcribed lazily when a transcription provider is configured |
-| `capture_mark(id, status?, target_date?)` | `capture:write` | `UpdateCapture` | updated capture |
+| `capture_mark(id, status?, target_date?, product_id?)` | `capture:write` | `UpdateCapture` | updated capture |
 | `agent_run_start(mode, dates?, captures?)` | `agent:write` | `BeginAgentRun(runner="external")` | `run_id`, `locked_days`, `skipped_days` |
 | `agent_run_finish(run_id, status, summary_md?)` | `agent:write` | `FinishAgentRun` | run record; releases every lock of the run |
 | `draft_create(draft)` | `agent:write` | `CreateDraft` | created items; **requires a live lock held by the draft's `run_id`** |
 | `draft_discard(date)` | `approve` | `DiscardDraft` | discarded count |
 | `day_approve(date, corrections[], close)` | `approve` | `ApproveDay` | approved day + warnings |
+| `meal_update(meal_id, name?, time?)`, `meal_delete(meal_id)` | `write` | `UpdateMeal` / `DeleteMeal` | meal; delete fails while items remain |
+| `product_update(product_id, …, source)` | `write` | `UpdateProduct` | product with corrected values (`verified` stays false); used for label-photo captures |
 | `line_item_create / line_item_update / line_item_delete` | `write` | `AddLineItem` / `UpdateLineItem` / `DeleteLineItem` | line item |
 | `product_create(...)`, `portion_create(...)` | `write` | `CreateProduct` / `AddPortion` | product / portion |
 | `weight_add(date, kg)` | `write` | `AddWeight` | weight row (`source=manual`) |

@@ -99,10 +99,26 @@ import { DayThread } from './day-thread';
             @for (meal of d.meals; track meal.id) {
               <article class="meal">
                 <header>
-                  <h3>{{ meal.name }}@if (meal.time) { <span class="v-muted v-small"> {{ meal.time }}</span> }</h3>
-                  <button type="button" class="v-btn quiet small" (click)="adding.set(adding() === meal.id ? null : meal.id)">
-                    {{ adding() === meal.id ? 'Cancel' : 'Add item' }}
-                  </button>
+                  @if (editingMeal() === meal.id) {
+                    <form class="meal-edit" (ngSubmit)="saveMeal(meal)">
+                      <input name="mn{{ meal.id }}" [(ngModel)]="mealName" aria-label="Meal name" required />
+                      <input name="mt{{ meal.id }}" type="time" [(ngModel)]="mealTime" aria-label="Meal time" />
+                      <button type="submit" class="v-btn small primary" [disabled]="!mealName.trim()">Save</button>
+                      <button type="button" class="v-btn small quiet" (click)="editingMeal.set(null)">Cancel</button>
+                    </form>
+                  } @else {
+                    <h3>
+                      <button type="button" class="meal-name" (click)="editMeal(meal)" title="Rename or set the time">{{ meal.name }}</button>
+                      @if (meal.time) { <span class="v-muted v-small"> {{ meal.time }}</span> }
+                    </h3>
+                  }
+                  <span class="v-actions">
+                    <button type="button" class="v-btn quiet small" (click)="adding.set(adding() === meal.id ? null : meal.id)">
+                      {{ adding() === meal.id ? 'Cancel' : 'Add item' }}
+                    </button>
+                    <button type="button" class="v-btn quiet small danger" (click)="deleteMeal(meal)" [disabled]="meal.line_items.length > 0"
+                      [title]="meal.line_items.length ? 'Delete or move the items first' : 'Delete this meal'">Delete</button>
+                  </span>
                 </header>
                 @if (adding() === meal.id) {
                   <div class="add">
@@ -126,7 +142,7 @@ import { DayThread } from './day-thread';
                 }
                 <div class="v-scroll-x">
                   <table class="v-table">
-                    <thead><tr><th>Item</th><th class="num">Amount</th><th class="num">kcal</th><th class="num">P</th><th class="num">C</th><th class="num">F</th><th class="num">Fi</th><th class="num">S</th><th></th></tr></thead>
+                    <thead><tr><th>Item</th><th class="num">Amount</th><th class="num">kcal</th><th class="num">P</th><th class="num v-hide-m">C</th><th class="num v-hide-m">F</th><th class="num v-hide-m">Fi</th><th class="num v-hide-m">S</th><th></th></tr></thead>
                     <tbody>
                       @for (it of meal.line_items; track it.id) {
                         <tr [class.draft]="it.is_draft" [class.estimated]="it.estimated || it.amount_estimated">
@@ -155,10 +171,10 @@ import { DayThread } from './day-thread';
                         <td>Total</td><td></td>
                         <td class="num">{{ meal.totals.kcal | macro: 'kcal' }}</td>
                         <td class="num">{{ meal.totals.protein | macro: 'protein' }}</td>
-                        <td class="num">{{ meal.totals.carbs | macro: 'carbs' }}</td>
-                        <td class="num">{{ meal.totals.fat | macro: 'fat' }}</td>
-                        <td class="num">{{ meal.totals.fiber | macro: 'fiber' }}</td>
-                        <td class="num">{{ meal.totals.salt | macro: 'salt' }}</td><td></td>
+                        <td class="num v-hide-m">{{ meal.totals.carbs | macro: 'carbs' }}</td>
+                        <td class="num v-hide-m">{{ meal.totals.fat | macro: 'fat' }}</td>
+                        <td class="num v-hide-m">{{ meal.totals.fiber | macro: 'fiber' }}</td>
+                        <td class="num v-hide-m">{{ meal.totals.salt | macro: 'salt' }}</td><td></td>
                       </tr>
                     </tbody>
                   </table>
@@ -187,6 +203,9 @@ import { DayThread } from './day-thread';
     .ledger { display: grid; gap: 1.25rem; }
     .meal header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.25rem; }
     .meal h3 { font-size: var(--v-fs-m); }
+    .meal-name { all: unset; cursor: text; border-bottom: 1px dashed transparent; } .meal-name:hover { border-bottom-color: var(--v-line-strong); }
+    .meal-edit { display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; }
+    .meal-edit input { padding: 0.3rem 0.5rem; border: 1px solid var(--v-line-strong); border-radius: var(--v-radius); background: var(--v-surface); }
     .add { padding: 0.75rem; margin-bottom: 0.5rem; border: 1px solid var(--v-line); border-radius: var(--v-radius-l); background: var(--v-surface); }
     .picked { align-self: end; font-weight: 500; }
     .check { align-items: center; grid-template-columns: auto auto; }
@@ -217,6 +236,9 @@ export class DayView {
   unitCode = 'g';
   estimated = false;
   newMeal = '';
+  readonly editingMeal = signal<number | null>(null);
+  mealName = '';
+  mealTime = '';
   newReliable = 'true';
   newTraining = '';
 
@@ -276,6 +298,32 @@ export class DayView {
   }
   reopen(): void {
     this.apply(this.api.reopenDay(this.date()));
+  }
+
+  editMeal(meal: Meal): void {
+    this.editingMeal.set(meal.id);
+    this.mealName = meal.name;
+    this.mealTime = meal.time ? meal.time.slice(0, 5) : '';
+  }
+
+  saveMeal(meal: Meal): void {
+    const name = this.mealName.trim();
+    if (!name) return;
+    this.api.updateMeal(meal.id, { name, time: this.mealTime || null }).subscribe({
+      next: () => {
+        this.editingMeal.set(null);
+        this.reload();
+      },
+      error: (e: unknown) => this.error.set(describeError(e)),
+    });
+  }
+
+  deleteMeal(meal: Meal): void {
+    if (meal.line_items.length) return;
+    this.api.deleteMeal(meal.id).subscribe({
+      next: () => this.reload(),
+      error: (e: unknown) => this.error.set(describeError(e)),
+    });
   }
 
   addMeal(): void {

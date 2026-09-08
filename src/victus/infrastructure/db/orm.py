@@ -651,6 +651,7 @@ class Capture(Base):
         ),
         Index("ix_capture_tenant_status", "tenant_id", "status"),
         Index("ix_capture_tenant_date", "tenant_id", "target_date"),
+        Index("ix_capture_product", "product_id"),
     )
 
     id: Mapped[str] = mapped_column(ID, primary_key=True, default=new_id)
@@ -667,6 +668,10 @@ class Capture(Base):
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     processed_at: Mapped[datetime | None] = mapped_column(TS)
     agent_run_id: Mapped[str | None] = mapped_column(ID)
+    # A capture about one product (label photo, correction) instead of a day.
+    product_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("product.id", ondelete="SET NULL")
+    )
 
     attachment: Mapped[Attachment | None] = relationship()
 
