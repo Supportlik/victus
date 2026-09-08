@@ -33,6 +33,7 @@ from victus.application.tenant_context import (
 from victus.application.use_cases import agent as agent_uc
 from victus.application.use_cases import captures as capture_uc
 from victus.application.use_cases import products as product_uc
+from victus.application.use_cases import rules as rules_uc
 from victus.config.server import ServerConfig
 from victus.domain.values import CaptureKind, CaptureStatus, MessageKind, Period, RunStatus
 from victus.infrastructure.db.uow import SqlAlchemyUnitOfWork
@@ -149,6 +150,15 @@ def context_json(view: dto.DayContextView) -> str:
     return json.dumps(data, ensure_ascii=False, indent=1, default=str)
 
 
+def tenant_rules(tc: ToolContext, scope: str) -> str:
+    """The user's own instructions, as Markdown for the session prompt (R61)."""
+    try:
+        rows = rules_uc.ListRules(tc.uow_factory, tc.ctx).execute(scope=scope, enabled_only=True)
+    except ApplicationError:
+        return ""
+    return rules_uc.rules_markdown(rows)
+
+
 def tenant_language(tc: ToolContext) -> str:
     with tc.uow_factory(tc.ctx) as uow:
         language, _ = capture_uc.transcription_settings(uow)
@@ -238,6 +248,9 @@ class DayDrafter:
             {"type": "text", "text": task},
             {"type": "text", "text": "## Day context (JSON)\n" + context_json(view)},
         ]
+        rules = tenant_rules(self.tc, "days")
+        if rules:
+            content.append({"type": "text", "text": rules})
         if notes:
             content.append({"type": "text", "text": "Notes: " + "; ".join(notes)})
         content.extend(self._image_blocks(view))
@@ -396,6 +409,9 @@ class DayDrafter:
                 {"type": "text", "text": "## Product (JSON)\n" + json.dumps(jsonable(product))},
                 {"type": "text", "text": "## Capture (JSON)\n" + json.dumps(jsonable(fresh))},
             ]
+            product_rules = tenant_rules(self.tc, "products")
+            if product_rules:
+                content.append({"type": "text", "text": product_rules})
             if fresh.kind == CaptureKind.IMAGE.value and fresh.attachment_id and self.tc.blobs:
                 if self.budget.take_images(1):
                     att = capture_uc.GetAttachment(

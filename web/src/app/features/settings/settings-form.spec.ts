@@ -10,7 +10,19 @@ const DOC = {
   tdee_reference_window: 14,
   calorie_corridor: { min: 1800, max: 2400, asymmetric: true },
   transcription: { language: 'en', vocabulary_prompt: 'skyr, quark' },
-  target_bands: [{ name: 'rest', training_type: 'rest' }],
+  target_bands: [
+    {
+      name: 'rest',
+      training_type: 'rest',
+      valid_from: '2026-08-18',
+      kcal: { min: 1400, opt_min: 1400, opt_max: 2000, target: 1900, max: 2000 },
+      protein: { min: 105, opt_min: 150, opt_max: 185, target: 165, max: 200, stretch: 185 },
+      carbs: { min: 120, opt_min: 155, opt_max: 200, target: 180, max: 230 },
+      fat: { min: 45, opt_min: 55, opt_max: 70, target: 58, max: 75 },
+      fiber: { min: 25, opt_min: 32, opt_max: 38, target: 35, max: 50, stretch: 38 },
+      salt: { min: 4, opt_min: 6, opt_max: 8, target: 8, max: 15 },
+    },
+  ],
   report_defaults: { period: '14d', palette: { ok: '#00ff00' } },
 };
 
@@ -48,6 +60,7 @@ describe('TenantSettingsForm', () => {
     expect((out['goals'] as { name: string }[]).map((g) => g.name)).toEqual(['plan', 'stretch']);
     expect(out['goal']).toMatchObject({ weight_kg: 76, date: '2027-06-30' });
     expect(out['trend_windows']).toEqual([7, 14, 21]);
+    // the form owns the bands now: they round-trip through the editor unchanged
     expect(out['target_bands']).toEqual(DOC.target_bands);
     expect((out['report_defaults'] as { palette: unknown }).palette).toEqual({ ok: '#00ff00' });
     expect((out['transcription'] as { vocabulary_prompt: string }).vocabulary_prompt).toBe('skyr, quark, rye bread');

@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, effect, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { BandEditor, BandModel, bandFromJson, bandToJson, emptyBand } from './band-editor';
 
 type Json = Record<string, unknown>;
 
@@ -21,6 +22,7 @@ interface Goal {
 /** Editable fields of the tenant settings document, flattened for the form. */
 export interface SettingsFormModel {
   goals: Goal[];
+  bands: BandModel[];
   kcalPerKg: string;
   movingAverageDays: string;
   trendWindows: string;
@@ -66,7 +68,7 @@ function obj(v: unknown): Json {
 @Component({
   selector: 'v-tenant-settings-form',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule],
+  imports: [FormsModule, BandEditor],
   template: `
     <form class="grid" (ngSubmit)="submit()">
       <fieldset>
@@ -97,6 +99,18 @@ function obj(v: unknown): Json {
           </div>
         }
         <button type="button" class="v-btn" (click)="addGoal()">Add goal</button>
+      </fieldset>
+
+      <fieldset>
+        <legend>Target bands</legend>
+        <p class="v-small v-muted">One profile per training type; a day picks the profile valid on its date. Salt has no other source than this table.</p>
+        @for (b of m.bands; track $index; let i = $index) {
+          <div class="band-wrap">
+            <v-band-editor [(band)]="m.bands[i]" [idx]="i" />
+            <button type="button" class="v-btn quiet small danger" (click)="m.bands.splice(i, 1)">remove profile</button>
+          </div>
+        }
+        <button type="button" class="v-btn" (click)="addBand()">Add profile</button>
       </fieldset>
 
       <fieldset>
@@ -144,7 +158,7 @@ function obj(v: unknown): Json {
 
       <div class="v-actions">
         <button type="submit" class="v-btn primary">Save as new version</button>
-        <span class="v-small v-muted">Target bands and other advanced keys are kept as they are.</span>
+        <span class="v-small v-muted">Keys not shown here are kept as they are.</span>
       </div>
     </form>
   `,
@@ -155,6 +169,7 @@ function obj(v: unknown): Json {
     .goal { display: grid; gap: 0.6rem; padding: 0.6rem; border: 1px solid var(--v-line); border-radius: var(--v-radius); }
     .goal.active { border-color: var(--v-primary); background: var(--v-primary-soft); }
     .goal .head { grid-template-columns: minmax(8rem, 1fr) minmax(7rem, 1fr) minmax(8rem, 1fr) auto auto; align-items: end; }
+    .band-wrap { display: grid; gap: 0.4rem; justify-items: start; }
     .stages { display: grid; gap: 0.5rem; }
     .stage { grid-template-columns: 2fr 1fr 2fr auto; align-items: center; }
     .stage input { padding: 0.35rem 0.5rem; border: 1px solid var(--v-line-strong); border-radius: var(--v-radius); background: var(--v-surface); }
@@ -175,6 +190,10 @@ export class TenantSettingsForm {
     });
   }
 
+  addBand(): void {
+    this.m.bands.push(emptyBand());
+  }
+
   addGoal(): void {
     this.m.goals.push({ name: '', weight: '', date: '', active: this.m.goals.length === 0, note: '', stages: [] });
   }
@@ -191,7 +210,7 @@ export class TenantSettingsForm {
 
   static empty(): SettingsFormModel {
     return {
-      goals: [], kcalPerKg: '', movingAverageDays: '',
+      goals: [], bands: [], kcalPerKg: '', movingAverageDays: '',
       trendWindows: '', tdeeWindows: '', tdeeReferenceWindow: '', corridorMin: '', corridorMax: '',
       corridorAsymmetric: true, birthDate: '', heightCm: '', sex: '', language: '', vocabulary: '', reportPeriod: '',
     };
@@ -222,8 +241,10 @@ export class TenantSettingsForm {
       })),
     }));
     if (goals.length && !goals.some((g) => g.active)) goals[0].active = true;
+    const bands = (Array.isArray(d['target_bands']) ? (d['target_bands'] as Json[]) : []).map(bandFromJson);
     return {
       goals,
+      bands,
       kcalPerKg: str(d['kcal_per_kg']),
       movingAverageDays: str(d['moving_average_days']),
       trendWindows: Array.isArray(d['trend_windows']) ? (d['trend_windows'] as number[]).join(', ') : '',
@@ -280,6 +301,8 @@ export class TenantSettingsForm {
       delete d['goals'];
       delete d['goal'];
     }
+    const bands = m.bands.filter((b) => b.name.trim() && b.valid_from).map(bandToJson);
+    setOrDelete(d, 'target_bands', bands.length ? bands : undefined);
     setOrDelete(d, 'kcal_per_kg', num(m.kcalPerKg));
     setOrDelete(d, 'moving_average_days', num(m.movingAverageDays));
     setOrDelete(d, 'trend_windows', intList(m.trendWindows).length ? intList(m.trendWindows) : undefined);

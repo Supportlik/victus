@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { LANDINGS, PrefsService } from '../../core/prefs.service';
 import { ThemeService } from '../../core/theme.service';
 import { TenantSettingsForm } from './settings-form';
-import { ApiClient, ApiToken, ApiTokenCreated, Health, Passkey, TargetBand, TenantSettingsVersion } from '../../api';
+import { ApiClient, ApiToken, ApiTokenCreated, Health, Passkey, Rule, TargetBand, TenantSettingsVersion } from '../../api';
 import { AuthService } from '../../core/auth/auth.service';
 import { describeError } from '../../core/problem';
 
@@ -65,9 +65,36 @@ interface SchemaLike {
         </form>
       </section>
 
+      <section class="v-panel" id="rules">
+        <h3>Your rules for the agent</h3>
+        <p class="v-small v-muted">In your words: when something applies, and what to do then. The agent gets these with every run, and you can add them in the chat too.</p>
+        <table class="v-table">
+          <thead><tr><th>When</th><th>Then</th><th>Scope</th><th></th></tr></thead>
+          <tbody>
+            @for (r of rules(); track r.name) {
+              <tr [class.off]="!r.enabled">
+                <td>{{ r.when }}</td><td>{{ r.then }}</td><td class="v-muted">{{ r.scope }}</td>
+                <td class="num">
+                  <button type="button" class="v-btn quiet small" (click)="toggleRule(r)">{{ r.enabled ? 'disable' : 'enable' }}</button>
+                  <button type="button" class="v-btn quiet small danger" (click)="removeRule(r)">remove</button>
+                </td>
+              </tr>
+            } @empty { <tr><td colspan="4" class="v-muted">No rules yet.</td></tr> }
+          </tbody>
+        </table>
+        <form class="v-form-row add" (ngSubmit)="addRule()">
+          <label class="v-field"><span>When</span><input name="rw" [(ngModel)]="ruleWhen" placeholder="bread rolls from the bakery" required /></label>
+          <label class="v-field"><span>Then</span><input name="rt" [(ngModel)]="ruleThen" placeholder="take the values from the bakery's own site, they beat any database" required /></label>
+          <label class="v-field"><span>Scope</span>
+            <select name="rs" [(ngModel)]="ruleScope"><option value="all">all</option><option value="products">products</option><option value="days">days</option><option value="reports">reports</option></select>
+          </label>
+          <button type="submit" class="v-btn primary" [disabled]="!ruleWhen.trim() || !ruleThen.trim()">Add rule</button>
+        </form>
+      </section>
+
       <section class="v-panel">
         <h3>Target bands</h3>
-        <p class="v-small v-muted">One profile per training type; salt has no other source than this table.</p>
+        <p class="v-small v-muted">One profile per training type; salt has no other source than this table. Edit them under “Tenant settings” below.</p>
         <div class="v-scroll-x"><table class="v-table">
           <thead><tr><th>Profile</th><th>Training</th><th>Valid</th><th>Protein</th><th>Carbs</th><th>Fat</th><th>Fiber</th><th>Salt</th></tr></thead>
           <tbody>
@@ -132,6 +159,7 @@ interface SchemaLike {
   styles: `
     .settings { display: grid; gap: 1.25rem; }
     .add { margin-top: 0.75rem; display: grid; gap: 0.75rem; align-items: end; }
+    tr.off td { opacity: 0.55; }
     .palettes { display: flex; gap: 0.4rem; flex-wrap: wrap; }
     .swatch { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.35rem 0.7rem; border: 1px solid var(--v-line-strong); border-radius: 999px; background: var(--v-surface); cursor: pointer; font-size: var(--v-fs-s); }
     .swatch.active { border-color: var(--v-primary); box-shadow: 0 0 0 1px var(--v-primary) inset; }
@@ -153,6 +181,7 @@ export class SettingsPage {
   readonly landings = LANDINGS;
   readonly passkeys = signal<Passkey[]>([]);
   readonly bands = signal<TargetBand[]>([]);
+  readonly rules = signal<Rule[]>([]);
   readonly settings = signal<TenantSettingsVersion | null>(null);
   readonly tokens = signal<ApiToken[]>([]);
   readonly created = signal<ApiTokenCreated | null>(null);
@@ -163,6 +192,9 @@ export class SettingsPage {
   private schema: SchemaLike | null = null;
   settingsJson = '';
   passkeyName = '';
+  ruleWhen = '';
+  ruleThen = '';
+  ruleScope: Rule['scope'] = 'all';
   tokenName = '';
   tokenExpires = '';
   tokenScopes = new Set<string>(['read']);
@@ -171,10 +203,53 @@ export class SettingsPage {
     const fail = (e: unknown) => this.error.set(describeError(e));
     this.api.passkeys().subscribe({ next: (p) => this.passkeys.set(p), error: fail });
     this.api.targetBands().subscribe({ next: (b) => this.bands.set(b), error: fail });
+    this.loadRules();
     this.api.settings().subscribe({ next: (s) => { this.settings.set(s); this.settingsJson = JSON.stringify(s.data, null, 2); }, error: fail });
     this.api.tokens().subscribe({ next: (t) => this.tokens.set(t), error: fail });
     this.api.health().subscribe({ next: (h) => this.health.set(h), error: () => this.health.set(null) });
     this.http.get<SchemaLike>('/schemas/tenant-settings.schema.json').subscribe({ next: (s) => (this.schema = s), error: () => (this.schema = null) });
+  }
+
+  loadRules(): void {
+    this.api.rules().subscribe({ next: (r) => this.rules.set(r), error: () => undefined });
+  }
+
+  /** A rule change writes a new settings version, so the document is reloaded with it. */
+  private afterRuleChange(): void {
+    this.loadRules();
+    this.api.settings().subscribe({
+      next: (s) => {
+        this.settings.set(s);
+        this.settingsJson = JSON.stringify(s.data, null, 2);
+      },
+      error: () => undefined,
+    });
+  }
+
+  addRule(): void {
+    if (!this.ruleWhen.trim() || !this.ruleThen.trim()) return;
+    this.api.putRule({ when: this.ruleWhen.trim(), then: this.ruleThen.trim(), scope: this.ruleScope }).subscribe({
+      next: () => {
+        this.ruleWhen = '';
+        this.ruleThen = '';
+        this.afterRuleChange();
+      },
+      error: (e: unknown) => this.error.set(describeError(e)),
+    });
+  }
+
+  toggleRule(r: Rule): void {
+    this.api.putRule({ ...r, enabled: !r.enabled }).subscribe({
+      next: () => this.afterRuleChange(),
+      error: (e: unknown) => this.error.set(describeError(e)),
+    });
+  }
+
+  removeRule(r: Rule): void {
+    this.api.deleteRule(r.name).subscribe({
+      next: () => this.afterRuleChange(),
+      error: (e: unknown) => this.error.set(describeError(e)),
+    });
   }
 
   band(b: { min: number; opt_min: number; opt_max: number; max: number }): string {

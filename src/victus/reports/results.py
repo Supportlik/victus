@@ -107,6 +107,31 @@ class DayListRow:
 
 
 @dataclass(frozen=True, slots=True)
+class TimelineRow:
+    date: date
+    weight: float | None = None
+    weight_ma: float | None = None
+    countable: bool = False
+    tdee: int | None = None
+    kcal: float | None = None
+    protein: float | None = None
+    carbs: float | None = None
+    fat: float | None = None
+    fiber: float | None = None
+    salt: float | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class TimelineResult:
+    meta: BlockMeta
+    rows: list[TimelineRow]
+    tdee_window: int
+    goal_kg: float | None = None
+    kcal_min: float | None = None
+    kcal_max: float | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class DayListResult:
     meta: BlockMeta
     columns: list[str]
@@ -136,6 +161,7 @@ BlockResult = (
     | ForecastResult
     | BurndownBlockResult
     | WeeklyChartResult
+    | TimelineResult
     | DayListResult
     | TextFindingResult
     | BlockError

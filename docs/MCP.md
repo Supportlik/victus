@@ -29,6 +29,9 @@ HTTP responses: missing or invalid token → `401`; token lacks the tool's scope
 |---|---|---|---|
 | `product_search(q, limit=10)` | `read` | `SearchProducts` | candidates `{id, name, kind, tier, score, kcal_per_100}` |
 | `product_get(id)` | `read` | `GetProduct` | product with portions and nutrients |
+| `rules_list(scope?)` | `read` | `ListRules` | the user's own instructions (when → then) |
+| `rule_upsert(when, then, name?, scope?, enabled?, priority?)` | `write` | `UpsertRule` | a rule the user just gave you, written down |
+| `rule_delete(name)` | `write` | `DeleteRule` | removed |
 | `product_usage(product_id, limit?)` | `read` | `GetProductUsage` | the days a product was logged on |
 | `recipe_get(id)` | `read` | `GetRecipe` | recipe, ingredients, batches |
 | `day_get(date)` | `read` | `GetDay` | day with meals, line items, computed macros, target band, findings |

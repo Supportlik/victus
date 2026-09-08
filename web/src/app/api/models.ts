@@ -263,6 +263,16 @@ export interface DayMessage {
   transcript?: string | null;
 }
 
+/** One of your own instructions for the agent. */
+export interface Rule {
+  name: string;
+  when: string;
+  then: string;
+  scope: 'products' | 'days' | 'reports' | 'all';
+  enabled: boolean;
+  priority: number;
+}
+
 /** One logged occurrence of a product. */
 export interface ProductUsageEntry {
   date: string;
@@ -601,6 +611,50 @@ export interface DayListRow {
   reliable: boolean | null;
   countable: boolean;
 }
+export interface TimelineRow {
+  date: string;
+  weight?: number | null;
+  weight_ma?: number | null;
+  countable: boolean;
+  tdee?: number | null;
+  kcal?: number | null;
+  protein?: number | null;
+  carbs?: number | null;
+  fat?: number | null;
+  fiber?: number | null;
+  salt?: number | null;
+}
+
+export interface TimelineBlock extends BlockBase {
+  rows: TimelineRow[];
+  tdee_window: number;
+  goal_kg?: number | null;
+  kcal_min?: number | null;
+  kcal_max?: number | null;
+}
+
+export interface TimelineRow {
+  date: string;
+  weight?: number | null;
+  weight_ma?: number | null;
+  countable: boolean;
+  tdee?: number | null;
+  kcal?: number | null;
+  protein?: number | null;
+  carbs?: number | null;
+  fat?: number | null;
+  fiber?: number | null;
+  salt?: number | null;
+}
+
+export interface TimelineBlock extends BlockBase {
+  rows: TimelineRow[];
+  tdee_window: number;
+  goal_kg?: number | null;
+  kcal_min?: number | null;
+  kcal_max?: number | null;
+}
+
 export interface DayListBlock extends BlockBase {
   columns: string[];
   rows: DayListRow[];
@@ -624,6 +678,7 @@ export type ReportBlock =
   | ForecastBlock
   | BurndownBlock
   | WeeklyChartBlock
+  | TimelineBlock
   | DayListBlock
   | TextFindingBlock
   | ErrorBlock;

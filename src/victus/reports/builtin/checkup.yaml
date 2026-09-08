@@ -26,13 +26,17 @@ blocks:
     id: eat_target
     title: Eat to hit the goal
     source: goal.eat_kcal
+  - type: timeline
+    id: timeline
+    title: Weight, intake and TDEE side by side
+    tdee_window: 14
   - type: tdee_windows
-    windows: [7, 14, 30]
+    windows: [7, 14, 30, 60, 90]
     show_quality: true
   - type: band_distribution
     macros: [kcal, protein, fiber, salt]
   - type: trend
-    windows: [7, 14, 21, 30]
+    windows: [7, 14, 21, 30, 60, 90]
   - type: forecast
     horizons: [1m, 3m, 6m]
     with_eta: true

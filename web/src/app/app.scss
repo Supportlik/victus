@@ -4,7 +4,7 @@
   display: grid;
   grid-template-columns: var(--v-rail) 1fr;
   min-height: 100vh;
-  &.collapsed { grid-template-columns: 4.25rem 1fr; }
+  &.collapsed { grid-template-columns: 5rem 1fr; }
 }
 
 .rail {
@@ -99,13 +99,29 @@
   .dot.bad { background: var(--v-bad); }
 }
 
-// Collapsed rail: icons only, badges as dots, everything else hidden.
+// Collapsed rail: icon with a small label underneath, so entries stay readable.
 .shell.collapsed .rail {
-  padding-inline: 0.5rem;
+  padding-inline: 0.35rem;
   .brand-row { flex-direction: column; gap: 0.5rem; padding-bottom: 0.75rem; }
-  .brand-text, .label, .foot .user, .foot .health, .foot-actions .v-btn:not(:first-child) { display: none; }
-  .today, li a { justify-content: center; padding-inline: 0; }
-  .badge { position: absolute; top: 0.15rem; right: 0.15rem; margin: 0; min-width: 0.6rem; height: 0.6rem; padding: 0; line-height: 0; font-size: 0; }
+  .brand-text, .foot .user, .foot .health, .foot-actions .v-btn:not(:first-child) { display: none; }
+  .today, li a {
+    flex-direction: column;
+    gap: 0.1rem;
+    padding: 0.4rem 0.15rem;
+    text-align: center;
+  }
+  .glyph { width: auto; font-size: var(--v-fs-m); }
+  .label { font-size: 0.62rem; line-height: 1.1; letter-spacing: 0.01em; }
+  .badge {
+    position: absolute;
+    top: 0.1rem;
+    right: 0.25rem;
+    margin: 0;
+    min-width: 1rem;
+    line-height: 1rem;
+    font-size: 0.6rem;
+    padding: 0 0.2rem;
+  }
 }
 
 .content { min-width: 0; }

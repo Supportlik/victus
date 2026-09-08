@@ -122,6 +122,13 @@ class WeeklyChartDef(_BlockBase):
     series: list[WeeklySeries] = Field(default_factory=_default_series)
 
 
+class TimelineDef(_BlockBase):
+    """Weight, intake, rolling TDEE and macros per day, for stacked panels."""
+
+    type: Literal["timeline"]
+    tdee_window: int = Field(default=14, ge=2, le=180)
+
+
 class DayListDef(_BlockBase):
     type: Literal["day_list"]
     columns: list[DayListColumn] = Field(default_factory=_default_columns)
@@ -142,6 +149,7 @@ BlockDef = Annotated[
     | TrendDef
     | ForecastDef
     | BurndownDef
+    | TimelineDef
     | WeeklyChartDef
     | DayListDef
     | TextFindingDef,

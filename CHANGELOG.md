@@ -72,6 +72,22 @@ All notable changes to Victus are documented here. The format follows
 - A product page shows where it was eaten (R60): the days it was logged on with amounts, kcal and
   draft state; items in the day view link back to their product. MCP `product_usage`.
 
+- Your own rules for the agent (R61): "when … then …" in your words, managed under Settings or in a
+  chat (`/settings/rules`, MCP `rules_list`, `rule_upsert`, `rule_delete`); every drafting and product
+  session gets them and follows them before its own judgement.
+- Target bands are editable in the settings form instead of only as JSON.
+- The check-up shows the TDEE windows 7, 14, 30, 60 and 90 days and the trend up to 90 days.
+- Burndown tooltips answer the actual question: weight behind the remaining kilograms, distance to the
+  goal, change since the day before, and how far ahead or behind each planned line you are.
+- Readable wording for the TDEE reference basis, equal-height KPI tiles, and the custom date range no
+  longer reflows the report controls.
+
+- Reports are computed as of a chosen day (R62): the anchor drives every rolling window, so tables and
+  charts agree; picking an earlier day shows the picture as it was then.
+- New `timeline` block (R63): weight against the goal, intake against the corridor with the rolling TDEE,
+  and the macro split, stacked on one time axis with a linked crosshair.
+- The check-up covers the TDEE windows 7, 14, 30, 60 and 90 days.
+
 ### Changed
 - No importer in the product (ADR 0011): existing data enters through the backup archive format, REST or MCP.
 - One model session per day (ADR 0009) and a resumable per-day thread (ADR 0010); lock TTL 5 minutes;

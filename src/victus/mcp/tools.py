@@ -44,6 +44,7 @@ from victus.application.use_cases import drafts as draft_uc
 from victus.application.use_cases import products as product_uc
 from victus.application.use_cases import proposals as proposal_uc
 from victus.application.use_cases import recipes as recipe_uc
+from victus.application.use_cases import rules as rules_uc
 from victus.application.use_cases import snapshots as snapshot_uc
 from victus.application.use_cases import weights as weight_uc
 from victus.application.use_cases._base import UowFactory
@@ -196,6 +197,9 @@ class ReportRenderIn(_In):
     )
     from_: dt.date | None = Field(default=None, alias="from")
     to: dt.date | None = None
+    as_of: dt.date | None = Field(
+        default=None, description="Compute it as of this day instead of today."
+    )
     format: Literal["markdown", "json"] = "markdown"
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
@@ -240,6 +244,9 @@ class LineItemApproveIn(_In):
 
 class ReportSnapshotCreateIn(_In):
     name: str = Field(default="checkup", description="Report definition to freeze.")
+    as_of: dt.date | None = Field(
+        default=None, description="Compute it as of this day instead of today."
+    )
     period: str | None = Field(default=None, description="e.g. '14d'; omit for the report default.")
     start: dt.date | None = Field(default=None, description="Explicit period start.")
     end: dt.date | None = Field(default=None, description="Explicit period end.")
@@ -387,6 +394,25 @@ class LineItemDeleteIn(_In):
     line_item_id: int
 
 
+class RulesListIn(_In):
+    scope: Literal["products", "days", "reports", "all"] | None = None
+
+
+class RuleUpsertIn(_In):
+    when: str = Field(description="What the rule applies to, e.g. 'bread rolls from the bakery'.")
+    then: str = Field(description="What to do then, e.g. 'take the values from their own site'.")
+    name: str | None = Field(
+        default=None, description="Short name; derived from `when` if omitted."
+    )
+    scope: Literal["products", "days", "reports", "all"] = "all"
+    enabled: bool = True
+    priority: int = Field(default=100, description="Lower comes first.")
+
+
+class RuleDeleteIn(_In):
+    name: str
+
+
 class ProductUsageIn(_In):
     product_id: int
     limit: int = Field(default=50, ge=1, le=500)
@@ -461,7 +487,7 @@ def _render_report(tc: ToolContext, inp: ReportRenderIn) -> ToolResult:
         definition = registry.get(inp.name)
     except KeyError as exc:
         raise ToolError("not_found", f"unknown report '{inp.name}'") from exc
-    today = datetime.now(UTC).date()
+    today = inp.as_of or datetime.now(UTC).date()
     if inp.from_ and inp.to:
         if inp.to < inp.from_:
             raise ToolError("validation", "'to' lies before 'from'")
@@ -697,7 +723,7 @@ def _line_item_approve(tc: ToolContext, inp: LineItemApproveIn) -> ToolResult:
 
 def _report_snapshot_create(tc: ToolContext, inp: ReportSnapshotCreateIn) -> ToolResult:
     definition = ReportRegistry().get(inp.name)
-    today = datetime.now(UTC).date()
+    today = inp.as_of or datetime.now(UTC).date()
     if inp.start and inp.end:
         period = Period(inp.start, inp.end)
     elif inp.period:
@@ -764,6 +790,23 @@ def _product_update(tc: ToolContext, inp: ProductUpdateIn) -> ToolResult:
     changes["verified"] = False  # a person confirms label readings in the review list
     view = product_uc.UpdateProduct(tc.uow_factory, tc.ctx).execute(inp.product_id, changes)
     return cast(dict[str, Any], jsonable(view))
+
+
+def _rules_list(tc: ToolContext, inp: RulesListIn) -> ToolResult:
+    rows = rules_uc.ListRules(tc.uow_factory, tc.ctx).execute(scope=inp.scope)
+    return cast(list[Any], jsonable(rows))
+
+
+def _rule_upsert(tc: ToolContext, inp: RuleUpsertIn) -> ToolResult:
+    view = rules_uc.UpsertRule(tc.uow_factory, tc.ctx).execute(
+        rules_uc.RuleInput(**inp.model_dump())
+    )
+    return cast(dict[str, Any], jsonable(view))
+
+
+def _rule_delete(tc: ToolContext, inp: RuleDeleteIn) -> ToolResult:
+    rules_uc.DeleteRule(tc.uow_factory, tc.ctx).execute(inp.name)
+    return {"deleted": inp.name}
 
 
 def _product_usage(tc: ToolContext, inp: ProductUsageIn) -> ToolResult:
@@ -1060,6 +1103,31 @@ TOOLS: tuple[ToolSpec, ...] = (
         read_only=False,
     ),
     _spec(
+        "rules_list",
+        "The user's own instructions for you (when → then). Read them before deciding where a "
+        "value comes from.",
+        SCOPE_READ,
+        RulesListIn,
+        _rules_list,
+    ),
+    _spec(
+        "rule_upsert",
+        "Write down a rule the user just gave you, e.g. \"for bread rolls check the bakery's own "
+        'site". Replaces the rule with the same name; creates a settings version.',
+        SCOPE_WRITE,
+        RuleUpsertIn,
+        _rule_upsert,
+        read_only=False,
+    ),
+    _spec(
+        "rule_delete",
+        "Remove one of the user's rules by name.",
+        SCOPE_WRITE,
+        RuleDeleteIn,
+        _rule_delete,
+        read_only=False,
+    ),
+    _spec(
         "product_usage",
         "The days a product was logged on, newest first, with amounts and kcal.",
         SCOPE_READ,
@@ -1122,6 +1190,7 @@ WORKER_TOOLS: frozenset[str] = frozenset(
         "days_list",
         "day_thread_get",
         "report_render",
+        "rules_list",
         "report_snapshot_create",
         "report_assess",
         "captures_open",

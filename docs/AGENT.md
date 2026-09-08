@@ -92,6 +92,14 @@ Surfaces: `GET/POST /days/{date}/messages`, MCP `day_thread_get(date)` / `day_me
 the chat panel on the day view (agent messages are tagged `summary`, `question`, `note`; your captures show
 "waiting for the agent" or "in draft").
 
+## The user's rules
+
+Whatever the user wrote down as a rule (R61) is handed to the session as a "The user's own rules"
+section: `when` → `then`, most important first, filtered to the session's scope (`days` or
+`products`). Rules win over the agent's own judgement, which is the point: "for bread rolls take the
+bakery's own site" is knowledge the model cannot derive. Rules are managed in the app under Settings
+or in a chat with `rule_upsert` / `rule_delete`.
+
 ## Product captures
 
 A capture uploaded with `product_id` (the product page's "Label photos & notes", or `POST /captures` with

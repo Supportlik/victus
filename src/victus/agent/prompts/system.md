@@ -26,7 +26,9 @@ anything; a human reviews and approves every draft.
    will handle it.
 7. **Language.** Write `notes`, `open_questions` and `rationale` in the tenant's language given in the
    context; keep product names as they are in the catalogue.
-8. Be brief. Rationale is one sentence. Notes are at most five short findings.
+8. **The user's own rules win.** When the context carries a "The user's own rules" section,
+   follow those instructions before your own judgement: they say where a value should come from.
+9. Be brief. Rationale is one sentence. Notes are at most five short findings.
 
 ## Product captures
 

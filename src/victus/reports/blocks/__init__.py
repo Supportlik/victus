@@ -12,6 +12,7 @@ from victus.reports.blocks.forecast import compute_forecast
 from victus.reports.blocks.kpi_tile import compute_kpi_tile
 from victus.reports.blocks.tdee_windows import compute_tdee_windows
 from victus.reports.blocks.text_finding import compute_text_finding
+from victus.reports.blocks.timeline import compute_timeline
 from victus.reports.blocks.trend import compute_trend
 from victus.reports.blocks.weekly_chart import compute_weekly_chart
 from victus.reports.context import ReportContext
@@ -27,6 +28,7 @@ COMPUTERS: dict[str, Compute] = {
     "forecast": lambda b, c: compute_forecast(_as(b, d.ForecastDef), c),
     "burndown": lambda b, c: compute_burndown(_as(b, d.BurndownDef), c),
     "weekly_chart": lambda b, c: compute_weekly_chart(_as(b, d.WeeklyChartDef), c),
+    "timeline": lambda b, c: compute_timeline(_as(b, d.TimelineDef), c),
     "day_list": lambda b, c: compute_day_list(_as(b, d.DayListDef), c),
     "text_finding": lambda b, c: compute_text_finding(_as(b, d.TextFindingDef), c),
 }

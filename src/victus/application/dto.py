@@ -398,6 +398,18 @@ class ProductUsage:
 
 
 @dataclass(frozen=True, slots=True)
+class RuleView:
+    """One of the user's own instructions for the agent."""
+
+    name: str
+    when: str
+    then: str
+    scope: str
+    enabled: bool
+    priority: int
+
+
+@dataclass(frozen=True, slots=True)
 class ReportSnapshotView:
     id: str
     report_name: str

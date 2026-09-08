@@ -13,6 +13,7 @@ import {
   ReportBlock,
   TdeeWindowsBlock,
   TextFindingBlock,
+  TimelineBlock,
   TrendBlock,
   WeeklyChartBlock,
 } from '../../../api';
@@ -66,7 +67,7 @@ import { CHART_PALETTE } from './palette';
         }
         @case ('tdee_windows') {
           <div class="v-panel">
-            <h3>{{ block().meta.title }} @if (tdee().reference_tdee != null) { <span class="v-small v-muted">reference {{ formatMacro(tdee().reference_tdee, 'kcal') }} kcal ({{ tdee().reference_basis }})</span> }</h3>
+            <h3>{{ block().meta.title }} @if (tdee().reference_tdee != null) { <span class="v-small v-muted">reference {{ formatMacro(tdee().reference_tdee, 'kcal') }} kcal, {{ basisLabel(tdee().reference_basis) }}</span> }</h3>
             <table class="v-table">
               <thead><tr><th>Window</th><th class="num">Ø kcal</th><th class="num">Δ weight</th><th class="num">TDEE</th><th class="num">Coverage</th><th class="num">in / above corridor</th>@if (tdee().show_quality) { <th>Grade</th> }</tr></thead>
               <tbody>
@@ -126,6 +127,12 @@ import { CHART_PALETTE } from './palette';
             <div echarts [options]="weeklyChart()" class="echart" aria-label="Weekly intake and expenditure"></div>
           </div>
         }
+        @case ('timeline') {
+          <div class="v-panel">
+            <h3>{{ block().meta.title }} <span class="v-small v-muted">weight, intake, rolling {{ timeline().tdee_window }}-day TDEE and macros on one axis</span></h3>
+            <div echarts [options]="timelineChart()" class="echart tall" aria-label="Weight, intake, TDEE and macros over time"></div>
+          </div>
+        }
         @case ('day_list') {
           <div class="v-panel">
             <h3>{{ block().meta.title }}</h3>
@@ -159,11 +166,15 @@ import { CHART_PALETTE } from './palette';
   `,
   styles: `
     :host { display: block; min-width: 0; }
-    .tile { display: grid; gap: 0.15rem; padding: 0.9rem 1.1rem; border: 1px solid var(--v-line); border-left-width: 4px; border-radius: var(--v-radius-l); background: var(--v-surface); }
+    /* One row each for title, value and note, so tiles line up whether or not a note is present. */
+    .tile { display: grid; grid-template-rows: auto 1fr auto; gap: 0.15rem; padding: 0.9rem 1.1rem; border: 1px solid var(--v-line); border-left-width: 4px; border-radius: var(--v-radius-l); background: var(--v-surface); height: 100%; min-height: 6.5rem; align-content: start; }
+    .tile .v { align-self: center; }
+    .tile .d { min-height: 1.1rem; }
     .tile.ok { border-left-color: var(--v-ok); } .tile.warn { border-left-color: var(--v-warn); } .tile.bad { border-left-color: var(--v-bad); } .tile.muted { border-left-color: var(--v-line-strong); }
     .t { font-size: var(--v-fs-s); color: var(--v-ink-2); } .v { font-size: var(--v-fs-xl); font-weight: 560; } .u { font-size: var(--v-fs-s); font-weight: 400; color: var(--v-ink-3); } .d { font-size: var(--v-fs-xs); color: var(--v-ink-3); }
     .bar { min-width: 10rem; } .stack { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--v-surface-2); } .stack span { display: block; }
     .echart { height: 18rem; width: 100%; }
+    .echart.tall { height: 30rem; }
     .stages { margin-top: 0.75rem; }
     .failed { border-left: 3px solid var(--v-bad); }
     .not-countable td { color: var(--v-ink-3); }
@@ -202,6 +213,151 @@ export class ReportBlockView {
   }
 
   /** Remaining kilograms over time: the goal line, one line per stage, and the actual curve. */
+  /**
+   * What the reader actually wants on a burndown: the weight behind the remaining
+   * kilograms, how far it still is to the goal, the day-on-day change, and how the
+   * actual line stands against each planned line.
+   */
+  burndownTooltip(params: unknown, bd: BurndownBlock): string {
+    const rows = (Array.isArray(params) ? params : [params]) as {
+      seriesName?: string;
+      value?: [string | number, number];
+      color?: string;
+      dataIndex?: number;
+    }[];
+    if (!rows.length) return '';
+    const goal = bd.goal_kg;
+    const actual = bd.result.actual as [string, number][];
+    const kg = (v: number) => `${v.toFixed(1)} kg`;
+    const day = (v: string | number) => new Date(v).toLocaleDateString();
+    const dot = (c?: string) => `<span style="display:inline-block;width:.55em;height:.55em;border-radius:50%;background:${c ?? 'currentColor'};margin-right:.4em"></span>`;
+
+    const head = rows[0]?.value ? day(rows[0].value[0]) : '';
+    const actualRow = rows.find((r) => r.seriesName?.startsWith('Actual'));
+    const remainingNow = actualRow?.value?.[1];
+    const lines: string[] = [];
+
+    if (actualRow && remainingNow != null) {
+      const i = actualRow.dataIndex ?? -1;
+      const prev = i > 0 ? actual[i - 1]?.[1] : undefined;
+      const delta = prev != null ? remainingNow - prev : undefined;
+      const change = delta == null ? '' : ` · ${delta <= 0 ? '−' : '+'}${Math.abs(delta).toFixed(2)} kg vs. the day before`;
+      lines.push(`${dot(actualRow.color)}<b>${kg(goal + remainingNow)}</b> · ${kg(remainingNow)} to go${change}`);
+    }
+
+    for (const r of rows) {
+      if (r === actualRow || r.value == null) continue;
+      const planned = r.value[1];
+      const gap = remainingNow == null ? null : planned - remainingNow;
+      const stand =
+        gap == null ? '' : gap >= 0 ? ` · ${kg(Math.abs(gap))} ahead` : ` · ${kg(Math.abs(gap))} behind`;
+      lines.push(`${dot(r.color)}${r.seriesName}: plan ${kg(goal + planned)}${stand}`);
+    }
+
+    const last = actual.length ? actual[actual.length - 1][1] : null;
+    if (last != null && rows.some((r) => r.seriesName?.startsWith('Actual'))) {
+      lines.push(`<span class="v-small">goal ${kg(goal)} by ${bd.goal_date}</span>`);
+    }
+    return `${head}<br>${lines.join('<br>')}`;
+  }
+
+  /** "rolling_14d" reads like a database column; say it in words. */
+  basisLabel(basis: string): string {
+    const rolling = /^rolling_(\d+)d$/.exec(basis);
+    if (rolling) return `from the rolling ${rolling[1]}-day window`;
+    const weekly = /^weekly_mean_(\d+)w$/.exec(basis);
+    if (weekly) return `mean of the last ${weekly[1]} weekly values`;
+    return basis === 'none' ? 'no basis yet' : basis;
+  }
+
+  timeline(): TimelineBlock {
+    return this.block() as TimelineBlock;
+  }
+
+  /**
+   * Four panels, one time axis: weight against the goal, intake against the corridor and
+   * the rolling TDEE, and the macro split. Hovering shows the same day in every panel.
+   */
+  timelineChart(): EChartsOption {
+    const t = this.timeline();
+    const days = t.rows.map((r) => r.date);
+    const pick = (f: (r: (typeof t.rows)[number]) => number | null | undefined) =>
+      t.rows.map((r) => {
+        const v = f(r);
+        return v === null || v === undefined ? null : v;
+      });
+    const line = (name: string, data: (number | null)[], color: string, extra: Record<string, unknown> = {}) => ({
+      name,
+      type: 'line' as const,
+      showSymbol: false,
+      connectNulls: true,
+      data,
+      xAxisIndex: extra['xAxisIndex'] ?? 0,
+      yAxisIndex: extra['yAxisIndex'] ?? 0,
+      lineStyle: { color, width: 2 },
+      itemStyle: { color },
+      ...extra,
+    });
+    const grids = [
+      { left: 56, right: 24, top: 28, height: 110 },
+      { left: 56, right: 24, top: 176, height: 110 },
+      { left: 56, right: 24, top: 324, height: 110 },
+    ];
+    const axisCommon = {
+      type: 'category' as const,
+      data: days,
+      boundaryGap: false,
+      axisLabel: { hideOverlap: true, formatter: (v: string) => v.slice(8) + '.' + v.slice(5, 7) + '.' },
+    };
+    const kcalMarks = [];
+    if (t.kcal_min != null) kcalMarks.push({ yAxis: t.kcal_min, name: 'corridor min' });
+    if (t.kcal_max != null) kcalMarks.push({ yAxis: t.kcal_max, name: 'corridor max' });
+
+    return {
+      animation: false,
+      axisPointer: { link: [{ xAxisIndex: 'all' }], label: { backgroundColor: '#555' } },
+      tooltip: { trigger: 'axis' },
+      legend: { top: 0, type: 'scroll', icon: 'roundRect' },
+      grid: grids,
+      xAxis: [
+        { ...axisCommon, gridIndex: 0, axisLabel: { show: false } },
+        { ...axisCommon, gridIndex: 1, axisLabel: { show: false } },
+        { ...axisCommon, gridIndex: 2 },
+      ],
+      yAxis: [
+        { type: 'value', gridIndex: 0, scale: true, name: 'kg', nameGap: 12, splitLine: { lineStyle: { opacity: 0.3 } } },
+        { type: 'value', gridIndex: 1, name: 'kcal', nameGap: 12, splitLine: { lineStyle: { opacity: 0.3 } } },
+        { type: 'value', gridIndex: 2, name: 'g', nameGap: 12, splitLine: { lineStyle: { opacity: 0.3 } } },
+      ],
+      series: [
+        {
+          ...line('Weight (7-day avg.)', pick((r) => r.weight_ma), CHART_PALETTE[0]),
+          areaStyle: { opacity: 0.1, color: CHART_PALETTE[0] },
+          markLine: t.goal_kg
+            ? { symbol: 'none', silent: true, lineStyle: { type: 'dashed', color: CHART_PALETTE[3] }, label: { formatter: 'goal', fontSize: 10 }, data: [{ yAxis: t.goal_kg }] }
+            : undefined,
+        },
+        { ...line('Weigh-ins', pick((r) => r.weight), CHART_PALETTE[4]), showSymbol: true, symbolSize: 4, lineStyle: { opacity: 0 }, connectNulls: false },
+        {
+          name: 'Intake',
+          type: 'bar',
+          xAxisIndex: 1,
+          yAxisIndex: 1,
+          data: pick((r) => r.kcal),
+          itemStyle: { color: CHART_PALETTE[1], opacity: 0.75 },
+          markLine: kcalMarks.length
+            ? { symbol: 'none', silent: true, lineStyle: { type: 'dotted', color: CHART_PALETTE[2] }, label: { formatter: '{b}', fontSize: 10 }, data: kcalMarks }
+            : undefined,
+        },
+        line(`TDEE (${t.tdee_window} d)`, pick((r) => r.tdee), CHART_PALETTE[2], { xAxisIndex: 1, yAxisIndex: 1 }),
+        line('Protein', pick((r) => r.protein), CHART_PALETTE[0], { xAxisIndex: 2, yAxisIndex: 2 }),
+        line('Carbs', pick((r) => r.carbs), CHART_PALETTE[1], { xAxisIndex: 2, yAxisIndex: 2 }),
+        line('Fat', pick((r) => r.fat), CHART_PALETTE[3], { xAxisIndex: 2, yAxisIndex: 2 }),
+        line('Fiber', pick((r) => r.fiber), CHART_PALETTE[4], { xAxisIndex: 2, yAxisIndex: 2 }),
+      ] as EChartsOption['series'],
+    };
+  }
+
   burndownChart(): EChartsOption {
     const bd = this.burndown();
     const b = bd.result;
@@ -219,10 +375,7 @@ export class ReportBlockView {
     return {
       animation: false,
       grid: { left: 56, right: 20, top: 8, bottom: 56 },
-      tooltip: {
-        trigger: 'axis',
-        valueFormatter: (v: unknown) => (typeof v === 'number' ? `${v.toFixed(1)} kg` : '–'),
-      },
+      tooltip: { trigger: 'axis', formatter: (p: unknown) => this.burndownTooltip(p, bd) },
       legend: { bottom: 0, type: 'scroll', icon: 'roundRect' },
       xAxis: {
         type: 'time',

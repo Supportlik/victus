@@ -189,6 +189,17 @@ class WeightIn(BaseModel):
     kg: float = Field(gt=0)
 
 
+class RuleIn(BaseModel):
+    """One of the user's own instructions for the agent."""
+
+    when: str = Field(min_length=1, max_length=300)
+    then: str = Field(min_length=1, max_length=1000)
+    name: str | None = Field(default=None, max_length=60)
+    scope: Literal["products", "days", "reports", "all"] = "all"
+    enabled: bool = True
+    priority: int = 100
+
+
 class SettingsIn(BaseModel):
     data: dict[str, Any]
     valid_from: date | None = None

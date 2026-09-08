@@ -6,6 +6,7 @@ formatting (``2,610 kcal``, ``86.4 kg``).
 
 from __future__ import annotations
 
+import re
 from datetime import date
 
 from victus.domain.values import BandZone, Quality
@@ -20,6 +21,7 @@ from victus.reports.results import (
     ReportResult,
     TdeeWindowsResult,
     TextFindingResult,
+    TimelineResult,
     TrendResult,
     WeeklyChartResult,
 )
@@ -118,6 +120,17 @@ def _band_distribution(b: BandDistributionResult) -> str:
     )
 
 
+def _basis(basis: str) -> str:
+    """``rolling_14d`` reads like a column name; say it in words."""
+    rolling = re.fullmatch(r"rolling_(\d+)d", basis)
+    if rolling:
+        return f"from the rolling {rolling.group(1)}-day window"
+    weekly = re.fullmatch(r"weekly_mean_(\d+)w", basis)
+    if weekly:
+        return f"mean of the last {weekly.group(1)} weekly values"
+    return "no basis yet" if basis == "none" else basis
+
+
 def _tdee(b: TdeeWindowsResult) -> str:
     headers = ["Window", "Ø kcal", "Δ kg (MA)", "TDEE", "Coverage"]
     if b.show_quality:
@@ -138,7 +151,7 @@ def _tdee(b: TdeeWindowsResult) -> str:
         if b.show_quality:
             row.append(f"{QUALITY_EMOJI[r.quality]} {r.quality.value}" if r.quality else "–")
         rows.append(row)
-    ref = f"\n\nReference TDEE: **{num(b.reference_tdee, 0, 'kcal')}** ({b.reference_basis})"
+    ref = f"\n\nReference TDEE: **{num(b.reference_tdee, 0, 'kcal')}**, {_basis(b.reference_basis)}"
     return _table(headers, rows) + ref
 
 
@@ -220,6 +233,35 @@ def _weekly(b: WeeklyChartResult) -> str:
     return _table(headers, rows)
 
 
+def _timeline(b: TimelineResult) -> str:
+    """A chart in the app; here the ends of each series, which is what is readable."""
+    rows = [r for r in b.rows if r.weight_ma is not None]
+    first, last = (rows[0], rows[-1]) if rows else (None, None)
+    kcal = [r.kcal for r in b.rows if r.kcal is not None]
+    tdees = [r.tdee for r in b.rows if r.tdee is not None]
+    lines = [
+        f"{len(b.rows)} days, {_d(b.rows[0].date)} to {_d(b.rows[-1].date)}"
+        if b.rows
+        else "no days in this period",
+    ]
+    if first and last and first.weight_ma is not None and last.weight_ma is not None:
+        lines.append(
+            f"Weight (moving average): {num(first.weight_ma, 1, 'kg')} → "
+            f"{num(last.weight_ma, 1, 'kg')} ({signed(last.weight_ma - first.weight_ma, 2, 'kg')})"
+        )
+    if kcal:
+        lines.append(
+            f"Intake: Ø {num(sum(kcal) / len(kcal), 0, 'kcal')} "
+            f"(min {num(min(kcal), 0)}, max {num(max(kcal), 0)}) on {len(kcal)} countable days"
+        )
+    if tdees:
+        lines.append(
+            f"Rolling TDEE ({b.tdee_window} d): {num(tdees[0], 0, 'kcal')} → "
+            f"{num(tdees[-1], 0, 'kcal')}"
+        )
+    return "\n".join(f"- {line}" for line in lines)
+
+
 def _day_list(b: DayListResult) -> str:
     headers = ["Date", *b.columns]
     rows: list[list[str]] = []
@@ -260,6 +302,8 @@ def _block(b: BlockResult) -> str:
         return title + _burndown(b)
     if isinstance(b, WeeklyChartResult):
         return title + _weekly(b)
+    if isinstance(b, TimelineResult):
+        return title + _timeline(b)
     if isinstance(b, DayListResult):
         return title + _day_list(b)
     if isinstance(b, TextFindingResult):

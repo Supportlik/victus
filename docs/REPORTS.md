@@ -32,6 +32,7 @@ Every render call takes `from`/`to` (or the default period) and the tenant setti
 | `forecast` | `horizons: [1m,3m,6m]`, `with_eta: true` | `forecast.forecast` | projected weight per horizon, weight at goal date, ETA to goal |
 | `burndown` | `start: <date>`, `stages: from_settings` | `burndown.burndown` | planned vs. actual series, gap, required rate |
 | `weekly_chart` | `weeks: 12` | `tdee.weekly_tdee` | ISO week × (Ø kg, Ø kcal, weekly TDEE) |
+| `timeline` | `tdee_window: 14` | `day_macros` + `tdee.rolling_window` | one row per day: weight, moving average, intake, rolling TDEE, macros (R63) |
 | `day_list` | `columns: [kcal, protein, fiber, weight, status]` | repository + `day_macros` | one row per day with flags |
 | `text_finding` | `source: agent | manual`, `id` | – | Markdown slot filled by the agent summary or by hand |
 
@@ -122,6 +123,12 @@ they were written for.
 
 Day-level consistency checks (`source_balance_drift` and friends) are a different thing: they are
 findings *about one day's data*, shown on the day view. An assessment is about the trajectory.
+
+## As of one day
+
+Every render carries an anchor day (`as_of`, default today). Rolling TDEE windows, trend, forecast
+and the burndown end on it, and the period ends there as well, so a report is one consistent moment;
+picking an earlier day shows the picture as it was then (R62).
 
 ## Renderers
 

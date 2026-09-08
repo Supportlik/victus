@@ -86,6 +86,15 @@ class PortionOut(Out):
     weight_source: str | None = None
 
 
+class RuleOut(Out):
+    name: str
+    when: str
+    then: str
+    scope: str
+    enabled: bool
+    priority: int
+
+
 class ProductUsageEntryOut(Out):
     date: date
     day_status: str

@@ -139,3 +139,27 @@ def test_band_and_settings_conversion_edge_cases() -> None:
     assert band.kcal is None and band.protein.stretch == 185
     s = settings_from_data({})
     assert s.kcal_per_kg == 7716.17 and s.corridor.min == 1400
+
+
+def test_timeline_block_lines_up_weight_intake_and_tdee(uow: SqlAlchemyUnitOfWork) -> None:
+    """T-RPT-010: one row per day of the period, with the rolling TDEE ending on it."""
+    from victus.reports.definition import ReportDefinition
+    from victus.reports.results import TimelineResult
+
+    definition = ReportDefinition.model_validate(
+        {
+            "name": "timeline-only",
+            "title": "Timeline",
+            "period": {"default": "7d", "options": ["7d"]},
+            "blocks": [{"type": "timeline", "tdee_window": 7}],
+        }
+    )
+    end = date(2026, 3, 10)
+    period = Period(end - timedelta(days=6), end)
+    with uow:
+        result = ReportEngine(SqlAlchemyReportDataSource(uow)).render(definition, period, today=end)
+    block = result.blocks[0]
+    assert isinstance(block, TimelineResult)
+    assert [r.date for r in block.rows] == [period.start + timedelta(days=i) for i in range(7)]
+    assert block.tdee_window == 7
+    assert block.kcal_min is not None and block.kcal_max is not None

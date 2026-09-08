@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, effect, inject, input, output, signal } from '@angular/core';
 import { ApiClient, ReportBlock, ReportSnapshot } from '../../api';
 import { describeError } from '../../core/problem';
 import { MarkdownPipe } from '../../shared/markdown.pipe';
@@ -105,6 +105,7 @@ export class SnapshotList {
   readonly report = input.required<string>();
   readonly from = input<string | null>(null);
   readonly to = input<string | null>(null);
+  readonly asOf = input<string | null>(null);
   readonly created = output<ReportSnapshot>();
 
   readonly snapshots = signal<ReportSnapshot[]>([]);
@@ -115,12 +116,18 @@ export class SnapshotList {
   readonly notice = signal<string | null>(null);
   readonly confirmDelete = signal<string | null>(null);
   ownText = '';
+  private loadedFor = '';
 
   constructor() {
-    this.load();
+    // `report` is a required input: reading it in the constructor would throw.
+    effect(() => {
+      const report = this.report();
+      if (report !== this.loadedFor) this.load();
+    });
   }
 
   load(): void {
+    this.loadedFor = this.report();
     this.api.snapshots(this.report()).subscribe({
       next: (s) => this.snapshots.set(s),
       error: (e: unknown) => this.error.set(describeError(e)),
@@ -150,7 +157,7 @@ export class SnapshotList {
     this.busy.set(true);
     this.error.set(null);
     this.notice.set(null);
-    this.api.createSnapshot(this.report(), { from: this.from(), to: this.to() }).subscribe({
+    this.api.createSnapshot(this.report(), { from: this.from(), to: this.to(), asOf: this.asOf() }).subscribe({
       next: (s) => {
         this.snapshots.update((list) => [s, ...list]);
         this.busy.set(false);

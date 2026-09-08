@@ -15,23 +15,25 @@ import { SnapshotList } from './snapshot-list';
     <div class="v-page">
       <header class="v-page-head">
         <div><h2>{{ current()?.title ?? 'Reports' }}</h2>@if (current()?.description) { <p class="sub">{{ current()!.description }}</p> }</div>
-        <div class="v-actions">
+        <div class="v-actions controls">
           <label class="v-field"><span>Report</span>
             <select [ngModel]="name()" (ngModelChange)="name.set($event); render()">
               @for (r of definitions(); track r.name) { <option [value]="r.name">{{ r.title }}@if (!r.builtin) { (custom) }</option> }
             </select>
           </label>
+          <label class="v-field"><span>As of</span><input type="date" [ngModel]="asOf()" (ngModelChange)="setAsOf($event)" name="asof" /></label>
           <label class="v-field"><span>Period</span>
             <select [ngModel]="period()" (ngModelChange)="setPeriod($event)">
               @for (p of current()?.period?.options ?? ['7d', '14d', '30d', '90d', 'custom']; track p) { <option [value]="p">{{ p === 'custom' ? 'custom range' : 'last ' + p.replace('d', ' days') }}</option> }
             </select>
           </label>
-          @if (period() === 'custom') {
-            <label class="v-field"><span>From</span><input type="date" [ngModel]="from()" (ngModelChange)="from.set($event); render()" /></label>
-            <label class="v-field"><span>To</span><input type="date" [ngModel]="to()" (ngModelChange)="to.set($event); render()" /></label>
-          }
         </div>
       </header>
+      <!-- Own row, so choosing "custom range" never reflows the controls above. -->
+      <div class="range" [class.shown]="period() === 'custom'">
+        <label class="v-field"><span>From</span><input type="date" [ngModel]="from()" (ngModelChange)="from.set($event); render()" /></label>
+        <label class="v-field"><span>To</span><input type="date" [ngModel]="to()" (ngModelChange)="to.set($event); render()" /></label>
+      </div>
       @if (error(); as e) { <div class="v-error">{{ e }}</div> }
       @if (result(); as r) {
         <p class="v-small v-muted">{{ r.period.start }} to {{ r.period.end }} ({{ r.period.days }} days) · generated {{ r.generated_at.replace('T', ' ').slice(0, 16) }}@if (errorCount(); as n) { · <span class="v-tag bad">{{ n }} block(s) failed</span> }</p>
@@ -39,14 +41,19 @@ import { SnapshotList } from './snapshot-list';
           <section class="tiles">@for (b of tiles(); track $index) { <v-report-block [block]="b" /> }</section>
         }
         <section class="blocks">@for (b of others(); track $index) { <v-report-block [block]="b" /> }</section>
-        <v-snapshot-list [report]="name()" [from]="from()" [to]="to()" />
+        <v-snapshot-list [report]="name()" [from]="from()" [to]="to()" [asOf]="asOf()" />
       } @else if (!error()) {
         <p class="v-muted">Rendering…</p>
       }
     </div>
   `,
   styles: `
-    .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
+    .controls { align-items: end; }
+    .controls .v-field select { min-width: 11rem; }
+    .range { display: none; gap: 0.75rem; margin-bottom: 0.75rem; }
+    .range.shown { display: flex; flex-wrap: wrap; }
+    .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 0.75rem; margin-bottom: 1rem; align-items: stretch; }
+    .tiles v-report-block { display: block; height: 100%; }
     .blocks { display: grid; gap: 1rem; }
   `,
 })
@@ -55,6 +62,7 @@ export class ReportsPage {
   readonly definitions = signal<ReportDefinition[]>([]);
   readonly name = signal('checkup');
   readonly period = signal('14d');
+  readonly asOf = signal(isoDate(new Date()));
   readonly to = signal(isoDate(new Date()));
   readonly from = signal(shiftDate(isoDate(new Date()), -13));
   readonly result = signal<ReportResult | null>(null);
@@ -78,11 +86,17 @@ export class ReportsPage {
     });
   }
 
+  /** Every window ends on the chosen day, so the panels and the tables agree. */
+  setAsOf(day: string): void {
+    this.asOf.set(day || isoDate(new Date()));
+    this.setPeriod(this.period());
+  }
+
   setPeriod(p: string): void {
     this.period.set(p);
     const m = /^(\d+)d$/.exec(p);
     if (m) {
-      this.to.set(isoDate(new Date()));
+      this.to.set(this.asOf());
       this.from.set(shiftDate(this.to(), -(Number(m[1]) - 1)));
     }
     this.render();
@@ -91,7 +105,7 @@ export class ReportsPage {
   render(): void {
     this.error.set(null);
     this.result.set(null);
-    this.api.renderReport(this.name(), this.from(), this.to()).subscribe({
+    this.api.renderReport(this.name(), this.from(), this.to(), this.asOf()).subscribe({
       next: (r) => this.result.set(r),
       error: (e: unknown) => this.error.set(describeError(e)),
     });

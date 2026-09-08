@@ -35,6 +35,7 @@ import {
   ReportDefinition,
   ReportResult,
   ReportSnapshot,
+  Rule,
   TargetBand,
   TenantSettingsVersion,
   Unit,
@@ -241,6 +242,15 @@ export class ApiClient {
   upsertTargetBand(body: Omit<TargetBand, 'id'>): Observable<TargetBand> {
     return this.http.post<TargetBand>(`${API_BASE}/target-bands`, body);
   }
+  rules(): Observable<Rule[]> {
+    return this.http.get<Rule[]>(`${API_BASE}/settings/rules`);
+  }
+  putRule(body: Partial<Rule> & { when: string; then: string }): Observable<Rule> {
+    return this.http.put<Rule>(`${API_BASE}/settings/rules`, body);
+  }
+  deleteRule(name: string): Observable<void> {
+    return this.http.delete<void>(`${API_BASE}/settings/rules/${encodeURIComponent(name)}`);
+  }
   settings(): Observable<TenantSettingsVersion> {
     return this.http.get<TenantSettingsVersion>(`${API_BASE}/settings`);
   }
@@ -267,8 +277,8 @@ export class ApiClient {
   snapshot(id: string): Observable<ReportSnapshot> {
     return this.http.get<ReportSnapshot>(`${API_BASE}/reports/snapshots/${id}`);
   }
-  createSnapshot(report: string, range: { from?: string | null; to?: string | null; label?: string } = {}): Observable<ReportSnapshot> {
-    return this.http.post<ReportSnapshot>(`${API_BASE}/reports/${report}/snapshots`, {}, { params: params({ from: range.from, to: range.to, label: range.label }) });
+  createSnapshot(report: string, range: { from?: string | null; to?: string | null; label?: string; asOf?: string | null } = {}): Observable<ReportSnapshot> {
+    return this.http.post<ReportSnapshot>(`${API_BASE}/reports/${report}/snapshots`, {}, { params: params({ from: range.from, to: range.to, label: range.label, as_of: range.asOf }) });
   }
   assessSnapshot(id: string, markdown: string): Observable<ReportSnapshot> {
     return this.http.post<ReportSnapshot>(`${API_BASE}/reports/snapshots/${id}/assess`, { markdown });
@@ -325,9 +335,9 @@ export class ApiClient {
   reports(): Observable<ReportDefinition[]> {
     return this.http.get<ReportDefinition[]>(`${API_BASE}/reports`);
   }
-  renderReport(name: string, from: string, to: string): Observable<ReportResult> {
+  renderReport(name: string, from: string, to: string, asOf?: string): Observable<ReportResult> {
     return this.http.post<ReportResult>(`${API_BASE}/reports/${name}/render`, {}, {
-      params: params({ format: 'json', from, to }),
+      params: params({ format: 'json', from, to, as_of: asOf }),
     });
   }
 }

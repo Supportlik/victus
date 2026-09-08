@@ -112,6 +112,9 @@ The tenant is always derived from the principal (session or token); it never app
 |---|---|---|
 | GET / POST | `/target-bands` | Target-band profiles |
 | PATCH | `/target-bands/{id}` | Edit a profile (creates a new version if already used) |
+| GET | `/settings/rules` | Your own instructions for the agent (R61), most important first |
+| PUT | `/settings/rules` | Add a rule or replace the one with the same name; creates a settings version |
+| DELETE | `/settings/rules/{name}` | Remove a rule |
 | GET / PUT | `/settings` | Current tenant settings / new version |
 | GET | `/settings/versions` | History |
 
@@ -169,7 +172,7 @@ correction becomes a proposal a person approves (R54).
 |---|---|---|
 | GET | `/reports` | Built-in and tenant definitions |
 | POST / PUT / DELETE | `/reports/{name}` | Manage tenant definitions |
-| POST | `/reports/{name}/render?format=json|markdown|svg&from=&to=` | Render |
+| POST | `/reports/{name}/render?format=json|markdown&from=&to=&as_of=` | Render. `as_of` computes the whole report as of that day (R62); omitted means today |
 | GET | `/reports/checkup` | Shortcut: built-in check-up, default window |
 
 ### Backup

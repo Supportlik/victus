@@ -99,10 +99,16 @@ def _period(
 
 
 def _render(
-    ctx: Any, uow_factory: Any, name: str, fmt: str, from_: date | None, to: date | None
+    ctx: Any,
+    uow_factory: Any,
+    name: str,
+    fmt: str,
+    from_: date | None,
+    to: date | None,
+    as_of: date | None = None,
 ) -> Response | dict[str, Any]:
     definition = _definition(name)
-    today = datetime.now(UTC).date()
+    today = as_of or datetime.now(UTC).date()
     period = _period(definition, from_, to, today)
     with uow_factory(ctx) as uow:
         source = SqlAlchemyReportDataSource(cast(SqlAlchemyUnitOfWork, uow))
@@ -118,11 +124,17 @@ def _render(
 
 
 def _freeze(
-    ctx: Any, uow_factory: Any, name: str, from_: date | None, to: date | None, label: str | None
+    ctx: Any,
+    uow_factory: Any,
+    name: str,
+    from_: date | None,
+    to: date | None,
+    label: str | None,
+    as_of: date | None = None,
 ) -> Any:
     """Render the report and store it as a snapshot (the numbers never change again)."""
     definition = _definition(name)
-    today = datetime.now(UTC).date()
+    today = as_of or datetime.now(UTC).date()
     period = _period(definition, from_, to, today)
     with uow_factory(ctx) as uow:
         source = SqlAlchemyReportDataSource(cast(SqlAlchemyUnitOfWork, uow))
@@ -155,8 +167,9 @@ def create_snapshot(
     from_: Annotated[date | None, Query(alias="from")] = None,
     to: date | None = None,
     label: Annotated[str | None, Query(max_length=200)] = None,
+    as_of: Annotated[date | None, Query(description="Freeze the report as of this day.")] = None,
 ) -> SnapshotOut:
-    return SnapshotOut.model_validate(_freeze(ctx, uow, name, from_, to, label))
+    return SnapshotOut.model_validate(_freeze(ctx, uow, name, from_, to, label, as_of))
 
 
 @router.get("/reports/snapshots", response_model=list[SnapshotOut])
@@ -207,9 +220,10 @@ def render_report(
     format: Annotated[Literal["json", "markdown"], Query()] = "json",
     from_: Annotated[date | None, Query(alias="from")] = None,
     to: date | None = None,
+    as_of: Annotated[date | None, Query(description="Compute the report as of this day.")] = None,
 ) -> Response | dict[str, Any]:
     ctx.require("read")
-    return _render(ctx, uow, name, format, from_, to)
+    return _render(ctx, uow, name, format, from_, to, as_of)
 
 
 @router.get(
@@ -223,6 +237,7 @@ def checkup(
     format: Annotated[Literal["json", "markdown"], Query()] = "json",
     from_: Annotated[date | None, Query(alias="from")] = None,
     to: date | None = None,
+    as_of: Annotated[date | None, Query(description="Compute the report as of this day.")] = None,
 ) -> Response | dict[str, Any]:
     ctx.require("read")
-    return _render(ctx, uow, "checkup", format, from_, to)
+    return _render(ctx, uow, "checkup", format, from_, to, as_of)

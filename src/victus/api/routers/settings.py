@@ -6,11 +6,12 @@ from dataclasses import asdict
 from datetime import date
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Response, status
 
 from victus.api.deps import Ctx, Uow
-from victus.api.schemas.common import Out, TargetBandOut
-from victus.api.schemas.requests import SettingsIn, TargetBandIn
+from victus.api.schemas.common import Out, RuleOut, TargetBandOut
+from victus.api.schemas.requests import RuleIn, SettingsIn, TargetBandIn
+from victus.application.use_cases import rules as rules_uc
 from victus.application.use_cases import settings as uc
 
 router = APIRouter(tags=["settings"])
@@ -33,6 +34,25 @@ def put_settings(body: SettingsIn, ctx: Ctx, uow: Uow) -> SettingsVersionOut:
     return SettingsVersionOut.model_validate(
         uc.PutSettings(uow, ctx).execute(body.data, body.valid_from)
     )
+
+
+@router.get("/settings/rules", response_model=list[RuleOut])
+def list_rules(ctx: Ctx, uow: Uow) -> list[RuleOut]:
+    """Your own instructions for the agent, most important first."""
+    return [RuleOut.model_validate(r) for r in rules_uc.ListRules(uow, ctx).execute()]
+
+
+@router.put("/settings/rules", response_model=RuleOut)
+def upsert_rule(body: RuleIn, ctx: Ctx, uow: Uow) -> RuleOut:
+    """Add a rule, or replace the one with the same name. Creates a settings version."""
+    view = rules_uc.UpsertRule(uow, ctx).execute(rules_uc.RuleInput(**body.model_dump()))
+    return RuleOut.model_validate(view)
+
+
+@router.delete("/settings/rules/{name}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_rule(name: str, ctx: Ctx, uow: Uow) -> Response:
+    rules_uc.DeleteRule(uow, ctx).execute(name)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/settings/versions", response_model=list[SettingsVersionOut])
