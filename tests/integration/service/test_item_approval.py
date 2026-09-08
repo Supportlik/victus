@@ -80,3 +80,29 @@ def test_line_items_carry_their_source_and_category(
     assert item.source_capture_id == capture_id and item.source_kind == "text"
     # the fixture product has no category; the field exists so the UI can pick an icon
     assert item.category is None
+
+
+def test_reassigning_a_consumable_drops_the_old_products_portion(
+    factory: UowFactory, alice: TenantContext, skyr: int
+) -> None:
+    """A portion belongs to one product; a re-assignment must not keep the old one."""
+    from victus.application.use_cases import products as products_uc
+
+    other = products_uc.CreateProduct(factory, alice).execute(
+        products_uc.ProductInput(name="Skyr vanilla", kcal=70, protein=10)
+    )
+    products_uc.AddPortion(factory, alice).execute(
+        other.id,
+        products_uc.PortionInput(unit_code="tub", label="tub", amount=450, is_default=True),
+    )
+    days_uc.CreateDay(factory, alice).execute(DAY, reliable=True)
+    meal_id = days_uc.AddMeal(factory, alice).execute(DAY, "Breakfast").id
+    item = days_uc.AddLineItem(factory, alice).execute(
+        meal_id, days_uc.LineItemInput(consumable_id=skyr, amount=1, unit_code="tub")
+    )
+    assert item.base_amount == 400
+
+    moved = days_uc.UpdateLineItem(factory, alice).execute(
+        item.id, {"consumable_id": other.id, "amount": 1, "unit_code": "tub"}
+    )
+    assert moved.consumable_id == other.id and moved.base_amount == 450

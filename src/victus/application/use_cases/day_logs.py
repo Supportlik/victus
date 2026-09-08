@@ -385,6 +385,7 @@ class UpdateLineItem(UseCase):
                 raise NotFound(f"line item {item_id} not found")
             diff: dict[str, Any] = {}
             consumable = li.consumable
+            original_consumable_id = li.consumable_id
             if (
                 changes.get("consumable_id") is not None
                 and changes["consumable_id"] != li.consumable_id
@@ -397,13 +398,16 @@ class UpdateLineItem(UseCase):
                 li.consumable = new_c
                 consumable = new_c
             if changes.get("amount") is not None or changes.get("unit_code") is not None:
+                # A portion belongs to one product: re-assigning the consumable drops it
+                # unless the caller names a portion of the new product explicitly.
+                kept_portion = li.portion_id if consumable.id == original_consumable_id else None
                 inp = LineItemInput(
                     consumable_id=consumable.id,
                     amount=float(
                         changes.get("amount", li.amount if li.amount is not None else 0.0)
                     ),
                     unit_code=str(changes.get("unit_code") or li.unit_code or "g"),
-                    portion_id=changes.get("portion_id", li.portion_id),
+                    portion_id=changes.get("portion_id", kept_portion),
                 )
                 base, base_unit, portion_id = resolve_base(uow, consumable, inp)
                 diff["amount"] = [li.amount, inp.amount]
