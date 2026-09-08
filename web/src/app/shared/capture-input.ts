@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, inject, input, output, signal, viewChild } from '@angular/core';
 import { ApiClient, Capture } from '../api';
 import { describeError } from '../core/problem';
 
@@ -7,7 +7,8 @@ import { describeError } from '../core/problem';
  *
  * - "Record" uses MediaRecorder (webm/opus in Chrome and Firefox, mp4 in Safari); the
  *   server converts and transcribes.
- * - "Take photo" opens the camera on phones (`capture="environment"`), a file dialog elsewhere.
+ * - "Take photo" opens the camera app on phones and the webcam in place on a computer,
+ *   falling back to a file dialog when no camera is available.
  * - "Choose" accepts several images or audio files at once.
  * Each file is uploaded as its own capture with the given day or product.
  */
@@ -25,11 +26,19 @@ import { describeError } from '../core/problem';
           <span aria-hidden="true">🎙</span> Record
         </button>
       }
-      <button type="button" class="v-btn" (click)="camera.click()" [disabled]="busy()"><span aria-hidden="true">📷</span> Take photo</button>
+      <button type="button" class="v-btn" (click)="takePhoto()" [disabled]="busy() || cameraOpen()"><span aria-hidden="true">📷</span> Take photo</button>
       <button type="button" class="v-btn" (click)="picker.click()" [disabled]="busy()"><span aria-hidden="true">🖼</span> Choose</button>
-      <input #camera type="file" accept="image/*" capture="environment" hidden (change)="onFiles($event)" />
       <input #picker type="file" accept="image/*,audio/*" multiple hidden (change)="onFiles($event)" />
       @if (busy()) { <span class="v-small v-muted">Uploading…</span> }
+      @if (cameraOpen()) {
+        <div class="cam-live">
+          <video #preview autoplay playsinline muted></video>
+          <div class="v-actions">
+            <button type="button" class="v-btn primary" (click)="shoot()">Take the picture</button>
+            <button type="button" class="v-btn quiet" (click)="closeCamera()">Cancel</button>
+          </div>
+        </div>
+      }
       @if (notice(); as n) { <span class="v-small v-muted">{{ n }}</span> }
       @if (error(); as e) { <span class="v-small err">{{ e }}</span> }
     </div>
@@ -40,6 +49,8 @@ import { describeError } from '../core/problem';
     .rec { font-variant-numeric: tabular-nums; }
     .pulse { width: 0.6rem; height: 0.6rem; border-radius: 50%; background: var(--v-bad); display: inline-block; animation: pulse 1s infinite; }
     .err { color: var(--v-bad); }
+    .cam-live { flex-basis: 100%; display: grid; gap: 0.5rem; justify-items: start; }
+    .cam-live video { width: 100%; max-width: 26rem; border-radius: var(--v-radius-l); background: #000; }
     @keyframes pulse { 50% { opacity: 0.3; } }
   `,
 })
@@ -58,6 +69,9 @@ export class CaptureInput {
   readonly error = signal<string | null>(null);
   readonly notice = signal<string | null>(null);
   readonly canRecord = typeof MediaRecorder !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
+  readonly cameraOpen = signal(false);
+  private readonly preview = viewChild<ElementRef<HTMLVideoElement>>('preview');
+  private cameraStream: MediaStream | null = null;
 
   private recorder: MediaRecorder | null = null;
   private chunks: Blob[] = [];
@@ -104,6 +118,79 @@ export class CaptureInput {
     this.recording.set(false);
     this.recorder?.stop();
     this.recorder = null;
+  }
+
+  /**
+   * On a phone the file input with `capture` opens the camera app; on a computer it would
+   * only open a file dialog, so there we grab the webcam ourselves and shoot in place.
+   */
+  async takePhoto(): Promise<void> {
+    this.error.set(null);
+    if (!navigator.mediaDevices?.getUserMedia) {
+      this.cameraFallback();
+      return;
+    }
+    try {
+      this.cameraStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1600 } },
+        audio: false,
+      });
+      this.cameraOpen.set(true);
+      // the <video> only exists once the block above is rendered
+      setTimeout(() => {
+        const el = this.preview()?.nativeElement;
+        if (el && this.cameraStream) {
+          el.srcObject = this.cameraStream;
+          void el.play().catch(() => undefined);
+        }
+      });
+    } catch {
+      this.cameraFallback();
+    }
+  }
+
+  /** No camera, or permission denied: let the person pick a file instead. */
+  private cameraFallback(): void {
+    this.closeCamera();
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.setAttribute('capture', 'environment');
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (file) this.upload([file]);
+    };
+    input.click();
+  }
+
+  shoot(): void {
+    const el = this.preview()?.nativeElement;
+    if (!el || !el.videoWidth) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = el.videoWidth;
+    canvas.height = el.videoHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      this.error.set('This browser cannot take the picture; choose a file instead.');
+      this.closeCamera();
+      return;
+    }
+    ctx.drawImage(el, 0, 0, canvas.width, canvas.height);
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    canvas.toBlob(
+      (blob) => {
+        this.closeCamera();
+        if (blob) this.upload([new File([blob], `photo-${stamp}.jpg`, { type: 'image/jpeg' })]);
+      },
+      'image/jpeg',
+      0.92,
+    );
+  }
+
+  closeCamera(): void {
+    this.cameraStream?.getTracks().forEach((t) => t.stop());
+    this.cameraStream = null;
+    this.cameraOpen.set(false);
   }
 
   onFiles(ev: Event): void {
