@@ -156,7 +156,9 @@ import { CHART_PALETTE } from './palette';
         @case ('text_finding') {
           <div class="v-panel finding">
             <h3>{{ block().meta.title }}</h3>
-            @if (finding().markdown) { <div class="v-md" [innerHTML]="finding().markdown | markdown"></div> } @else { <p class="v-muted">Nothing written for this period.</p> }
+            @if (finding().markdown) { <div class="v-md" [innerHTML]="finding().markdown | markdown"></div> } @else {
+              <p class="v-muted">No assessment yet. Freeze this report below to keep its numbers, then let Claude judge that moment. The text and the figures then belong together.</p>
+            }
           </div>
         }
         @default {

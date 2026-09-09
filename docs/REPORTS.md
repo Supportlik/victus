@@ -34,7 +34,7 @@ Every render call takes `from`/`to` (or the default period) and the tenant setti
 | `weekly_chart` | `weeks: 12` | `tdee.weekly_tdee` | ISO week × (Ø kg, Ø kcal, weekly TDEE) |
 | `timeline` | `tdee_window: 14` | `day_macros` + `tdee.rolling_window` | one row per day: weight, moving average, intake, rolling TDEE, macros (R63) |
 | `day_list` | `columns: [kcal, protein, fiber, weight, status]` | repository + `day_macros` | one row per day with flags |
-| `text_finding` | `source: agent | manual`, `id` | – | Markdown slot filled by the agent summary or by hand |
+| `text_finding` | `source: agent | manual`, `id` | newest assessed snapshot | Titled **Assessment**: the judgement of the most recently assessed snapshot, or empty. It is not a log of what the agent did (R71) |
 
 ### Metric paths for `kpi_tile`
 

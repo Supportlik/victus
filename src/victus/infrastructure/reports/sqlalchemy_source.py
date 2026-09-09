@@ -175,11 +175,18 @@ class SqlAlchemyReportDataSource:
         return settings_from_data(current.data if current else {})
 
     def latest_finding(self, source: str) -> str | None:
+        """The newest assessment of a frozen report, or nothing (R58, R71).
+
+        This used to return the last agent run's summary, which is a processing log
+        ("read the ice cream, skipped the selfie") and not a judgement of where the
+        numbers stand. A finding is the latter: a person freezes a report and asks for
+        an assessment of that moment, so the text and the figures belong together.
+        """
         if source != "agent":
             return None
-        for run in self._uow.agent.list_runs(limit=20):
-            if run.summary_md:
-                return run.summary_md
+        for snap in self._uow.snapshots.list(status="assessed", limit=1):
+            if snap.assessment_md:
+                return snap.assessment_md
         return None
 
 

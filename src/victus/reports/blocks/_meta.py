@@ -12,7 +12,7 @@ DEFAULT_TITLES: dict[str, str] = {
     "burndown": "Burndown",
     "weekly_chart": "Weeks",
     "day_list": "Days",
-    "text_finding": "Finding",
+    "text_finding": "Assessment",
 }
 
 

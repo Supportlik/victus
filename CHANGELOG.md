@@ -126,6 +126,11 @@ All notable changes to Victus are documented here. The format follows
   start a new version; the day view offers the version that applied on the day being logged. Two MCP
   tools, `product_versions` and `product_version_create`, do the same from a chat.
 
+- The report's finding block is now titled **Assessment** and shows the judgement of the most recently
+  assessed snapshot (R71). It used to show the last agent run's summary, which describes what the agent
+  did with the captures rather than where the numbers stand. With no assessment yet, the block says how
+  to get one.
+
 ### Changed
 - No importer in the product (ADR 0011): existing data enters through the backup archive format, REST or MCP.
 - One model session per day (ADR 0009) and a resumable per-day thread (ADR 0010); lock TTL 5 minutes;
