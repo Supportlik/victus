@@ -130,3 +130,27 @@ def test_an_unknown_sex_stops_the_ratio_but_not_the_bmi(ref) -> None:  # type: i
     energy = _energy(_ctx(source, ref))
     assert energy.basal_kcal is None
     assert any("'x'" in m for m in energy.missing)
+
+def test_no_circumference_is_left_out_of_the_change(ref) -> None:  # type: ignore[no-untyped-def]
+    """A value that did not move must read as 0.0, not as unmeasured.
+
+    The two lists of circumferences used to be maintained separately, and the neck fell out
+    of the one used for changes: a value that had not moved looked like a missing one.
+    """
+    end = max(ref.daily)
+    everything = dict(
+        waist_cm=100.0, belly_cm=110.0, hip_cm=105.0, chest_cm=104.0,
+        neck_cm=45.0, thigh_cm=60.0, arm_cm=35.0,
+    )
+    source = _source(
+        ref,
+        body_profile=BodyProfile(height_cm=180.0, sex="m"),
+        body_sessions=[
+            BodySession(measured_at=end.replace(day=1), **everything),
+            BodySession(measured_at=end, **{**everything, "waist_cm": 98.0}),
+        ],
+    )
+    result = _body(_ctx(source, ref))
+    assert set(result.changes) == set(everything), "every measured circumference is compared"
+    assert result.changes["waist_cm"] == -2.0
+    assert result.changes["neck_cm"] == 0.0

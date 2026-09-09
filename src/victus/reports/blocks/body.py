@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from victus.application.use_cases.body import CIRCUMFERENCES
 from victus.domain.services import body as calc
 from victus.reports.blocks._meta import meta_for
 from victus.reports.context import ReportContext
@@ -83,7 +84,7 @@ def compute_body_composition(
 
     changes: dict[str, float] = {}
     if latest and previous:
-        for name in ("waist_cm", "belly_cm", "hip_cm", "chest_cm", "thigh_cm", "arm_cm"):
+        for name in CIRCUMFERENCES:
             now, before = getattr(latest, name), getattr(previous, name)
             if now is not None and before is not None:
                 changes[name] = round(now - before, 1)
@@ -98,19 +99,7 @@ def compute_body_composition(
         waist_to_hip=whr,
         measured_at=latest.measured_at if latest else None,
         circumferences=(
-            {
-                name: value
-                for name in (
-                    "waist_cm",
-                    "belly_cm",
-                    "hip_cm",
-                    "chest_cm",
-                    "neck_cm",
-                    "thigh_cm",
-                    "arm_cm",
-                )
-                if (value := getattr(latest, name)) is not None
-            }
+            {name: value for name in CIRCUMFERENCES if (value := getattr(latest, name)) is not None}
             if latest
             else {}
         ),
