@@ -34,6 +34,7 @@ import {
   RecipeIngredient,
   ReportDefinition,
   ReportResult,
+  AgentStatus,
   ReportSnapshot,
   Rule,
   TargetBand,
@@ -309,6 +310,10 @@ export class ApiClient {
   /** URL of an attachment (image, audio); served inline, session cookie authenticates. */
   attachmentUrl(id: string): string {
     return `${API_BASE}/attachments/${id}`;
+  }
+  /** Whether a queued run would be picked up: ready, no_key or disabled. */
+  agentStatus(): Observable<AgentStatus> {
+    return this.http.get<AgentStatus>(`${API_BASE}/agent/status`);
   }
   startAgentRun(body: { mode: AgentRun['mode']; captures?: string[]; from?: string; to?: string }): Observable<AgentRun> {
     return this.http.post<AgentRun>(`${API_BASE}/agent/runs`, body);

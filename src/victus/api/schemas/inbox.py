@@ -98,6 +98,15 @@ class UnlockOut(Out):
     released: bool
 
 
+class AgentStatusOut(Out):
+    """Whether a run queued now would be picked up."""
+
+    #: ``ready`` (a worker with a model key), ``no_key``, or ``disabled`` by configuration
+    runner: str
+    #: the model the worker would use, only when ready
+    model: str | None = None
+
+
 class ProposalOut(Out):
     id: str
     product_id: int

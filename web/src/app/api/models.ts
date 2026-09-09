@@ -302,6 +302,12 @@ export interface ProductUsage {
 }
 
 /** A report frozen at a point in time, with the assessment written for those numbers. */
+export interface AgentStatus {
+  /** ready: a worker with a model key. no_key / disabled: nothing would collect a run. */
+  runner: 'ready' | 'no_key' | 'disabled';
+  model?: string | null;
+}
+
 export interface ReportSnapshot {
   id: string;
   report_name: string;

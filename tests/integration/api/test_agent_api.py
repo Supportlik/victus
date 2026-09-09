@@ -6,6 +6,7 @@ from datetime import date
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 
 from tests.integration.api.conftest import Account, bearer
 from victus.application.use_cases import agent as agent_uc
@@ -94,3 +95,31 @@ def test_locks_are_listed_and_force_released(
     assert client.post("/api/v1/agent/runs", json={}, headers=read_only).status_code == 403
     assert client.get("/api/v1/agent/runs", headers=read_only).status_code == 200
     assert client.get("/api/v1/agent/runs", headers={}).status_code == 401
+
+
+def test_agent_status_reports_whether_a_runner_would_collect(
+    client: TestClient, alice_token: dict[str, str]
+) -> None:
+    """T-API-070: the web app must not queue runs nobody collects (R67)."""
+    cfg = client.app.state.config  # type: ignore[attr-defined]
+
+    r = client.get("/api/v1/agent/status", headers=alice_token)
+    assert r.status_code == 200, r.text
+    # the test server runs without a model key
+    assert r.json()["runner"] in {"no_key", "disabled"}
+    assert r.json()["model"] is None
+
+    enabled, key = cfg.agent.enabled, cfg.providers.anthropic_api_key
+    try:
+        cfg.agent.enabled = False
+        assert (
+            client.get("/api/v1/agent/status", headers=alice_token).json()["runner"] == "disabled"
+        )
+        cfg.agent.enabled = True
+        cfg.providers.anthropic_api_key = None
+        assert client.get("/api/v1/agent/status", headers=alice_token).json()["runner"] == "no_key"
+        cfg.providers.anthropic_api_key = SecretStr("sk-test")
+        body = client.get("/api/v1/agent/status", headers=alice_token).json()
+        assert body["runner"] == "ready" and body["model"] == cfg.agent.model
+    finally:
+        cfg.agent.enabled, cfg.providers.anthropic_api_key = enabled, key

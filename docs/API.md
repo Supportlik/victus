@@ -159,6 +159,7 @@ correction becomes a proposal a person approves (R54).
 
 | Method | Path | Purpose |
 |---|---|---|
+| GET | `/agent/status` | Whether a queued run would be collected: `runner` is `ready`, `no_key` or `disabled`, with the model name only when ready. No key material is returned; the web app uses it to choose between **Process now** and the Claude hand-off (R67) |
 | POST | `/agent/runs` | Queue a run on demand `{mode, captures[], from, to}` — the app's **Process now** button; `202 Accepted` with the run (`status: queued`); the worker picks it up within `agent.poll_seconds` (no cron needed) |
 | GET | `/agent/runs?limit=&status=` | Runs with tokens, cost, summary |
 | GET | `/agent/runs/{id}` | One run incl. `sessions[]` (one per drafted day) |

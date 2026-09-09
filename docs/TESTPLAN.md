@@ -193,6 +193,7 @@ The pyramid is deliberate: most cases are `T-DOM`/`T-SVC`; E2E covers the two fl
 | T-WEB-032 | Captures page | mocked captures (audio with transcript, image) | render; set day; discard; duplicate upload | transcript and audio element, image thumbnail via `/attachments/{id}`; `PATCH` bodies; `created: false` shows a notice, no new row | mock | yes | 3 |
 | T-WEB-033 | Web | Capture form on the inbox | Type a line and save without picking any file | One text box and one "Save capture" button exist; the button is disabled while empty, posts `text` plus `target_date` and no file, then clears the form | `capture-input.spec.ts` | automated |
 | T-WEB-035 | Web | Tenant settings form | Read and write `captures.processed_retention_days` | 30 round-trips; `0` is written as `0`; an empty field drops the whole `captures` object | `settings-form.spec.ts` | automated |
+| T-WEB-036 | Web | Inbox header | Load the page with runner `ready`, then with `no_key` | `ready` shows Process now; `no_key` shows Open Claude for Processing and lists only the unassessed frozen report | `inbox-page.spec.ts` | automated |
 | T-WEB-033 | Day thread states | mocked messages with `processing_state` and agent kinds | render `DayThread` | user captures show "waiting for the agent" / "in draft"; agent messages tagged summary/question/note; composer enabled while a run is active | mock | partly (manual) | 3 |
 
 ## Agent (`T-AGT`)
@@ -235,6 +236,7 @@ The pyramid is deliberate: most cases are `T-DOM`/`T-SVC`; E2E covers the two fl
 | T-SVC-054 | Prompt echo | transcript empty or all vocabulary words | `TranscribeCapture` | transcript stored empty, capture `failed`, audit entry | service | yes | 3 |
 | T-API-026 | Proposal endpoints | product + product capture | list, approve with correction | 200 with diff, product verified, capture processed, re-decide 409 | api | yes | 3 |
 | T-API-027 | Proposal isolation | Alice's proposal | Bob lists / unknown id | empty list / 404 | api | yes | 3 |
+| T-API-070 | API | `GET /agent/status` | Toggle `agent.enabled` and the model key | Reports `disabled`, `no_key` and `ready`; the model name appears only when ready, never a key | `test_agent_api.py` | automated |
 | T-SVC-055 | Accept one item | day with two drafted items | `ApproveLineItem` with a correction | item accepted, day stays draft, capture still assigned; second call 409 | service | yes | 3 |
 | T-SVC-056 | Last item accepted | one drafted item left | `ApproveLineItem` | day leaves draft, becomes reliable, capture processed | service | yes | 3 |
 | T-RPT-010 | Timeline block | seeded days and weights | render a definition with `timeline` | one row per period day, the rolling window as configured, corridor bounds present | reports | yes | 2 |

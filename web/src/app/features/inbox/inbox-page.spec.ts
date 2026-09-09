@@ -53,11 +53,29 @@ const SUMMARY = {
   },
 };
 
-/** The page and the badge service both load captures and drafts; answer all of them. */
-function flush(http: HttpTestingController): void {
+const FROZEN = [
+  { id: 's1', report_name: 'checkup', title: 'Check-up', label: 'before the trip', period_start: '2026-01-01',
+    period_end: '2026-01-14', today: '2026-01-14', status: 'frozen', created_at: '2026-01-14T18:00:00Z',
+    created_by: 'michael', assessment_md: null, assessed_at: null, model: null, prompt_version: null },
+  { id: 's2', report_name: 'checkup', title: 'Check-up', label: 'december', period_start: '2025-12-01',
+    period_end: '2025-12-31', today: '2025-12-31', status: 'assessed', created_at: '2025-12-31T18:00:00Z',
+    created_by: 'michael', assessment_md: 'on track', assessed_at: '2025-12-31T19:00:00Z', model: 'x', prompt_version: 'y' },
+];
+
+/**
+ * The page and the badge service load captures, drafts, the runner state and the snapshots;
+ * answer all of them. `runner` decides which processing button the header shows.
+ */
+function flush(http: HttpTestingController, runner: 'ready' | 'no_key' = 'no_key'): void {
   http.match((r) => r.url === '/api/v1/captures').forEach((r) => r.flush(CAPTURES));
   http.match((r) => r.url === '/api/v1/drafts').forEach((r) => r.flush(DRAFTS));
+  http.match((r) => r.url === '/api/v1/agent/status').forEach((r) => r.flush({ runner }));
+  http.match((r) => r.url === '/api/v1/reports/snapshots').forEach((r) => r.flush(FROZEN));
   http.match(() => true).forEach((r) => r.flush([]));
+}
+
+function buttonLabels(el: HTMLElement): string[] {
+  return Array.from(el.querySelectorAll('.v-page-head button')).map((b) => b.textContent?.trim() ?? '');
 }
 
 describe('InboxPage', () => {
@@ -85,6 +103,35 @@ describe('InboxPage', () => {
     expect(row.querySelector('[data-capture="c_audio"] .actions')).toBeNull();
     // the still unassigned capture appears in the capture list with its actions
     expect(el.querySelector('.cards [data-capture="c_open"] .actions')).not.toBeNull();
+  });
+
+  // T-WEB-036: queueing a run only makes sense when a worker would collect it; otherwise the
+  // header hands the job to the user's own Claude (R67).
+  async function header(runner: 'ready' | 'no_key'): Promise<HTMLElement> {
+    const f = TestBed.createComponent(InboxPage);
+    f.detectChanges();
+    flush(http, runner);
+    f.detectChanges();
+    await f.whenStable();
+    // the draft card asks for its summary; an empty array would break its rendering
+    http.match((r) => r.url === '/api/v1/drafts/2026-01-05/summary').forEach((r) => r.flush(SUMMARY));
+    http.match(() => true).forEach((r) => r.flush([]));
+    f.detectChanges();
+    return f.nativeElement as HTMLElement;
+  }
+
+  it('offers Process now while a runner is available', async () => {
+    expect(buttonLabels(await header('ready'))).toContain('Process now');
+  });
+
+  it('hands processing to Claude when no runner would collect a run', async () => {
+    const el = await header('no_key');
+    expect(buttonLabels(el)).toContain('Open Claude for Processing');
+    expect(buttonLabels(el)).not.toContain('Process now');
+    // only the unassessed snapshot is waiting for a judgement
+    const frozen = el.querySelectorAll('.frozen .snap');
+    expect(frozen).toHaveLength(1);
+    expect(frozen[0].textContent).toContain('before the trip');
   });
 
   it('accepts a single drafted item', async () => {

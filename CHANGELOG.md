@@ -105,6 +105,11 @@ All notable changes to Victus are documented here. The format follows
   for ever), together with the photos and recordings only they referenced (R66). The worker does it each
   tick, and listing captures does it too.
 
+- The inbox stops queueing runs nobody would collect (R67): with a worker and a model key it keeps
+  "Process now", otherwise the button reads "Open Claude for Processing" and hands the job to the user's
+  own Claude over MCP, with a copy button beside it. Frozen report moments still waiting for a judgement
+  are listed on the same screen with the same hand-off.
+
 ### Changed
 - No importer in the product (ADR 0011): existing data enters through the backup archive format, REST or MCP.
 - One model session per day (ADR 0009) and a resumable per-day thread (ADR 0010); lock TTL 5 minutes;

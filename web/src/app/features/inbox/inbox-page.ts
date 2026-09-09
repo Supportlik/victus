@@ -1,8 +1,9 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { AgentRun, ApiClient, Capture, DraftListEntry } from '../../api';
+import { AgentRun, AgentStatus, ApiClient, Capture, DraftListEntry, ReportSnapshot } from '../../api';
 import { BadgesService } from '../../core/badges.service';
+import { ClaudeHandoff } from '../../core/claude-handoff';
 import { describeError } from '../../core/problem';
 import { CaptureCard } from '../../shared/capture-card';
 import { CaptureInput } from '../../shared/capture-input';
@@ -26,11 +27,22 @@ type Filter = 'open' | 'assigned' | 'processed' | 'discarded' | 'failed' | 'all'
         <div><h2>Inbox</h2><p class="sub">Voice, photo or text goes in; drafts come back. Nothing counts until you accept it.</p></div>
         <div class="v-actions">
           <a class="v-btn" routerLink="/agent">Agent runs</a>
-          <button type="button" class="v-btn primary" (click)="processNow()" [disabled]="running()">
-            {{ running() ? 'Processing…' : 'Process now' }}
-          </button>
+          @if (runnerReady()) {
+            <button type="button" class="v-btn primary" (click)="processNow()" [disabled]="running()">
+              {{ running() ? 'Processing…' : 'Process now' }}
+            </button>
+          } @else {
+            <button type="button" class="v-btn primary" (click)="openClaude()">Open Claude for Processing</button>
+            <button type="button" class="v-btn" (click)="copyPrompt(handoff.processCaptures)">Copy prompt</button>
+          }
         </div>
       </header>
+      @if (!runnerReady() && status()) {
+        <p class="v-small v-muted">
+          {{ status()!.runner === 'no_key' ? 'No model key is configured, so nothing would collect a run.' : 'The agent is switched off in the server configuration.' }}
+          Your own Claude already reaches Victus over MCP and can do the work instead.
+        </p>
+      }
       @if (error(); as e) { <div class="v-error">{{ e }}</div> }
 
       <section class="v-panel add">
@@ -51,6 +63,25 @@ type Filter = 'open' | 'assigned' | 'processed' | 'discarded' | 'failed' | 'all'
           @if (r.days.length) { <p class="v-small v-muted">Days: {{ r.days.join(', ') }}@if (r.cost_usd != null) { · {{ r.cost_usd.toFixed(2) }} USD }</p> }
           @if (r.error) { <div class="v-error">{{ r.error }}</div> }
           @if (r.summary_md) { <div class="v-md" [innerHTML]="r.summary_md | markdown"></div> }
+        </section>
+      }
+
+      @if (pendingSnapshots().length) {
+        <section class="frozen">
+          <h3>Frozen report moments <span class="v-tag warn">{{ pendingSnapshots().length }}</span></h3>
+          <p class="v-small v-muted">A frozen report holds the numbers of one moment. It counts once Claude has judged it.</p>
+          @for (snap of pendingSnapshots(); track snap.id) {
+            <div class="snap">
+              <div class="what">
+                <a routerLink="/reports">{{ snap.label || snap.title }}</a>
+                <span class="v-small v-muted">{{ snap.period_start }} to {{ snap.period_end }} · frozen {{ snap.created_at.slice(0, 10) }}</span>
+              </div>
+              <div class="v-actions">
+                <button type="button" class="v-btn small primary" (click)="openClaude(snap)">Open Claude to assess</button>
+                <button type="button" class="v-btn small" (click)="copyPrompt(handoff.assessSnapshot(snap.id, snap.label || snap.title))">Copy prompt</button>
+              </div>
+            </div>
+          }
         </section>
       }
 
@@ -88,6 +119,10 @@ type Filter = 'open' | 'assigned' | 'processed' | 'discarded' | 'failed' | 'all'
     .add-head { display: flex; justify-content: space-between; align-items: end; gap: 1rem; flex-wrap: wrap; }
     .day { min-width: 11rem; }
     .run { margin-top: 1rem; } .run.active { border-color: var(--v-agent); }
+    .frozen { margin-top: 1.5rem; display: grid; gap: 0.5rem; }
+    .frozen h3 { font-size: var(--v-fs-l); }
+    .snap { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; padding: 0.6rem 0.75rem; border: 1px solid var(--v-line); border-left: 3px solid var(--v-warn); border-radius: var(--v-radius-l); background: var(--v-surface); }
+    .snap .what { display: grid; gap: 0.1rem; min-width: 0; }
     .drafts, .captures { margin-top: 1.5rem; display: grid; gap: 0.75rem; }
     .drafts h3, .captures h3 { font-size: var(--v-fs-l); }
     .captures .head { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; align-items: baseline; }
@@ -100,11 +135,14 @@ type Filter = 'open' | 'assigned' | 'processed' | 'discarded' | 'failed' | 'all'
 })
 export class InboxPage {
   readonly api = inject(ApiClient);
+  readonly handoff = inject(ClaudeHandoff);
   private readonly badges = inject(BadgesService);
   readonly captures = signal<Capture[]>([]);
   readonly drafts = signal<DraftListEntry[]>([]);
   readonly filter = signal<Filter>('open');
   readonly run = signal<AgentRun | null>(null);
+  readonly status = signal<AgentStatus | null>(null);
+  readonly snapshots = signal<ReportSnapshot[]>([]);
   readonly error = signal<string | null>(null);
   readonly filters: { id: Filter; label: string }[] = [
     { id: 'open', label: 'Open' },
@@ -118,6 +156,9 @@ export class InboxPage {
   private timer: ReturnType<typeof setTimeout> | null = null;
 
   readonly visible = computed(() => this.captures().filter((c) => this.matches(c, this.filter())));
+  /** Only a worker with a model key would collect a queued run. */
+  readonly runnerReady = computed(() => this.status()?.runner === 'ready');
+  readonly pendingSnapshots = computed(() => this.snapshots().filter((s) => s.status === 'frozen'));
   readonly running = computed(() => {
     const r = this.run();
     return !!r && !this.finished(r);
@@ -138,6 +179,29 @@ export class InboxPage {
     this.api.drafts().subscribe({
       next: (d) => this.drafts.set(d),
       error: (e: unknown) => this.error.set(describeError(e)),
+    });
+    this.api.agentStatus().subscribe({
+      // the button falls back to the Claude hand-off when this cannot be read
+      next: (s) => this.status.set(s),
+      error: () => this.status.set({ runner: 'no_key' }),
+    });
+    this.api.snapshots().subscribe({
+      next: (s) => this.snapshots.set(s),
+      error: () => this.snapshots.set([]),
+    });
+  }
+
+  /** Hand the job to the user's own Claude: captures, or one frozen report. */
+  openClaude(snap?: ReportSnapshot): void {
+    const prompt = snap
+      ? this.handoff.assessSnapshot(snap.id, snap.label || snap.title)
+      : this.handoff.processCaptures;
+    this.handoff.open(prompt);
+  }
+
+  copyPrompt(prompt: string): void {
+    void this.handoff.copy(prompt).then((ok) => {
+      this.error.set(ok ? null : 'The browser would not let the page copy. Select the prompt by hand.');
     });
   }
 
