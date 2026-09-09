@@ -28,6 +28,11 @@
   --v-bad-soft: light-dark(#fce6dd, #46231a);
   --v-agent-soft: light-dark(#ebe7f7, #2a2450);
   --v-primary-ink: #fff;
+  // The accent, one shade deeper: white on the plain accent measures 4.4:1, just under
+  // what a label needs, and the filled button and the Today pill are the two places with
+  // text on the accent itself. Written out per palette rather than mixed at runtime,
+  // because a color-mix() around light-dark() is dropped rather than resolved.
+  --v-primary-strong: #2569b8;
 
   // The meaning colours again, but as text: a chip's own hue at the same lightness as
   // its background is unreadable — amber on pale amber measured 1.9:1. Each of these is
@@ -86,6 +91,7 @@ html[data-scheme="light"] { color-scheme: light; }
 html[data-scheme="dark"] { color-scheme: dark; }
 
 html[data-palette="forest"] {
+  --v-primary-strong: #297d4f;
   --v-primary: #2f8f5b;
   --v-primary-soft: light-dark(#e3f3ea, #17372a);
   --v-agent: #5a6e2d;
@@ -95,6 +101,7 @@ html[data-palette="forest"] {
   --v-surface-2: light-dark(#e9eee6, #242d27);
 }
 html[data-palette="ocean"] {
+  --v-primary-strong: #0d6e8a;
   --v-primary: #0f7f9f;
   --v-primary-soft: light-dark(#dff1f6, #10323c);
   --v-agent: #3f5fb5;
@@ -104,6 +111,7 @@ html[data-palette="ocean"] {
   --v-surface-2: light-dark(#e6ecee, #232d32);
 }
 html[data-palette="clay"] {
+  --v-primary-strong: #ab4c25;
   --v-primary: #c2572b;
   --v-primary-soft: light-dark(#f9e6dd, #46261a);
   --v-agent: #8a5a3c;
@@ -113,6 +121,7 @@ html[data-palette="clay"] {
   --v-surface-2: light-dark(#efe9e2, #2c261f);
 }
 html[data-palette="plum"] {
+  --v-primary-strong: #6b41a0;
   --v-primary: #7b4bb7;
   --v-primary-soft: light-dark(#eee6f8, #2c1f46);
   --v-agent: #b0407a;
@@ -123,6 +132,7 @@ html[data-palette="plum"] {
 }
 html[data-palette="contrast"] {
   --v-primary: light-dark(#0000d6, #8ab4ff);
+  --v-primary-strong: light-dark(#0000d6, #8ab4ff);
   --v-primary-ink: light-dark(#fff, #000);
   --v-primary-soft: light-dark(#e0e0ff, #1b2a4a);
   --v-agent: light-dark(#5a0090, #d9a8ff);
@@ -253,13 +263,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   line-height: 1.2;
   &:hover { border-color: var(--v-ink-3); }
   &:disabled { opacity: 0.5; cursor: default; }
-  // A shade deeper than the accent itself: white on the plain accent measured 4.4:1,
-  // just under what a label needs, and the button is the one place with text on it.
-  &.primary {
-    background: color-mix(in oklab, var(--v-primary) 90%, #000);
-    border-color: color-mix(in oklab, var(--v-primary) 90%, #000);
-    color: var(--v-primary-ink);
-  }
+  &.primary { background: var(--v-primary-strong); border-color: var(--v-primary-strong); color: var(--v-primary-ink); }
   &.primary:hover { filter: brightness(0.95); }
   &.danger { color: var(--v-bad-ink); border-color: var(--v-bad); }
   &.quiet { border-color: transparent; background: transparent; color: var(--v-link); padding-inline: 0.4rem; }
