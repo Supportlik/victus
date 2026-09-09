@@ -485,8 +485,20 @@ class ReopenDay(UseCase):
 # ── day thread (ADR 0010) ───────────────────────────────────────────────────
 
 
+def _attachment_refs(uow: UnitOfWork, capture: orm.Capture | None) -> list[dto.AttachmentRef]:
+    if capture is None:
+        return []
+    return [
+        dto.AttachmentRef(id=a.id, mime=a.mime, size=a.size, original_name=a.original_name)
+        for a in uow.captures.attachments_of(capture.id)
+    ]
+
+
 def _message_view(
-    m: orm.DayMessage, capture: orm.Capture | None, transcript: str | None = None
+    m: orm.DayMessage,
+    capture: orm.Capture | None,
+    transcript: str | None = None,
+    attachments: list[dto.AttachmentRef] | None = None,
 ) -> dto.DayMessageView:
     return dto.DayMessageView(
         id=str(m.id),
@@ -503,6 +515,7 @@ def _message_view(
             if capture is not None and capture.attachment is not None
             else None
         ),
+        attachments=attachments or [],
         transcript=transcript,
     )
 
@@ -517,7 +530,9 @@ class GetDayThread(UseCase):
             for m in messages:
                 cap = uow.captures.get(m.capture_id) if m.capture_id else None
                 tr = uow.captures.transcript_for(cap.id) if cap is not None else None
-                out.append(_message_view(m, cap, tr.text if tr else None))
+                out.append(
+                    _message_view(m, cap, tr.text if tr else None, _attachment_refs(uow, cap))
+                )
             # captures that arrived without a thread message (uploads, voice notes)
             for cap in uow.captures.list(target_date=day):
                 if cap.id in linked or cap.product_id is not None:
@@ -536,6 +551,7 @@ class GetDayThread(UseCase):
                         capture_kind=cap.kind,
                         attachment_id=cap.attachment_id,
                         attachment_mime=cap.attachment.mime if cap.attachment else None,
+                        attachments=_attachment_refs(uow, cap),
                         transcript=tr.text if tr else None,
                     )
                 )

@@ -219,6 +219,9 @@ class DayMessageView:
     capture_kind: str | None = None
     attachment_id: str | None = None
     attachment_mime: str | None = None
+    #: Every file of the capture. One capture can be two photos and a spoken note (R65),
+    #: and `attachment_id` names only whichever arrived first.
+    attachments: list[AttachmentRef] = field(default_factory=list)
     transcript: str | None = None
 
 

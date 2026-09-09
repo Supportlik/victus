@@ -37,6 +37,36 @@ def test_text_capture_upload_and_duplicate(client: TestClient, alice_token: dict
     assert empty.status_code == 422
 
 
+def test_the_day_thread_lists_every_file_of_a_capture(
+    client: TestClient, alice_token: dict[str, str]
+) -> None:
+    """A capture of two photos and a voice note shows both photos in the day (R65).
+
+    The thread used to carry `attachment_id` only — whichever file arrived first — so a
+    capture that began with a photo showed no audio, and one that began with the voice
+    note showed no photos.
+    """
+    r = client.post(
+        "/api/v1/captures",
+        data={"target_date": DAY},
+        files=[
+            ("file", ("label.png", PNG, "image/png")),
+            ("file", ("second.png", PNG + b"x", "image/png")),
+            ("file", ("voice.webm", b"OggS-fake-audio", "audio/webm")),
+        ],
+        headers=alice_token,
+    )
+    assert r.status_code == 201, r.text
+    cap = r.json()
+    assert cap["kind"] == "audio", "audio in the capture makes it an audio capture"
+    assert len(cap["attachments"]) == 3
+
+    thread = client.get(f"/api/v1/days/{DAY}/messages", headers=alice_token).json()
+    entry = next(m for m in thread if m["capture_id"] == cap["id"])
+    mimes = [a["mime"] for a in entry["attachments"]]
+    assert mimes.count("image/png") == 2 and "audio/webm" in mimes
+
+
 def test_image_upload_and_attachment_download(
     client: TestClient, alice_token: dict[str, str], bob_token: dict[str, str]
 ) -> None:

@@ -149,6 +149,47 @@ def test_transcription_stores_transcript_and_uses_tenant_vocabulary(
     assert uc.GetCapture(factory, alice).execute(cap.id).transcript == "four hundred grams of skyr"
 
 
+def test_the_voice_note_is_transcribed_not_the_photo_beside_it(
+    factory: UowFactory, alice: TenantContext, blobs: InMemoryBlobStorage
+) -> None:
+    """A capture is one thing with several parts, and the parts arrive in any order.
+
+    Two photos and a spoken note is an ordinary capture (R65). Transcription used to take
+    the part that arrived first, so a photo went to ffmpeg, which produced an mp3 with no
+    stream in it and reported it as a conversion failure.
+    """
+    fake = FakeTranscription("frosta bag, five hundred grams")
+    cap = _upload(
+        factory,
+        alice,
+        blobs,
+        data=b"\xff\xd8\xff-fake-jpeg",
+        filename="photo-1.jpg",
+        mime="image/jpeg",
+        files=(
+            uc.UploadFile(b"\xff\xd8\xff-second-jpeg", "photo-2.jpg", "image/jpeg"),
+            uc.UploadFile(b"OggS-fake-audio", "voice.webm", "audio/webm"),
+        ),
+    )
+    assert cap.kind == "audio", "a capture with audio in it is an audio capture"
+
+    view = uc.TranscribeCapture(factory, alice, blobs, fake).execute(cap.id)
+    assert view.transcript == "frosta bag, five hundred grams"
+    assert fake.calls[0]["mime"] == "audio/webm"
+
+    # a capture that is only photos says so instead of failing in the converter
+    photos = _upload(
+        factory,
+        alice,
+        blobs,
+        data=b"\xff\xd8\xff-only-a-photo",
+        filename="label.jpg",
+        mime="image/jpeg",
+    )
+    with pytest.raises(ValidationFailed):
+        uc.TranscribeCapture(factory, alice, blobs, fake).execute(photos.id)
+
+
 def test_transcription_failure_marks_capture_failed(
     factory: UowFactory, alice: TenantContext, blobs: InMemoryBlobStorage
 ) -> None:

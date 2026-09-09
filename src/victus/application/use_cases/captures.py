@@ -503,6 +503,22 @@ def looks_like_prompt_echo(text: str, vocabulary_prompt: str | None) -> bool:
     return hits / len(words) >= 0.8
 
 
+def _audio_of(uow: UnitOfWork, cap: orm.Capture) -> orm.Attachment | None:
+    """The capture's audio file, whichever position it holds.
+
+    A capture is one thing made of several parts — two photos and a spoken note is an
+    ordinary capture (R65) — and ``attachment_id`` names the part that arrived first.
+    Transcribing that one handed ffmpeg a photo, which turned it into an mp3 with no
+    stream in it and reported the failure as a conversion error.
+    """
+    files = list(uow.captures.attachments_of(cap.id))
+    if not files and cap.attachment_id:
+        single = uow.captures.get_attachment(cap.attachment_id)
+        files = [single] if single is not None else []
+    audio = [f for f in files if (f.mime or "").lower().startswith(("audio/", "video/"))]
+    return audio[0] if audio else None
+
+
 class TranscribeCapture(UseCase):
     """Transcribe an audio capture through the port and store the transcript (R36)."""
 
@@ -532,9 +548,9 @@ class TranscribeCapture(UseCase):
                 raise ExternalServiceError(
                     "transcription is not configured (providers.openai_api_key missing)"
                 )
-            att = uow.captures.get_attachment(cap.attachment_id or "")
+            att = _audio_of(uow, cap)
             if att is None:
-                raise NotFound(f"capture {capture_id} has no attachment")
+                raise ValidationFailed(f"capture {capture_id} has no audio to transcribe")
             try:
                 audio = self.blobs.get(att.storage_key)
             except BlobNotFoundError as exc:

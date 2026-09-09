@@ -68,6 +68,15 @@ class MessageOut(Out):
     params: dict[str, str | int | float] = Field(default_factory=dict)
 
 
+class AttachmentRefOut(Out):
+    """One file of a capture; a capture can have several (R65)."""
+
+    id: str
+    mime: str
+    size: int
+    original_name: str | None = None
+
+
 class FindingOut(Out):
     kind: int
     code: str
@@ -227,6 +236,8 @@ class DayMessageOut(Out):
     capture_kind: str | None = None
     attachment_id: str | None = None
     attachment_mime: str | None = None
+    #: Every file of the capture; `attachment_id` is only the first one (R65).
+    attachments: list[AttachmentRefOut] = Field(default_factory=list)
     transcript: str | None = None
 
 

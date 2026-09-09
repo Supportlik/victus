@@ -7,18 +7,11 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from victus.api.schemas.common import Out
+from victus.api.schemas.common import AttachmentRefOut, Out
 
 CaptureStatusLiteral = Literal["new", "in_progress", "assigned", "processed", "discarded", "failed"]
 #: "assess" judges frozen reports instead of drafting days and locks no day (R72).
 AgentModeLiteral = Literal["historical", "batch", "manual", "follow_up", "assess"]
-
-
-class AttachmentRefOut(Out):
-    id: str
-    mime: str
-    size: int
-    original_name: str | None = None
 
 
 class CaptureOut(Out):
