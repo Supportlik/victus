@@ -158,10 +158,7 @@ import { DayThread } from './day-thread';
                             <span>One {{ unitLabel() }} of {{ pending()!.name }} is</span>
                             <span class="size">
                               <input name="psize" type="number" step="any" min="0" [(ngModel)]="portionAmount" required />
-                              <select name="punit" [(ngModel)]="portionUnit">
-                                <option value="g">g</option>
-                                <option value="ml">ml</option>
-                              </select>
+                              <span class="fixed">{{ pending()!.reference_unit }}</span>
                             </span>
                           </label>
                           <p class="v-small v-muted hint">Saved with the product, so “{{ unitLabel() }}” works from now on.</p>
@@ -248,7 +245,8 @@ import { DayThread } from './day-thread';
     .add { padding: 0.75rem; margin-bottom: 0.5rem; border: 1px solid var(--v-line); border-radius: var(--v-radius-l); background: var(--v-surface); }
     .picked { align-self: end; font-weight: 500; }
     .check { align-items: center; grid-template-columns: auto auto; }
-    .size { display: flex; gap: 0.3rem; }
+    .size { display: flex; gap: 0.4rem; align-items: center; }
+    .size .fixed { color: var(--v-ink-2); font-size: var(--v-fs-s); }
     .size input { min-width: 5rem; }
     .add .hint { grid-column: 1 / -1; margin: 0; }
     tr.draft td { background: var(--v-agent-soft); }
@@ -298,7 +296,6 @@ export class DayView {
   unitCode = 'g';
   /** Size of a unit the chosen product has no portion for; stored with the product. */
   portionAmount: number | null = null;
-  portionUnit: 'g' | 'ml' = 'g';
   estimated = false;
   newMeal = '';
   readonly editingMeal = signal<number | null>(null);
@@ -430,7 +427,7 @@ export class DayView {
           unit_code: code,
           label,
           amount: this.portionAmount,
-          amount_unit: this.portionUnit,
+          amount_unit: p.reference_unit,
           is_default: true,
           weight_source: this.estimated ? 'estimated' : 'weighed',
         })

@@ -38,7 +38,7 @@ import { ProductForm } from './product-form';
           <div class="v-panel"><v-product-form [product]="p" (saved)="onSaved($event)" (cancelled)="editing.set(false)" /></div>
         } @else {
           <section class="facts v-panel">
-            <h3>Per 100 {{ p.reference_unit }}</h3>
+            <h3>Per {{ p.reference_amount }} {{ p.reference_unit }}</h3>
             <dl>
               <div><dt>kcal</dt><dd>{{ p.kcal | macro: 'kcal' }}</dd></div>
               <div><dt>Protein</dt><dd>{{ p.protein | macro: 'protein' }} g</dd></div>
@@ -171,7 +171,7 @@ import { ProductForm } from './product-form';
 
         <section class="portions">
           <h3>Portions</h3>
-          <p class="v-small v-muted">Piece weights live only here. One default portion per unit.</p>
+          <p class="v-small v-muted">Piece weights live only here, and they are measured in {{ p.reference_unit }} like the values above. One portion per unit can be the default.</p>
           <table class="v-table">
             <thead><tr><th>Label</th><th>Unit</th><th class="num">Weight</th><th>Default</th><th>Weighed</th><th></th></tr></thead>
             <tbody>
@@ -195,7 +195,7 @@ import { ProductForm } from './product-form';
               <span>One {{ portionUnitLabel() }} of this is</span>
               <span class="pair">
                 <input name="amount" type="number" step="any" min="0" [(ngModel)]="np.amount" required />
-                <select name="au" [(ngModel)]="np.amount_unit"><option value="g">g</option><option value="ml">ml</option></select>
+                <span class="fixed">{{ p.reference_unit }}</span>
               </span>
             </label>
             <label class="v-field">
@@ -206,9 +206,11 @@ import { ProductForm } from './product-form';
             <label class="v-field check"><span>Use by default</span><input name="def" type="checkbox" [(ngModel)]="np.is_default" /></label>
             <p class="v-small v-muted hint">
               A portion says what one {{ portionUnitLabel() }} of this product weighs, so “2 {{ portionUnitLabel() }}” can be
-              logged without weighing anything. <b>Use by default</b> decides which one counts when a
-              day just says {{ portionUnitLabel() }} and this product has several of that unit, for
-              instance a small and a large one.
+              logged without weighing anything. It is measured in <b>{{ p.reference_unit }}</b>,
+              because that is what this product's values are stated per; the other unit would need a
+              density to convert. <b>Use by default</b> decides which one counts when a day just says
+              {{ portionUnitLabel() }} and this product has several of that unit, for instance a small
+              and a large one.
             </p>
             <button type="submit" class="v-btn" [disabled]="!np.unit_code || !np.amount">Add portion</button>
           </form>
@@ -219,7 +221,11 @@ import { ProductForm } from './product-form';
   styles: `
     dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr)); gap: 0.75rem; margin: 0.5rem 0; }
     dt { font-size: var(--v-fs-xs); color: var(--v-ink-3); } dd { margin: 0; font-size: var(--v-fs-l); font-weight: 560; }
-    .portions { margin-top: 1.5rem; } .add { margin-top: 0.75rem; align-items: end; }
+    .portions { margin-top: 1.5rem; display: grid; gap: 0.6rem; }
+    .portions h3 { font-size: var(--v-fs-l); }
+    .portions p { margin: 0; }
+    .portions .v-table { margin: 0; }
+    .add { margin-top: 0.25rem; align-items: end; row-gap: 0.75rem; }
     .captures { margin-top: 1.5rem; display: grid; gap: 0.6rem; }
     .usage { margin-top: 1.5rem; display: grid; gap: 0.5rem; }
     .newver, .history { margin-top: 1rem; display: grid; gap: 0.5rem; }
@@ -230,7 +236,8 @@ import { ProductForm } from './product-form';
     .proposal { display: grid; gap: 0.4rem; padding-top: 0.5rem; border-top: 1px dashed var(--v-line); }
     .diff { max-width: 28rem; }
     .check { grid-template-columns: 1fr auto; align-items: center; }
-    .pair { display: flex; gap: 0.3rem; }
+    .pair { display: flex; gap: 0.4rem; align-items: center; }
+    .pair .fixed { color: var(--v-ink-2); font-size: var(--v-fs-s); }
     .pair input { min-width: 5rem; }
     .add .hint { grid-column: 1 / -1; margin: 0; }
   `,

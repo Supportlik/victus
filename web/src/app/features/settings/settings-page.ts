@@ -23,6 +23,7 @@ interface SchemaLike {
     <div class="v-page settings">
       <header class="v-page-head"><div><h2>Settings</h2><p class="sub">{{ auth.me()?.tenant?.name }} · signed in as {{ auth.me()?.user?.display_name }}</p></div></header>
       @if (error(); as e) { <div class="v-error">{{ e }}</div> }
+      @if (saved(); as when) { <div class="v-notice" role="status">Saved as version {{ when }}.</div> }
 
       <section class="v-panel" id="appearance">
         <h3>Appearance</h3>
@@ -187,6 +188,9 @@ export class SettingsPage {
   readonly created = signal<ApiTokenCreated | null>(null);
   readonly health = signal<Health | null>(null);
   readonly error = signal<string | null>(null);
+  /** Version number of the last save; a silent success looks like a failure. */
+  readonly saved = signal<number | null>(null);
+  private savedTimer: ReturnType<typeof setTimeout> | null = null;
   readonly jsonError = signal<string | null>(null);
   readonly scopes = SCOPES;
   private schema: SchemaLike | null = null;
@@ -307,13 +311,22 @@ export class SettingsPage {
 
   saveSettingsData(data: Record<string, unknown>): void {
     this.error.set(null);
+    this.saved.set(null);
     this.api.putSettings(data).subscribe({
       next: (s) => {
         this.settings.set(s);
         this.settingsJson = JSON.stringify(s.data, null, 2);
+        this.confirmSaved(s.version);
       },
       error: (e: unknown) => this.error.set(describeError(e)),
     });
+  }
+
+  /** Show the new version for a few seconds, then get out of the way. */
+  private confirmSaved(version: number): void {
+    this.saved.set(version);
+    if (this.savedTimer) clearTimeout(this.savedTimer);
+    this.savedTimer = setTimeout(() => this.saved.set(null), 6000);
   }
 
   toggleScope(s: string, on: boolean): void {

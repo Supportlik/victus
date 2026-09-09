@@ -394,6 +394,24 @@ class DeleteProduct(UseCase):
                 raise Conflict("product is referenced by line items or recipes") from exc
 
 
+def _check_portion_unit(product: orm.Product, amount_unit: str) -> None:
+    """A portion must be measured the way the product's nutrients are (R75).
+
+    Nutrients are stated per reference amount in grams or millilitres. A portion given in
+    the other unit cannot be converted without a density, so the numbers it produces would
+    be wrong rather than merely imprecise.
+    """
+    if amount_unit == product.reference_unit:
+        return
+    if product.density_g_per_ml:
+        return
+    raise ValidationFailed(
+        f"this product's values are per {product.reference_amount:g} "
+        f"{product.reference_unit}, so a portion must be in {product.reference_unit}. "
+        f"Set a density to allow {amount_unit}."
+    )
+
+
 class AddPortion(UseCase):
     def execute(self, product_id: int, data: PortionInput) -> dto.PortionView:
         self.ctx.require(SCOPE_WRITE)
@@ -402,8 +420,10 @@ class AddPortion(UseCase):
         if data.amount <= 0 or data.amount_unit not in ("g", "ml"):
             raise ValidationFailed("portion amount must be positive, unit g or ml")
         with self._uow() as uow:
-            if uow.products.get(product_id) is None:
+            product = uow.products.get(product_id)
+            if product is None:
                 raise NotFound(f"product {product_id} not found")
+            _check_portion_unit(product, data.amount_unit)
             if data.is_default:
                 for existing in uow.products.portions_for(product_id):
                     if existing.unit_code == data.unit_code and existing.is_default:
@@ -442,6 +462,9 @@ class UpdatePortion(UseCase):
             ):
                 if key in changes and changes[key] is not None:
                     setattr(portion, key, changes[key])
+            product = uow.products.get(portion.product_id)
+            if product is not None:
+                _check_portion_unit(product, portion.amount_unit)
             if changes.get("is_default"):
                 for other in uow.products.portions_for(portion.product_id):
                     if other.id != portion.id and other.unit_code == portion.unit_code:
