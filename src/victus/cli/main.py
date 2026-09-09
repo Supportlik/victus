@@ -69,7 +69,19 @@ def serve(
 
     if migrate:
         _migrate_database()
-    uvicorn.run("victus.api.app:create_app", factory=True, host=host, port=port, reload=reload)
+    # X-Forwarded-Proto is trusted, because the API is never exposed directly: it binds
+    # localhost and a reverse proxy terminates TLS. Without this the app thinks every
+    # request is plain HTTP, and `/mcp` redirects to `http://…/mcp/` — a client that
+    # follows that lands on the web app and reads HTML where it expects JSON.
+    uvicorn.run(
+        "victus.api.app:create_app",
+        factory=True,
+        host=host,
+        port=port,
+        reload=reload,
+        proxy_headers=True,
+        forwarded_allow_ips="*",
+    )
 
 
 def _planned(stage: str, what: str) -> None:
