@@ -198,6 +198,7 @@ The pyramid is deliberate: most cases are `T-DOM`/`T-SVC`; E2E covers the two fl
 | T-WEB-037 | Web | Phone navigation | Render the shell signed in, then press More | Six entries in the bar; the sheet lists the four remaining sections plus sign out; a recovery session shows no bar at all | `app.spec.ts` | automated |
 | T-WEB-038 | Web | Report tooltip | Adopt `de-DE`, then `en-GB` | The same values read 89,4 / 1.900 and 89.4 / 1,900 | `report-block.spec.ts` | automated |
 | T-WEB-039 | Web | Product search | Set `on` and type a query | The request carries `on`, so an older day is offered the values of its time | `product-search.spec.ts` | automated |
+| T-WEB-040 | Web | Inbox, frozen report | Press Assess now with runner `ready` | Queues one run with mode `assess` | `inbox-page.spec.ts` | automated |
 | T-WEB-033 | Day thread states | mocked messages with `processing_state` and agent kinds | render `DayThread` | user captures show "waiting for the agent" / "in draft"; agent messages tagged summary/question/note; composer enabled while a run is active | mock | partly (manual) | 3 |
 
 ## Agent (`T-AGT`)
@@ -210,6 +211,8 @@ The pyramid is deliberate: most cases are `T-DOM`/`T-SVC`; E2E covers the two fl
 | T-AGT-004 | One session per day | captures for three days | `Worker.run_once()` | three `agent_session` rows; each session's messages contain only that day's captures | scripted model | yes | 3 |
 | T-AGT-005 | Budget exceeded | `max_usd_per_run` below the first session's cost | run | run `budget_exceeded`, remaining days unlocked, summary explains | scripted model | yes | 3 |
 | T-AGT-006 | Refusal | scripted `stop_reason=refusal` | run | session outcome `refused`, day not drafted, run `finished` with the note in the summary | scripted model | yes | 3 |
+| T-AGT-007 | Agent | `assess` run | Freeze a report, queue an assess run, script `report_assess` | The snapshot is assessed with the runner's prompt version, the summary names it, and no day is locked | `test_runner.py` | automated |
+| T-AGT-008 | Agent | `assess` run, nothing waiting | Queue an assess run with no frozen report | Finishes without calling the model and says so | `test_runner.py` | automated |
 | T-AGT-007 | Stuck loop | model keeps calling `product_search` | run | session ends after `max_turns_per_day` with outcome `stuck`; lock released | scripted model | yes | 3 |
 | T-AGT-008 | Missing API key | `providers.anthropic_api_key` unset | `Worker.run_once()` on a queued run | run `failed` with a clear error, no exception, locks released | – | yes | 3 |
 | T-AGT-009 | Follow-up merge | drafted day, two new messages | `Worker.run_once()` | one `follow_up` run processed, the duplicate marked `cancelled` ("merged into …"), draft changed incrementally | scripted model | yes | 3 |

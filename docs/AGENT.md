@@ -119,8 +119,9 @@ confirms the product in the review list.
 | `batch` | All days with open captures in one run; still **one session per day**, executed sequentially | Manual "process everything from the weekend" |
 | `manual` | Explicit capture IDs or date range; one session per affected day | Re-processing after a correction |
 | `follow_up` | One day, seeded with its thread and current draft; incremental changes only | Queued automatically by new messages on a drafted or locked day |
+| `assess` | Judges the frozen reports waiting for an assessment, one short session each; locks no day and writes no draft. The frozen figures come from the prompt, never fetched fresh, so the judgement is about that moment (R72) | The **Assess now** button, and the hand-off to the user's Claude when no key is configured |
 
-CLI: `victus agent run --tenant alice [--mode historical|batch|manual|follow_up] [--captures id,id] [--from YYYY-MM-DD --to YYYY-MM-DD]`
+CLI: `victus agent run --tenant alice [--mode historical|batch|manual|follow_up|assess] [--captures id,id] [--from YYYY-MM-DD --to YYYY-MM-DD]`
 queues a run and processes it in-process, then prints the summary. `victus agent runs --tenant alice` lists runs;
 `victus agent unlock --tenant alice --date 2026-09-07` drops a stuck lock.
 

@@ -728,7 +728,7 @@ class AgentRun(Base):
     __table_args__ = (
         CheckConstraint("runner IN ('worker','external')", name="ck_agent_run_runner"),
         CheckConstraint(
-            "mode IN ('historical','batch','manual','follow_up')", name="ck_agent_run_mode"
+            "mode IN ('historical','batch','manual','follow_up','assess')", name="ck_agent_run_mode"
         ),
         CheckConstraint(
             "status IN ('queued','running','finished','budget_exceeded','failed','cancelled')",

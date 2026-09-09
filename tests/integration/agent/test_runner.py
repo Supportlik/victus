@@ -6,13 +6,15 @@ T-AGT-003 follow-up merge
 T-AGT-004 budget exhausted
 T-AGT-005 model refusal
 T-AGT-006 no model configured
+T-AGT-007 assess run judges a frozen report
+T-AGT-008 assess run with nothing waiting
 """
 
 from __future__ import annotations
 
 import json
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 
 import pytest
@@ -348,3 +350,84 @@ def test_processor_transcribes_audio_before_the_session(
     assert outcome.run.status == "finished"
     ctx_json = json.loads(model.calls[0]["messages"][0]["content"][1]["text"].split("\n", 1)[1])
     assert ctx_json["captures"][0]["transcript"] == "two slices of rye bread with butter"
+
+
+def test_assess_run_judges_a_frozen_report(
+    factory: UowFactory,
+    alice: TenantContext,
+    blobs: InMemoryBlobStorage,
+    config: ServerConfig,
+    session_factory: sessionmaker[Session],
+    tmp_path: Any,
+) -> None:
+    """T-AGT-007: an `assess` run writes the judgement of a frozen report (R72).
+
+    It locks no day, so it cannot collide with drafting, and it must not need the day
+    machinery: a snapshot's numbers are already fixed.
+    """
+    from victus.application.use_cases import snapshots as snap_uc
+
+    snap = snap_uc.FreezeReport(factory, alice).execute(
+        "checkup",
+        "Check-up",
+        {"blocks": [{"meta": {"type": "kpi_tile", "title": "Weight"}, "value": 86.4}]},
+        period_start=date(2026, 3, 1),
+        period_end=DAY,
+        today=DAY,
+        label="before the trip",
+    )
+    assert snap.status == "frozen"
+
+    run = agent_uc.QueueAgentRun(factory, alice).execute("assess")
+    assessment = "Weight is 86.4 kg, 1.4 kg from the goal. Hold the current intake."
+    model = ScriptedModelClient(
+        turns=[
+            ScriptedTurn(
+                tool_calls=[
+                    ("report_assess", {"snapshot_id": snap.id, "assessment_md": assessment})
+                ]
+            ),
+            ScriptedTurn(text="Assessed."),
+        ]
+    )
+    worker = _worker(config, session_factory, blobs, model, tmp_path)
+
+    outcomes = worker.run_once()
+
+    assert len(outcomes) == 1
+    outcome = outcomes[0]
+    assert outcome.run.status == "finished"
+    assert outcome.run.id == run.id
+    assert [o.outcome for o in outcome.days] == ["assessed"]
+    assert outcome.summary_md is not None
+    assert "before the trip" in outcome.summary_md
+
+    stored = snap_uc.GetSnapshot(factory, alice).execute(snap.id)
+    assert stored.status == "assessed"
+    assert stored.assessment_md == assessment
+    # the assessment records which prompt wrote it, not "external"
+    assert stored.prompt_version == load_prompts().version
+    # no day was locked, so drafting is unaffected
+    with factory(alice) as uow:
+        assert list(uow.agent.locks()) == []
+
+
+def test_assess_run_says_so_when_nothing_is_waiting(
+    factory: UowFactory,
+    alice: TenantContext,
+    blobs: InMemoryBlobStorage,
+    config: ServerConfig,
+    session_factory: sessionmaker[Session],
+    tmp_path: Any,
+) -> None:
+    """T-AGT-008: an assess run with no frozen report finishes without calling the model."""
+    agent_uc.QueueAgentRun(factory, alice).execute("assess")
+    model = ScriptedModelClient(turns=[ScriptedTurn(text="should not be called")])
+    worker = _worker(config, session_factory, blobs, model, tmp_path)
+
+    outcomes = worker.run_once()
+
+    assert outcomes[0].run.status == "finished"
+    assert outcomes[0].days == []
+    assert model.calls == []
+    assert "No frozen report" in (outcomes[0].summary_md or "")

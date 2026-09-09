@@ -78,8 +78,14 @@ type Filter = 'open' | 'assigned' | 'processed' | 'discarded' | 'failed' | 'all'
                 <span class="v-small v-muted">{{ snap.period_start }} to {{ snap.period_end }} · frozen {{ snap.created_at.slice(0, 10) }}</span>
               </div>
               <div class="v-actions">
-                <button type="button" class="v-btn small primary" (click)="openClaude(snap)">Open Claude to assess</button>
-                <button type="button" class="v-btn small" (click)="copyPrompt(handoff.assessSnapshot(snap.id, snap.label || snap.title))">Copy prompt</button>
+                @if (runnerReady()) {
+                  <button type="button" class="v-btn small primary" (click)="assessNow()" [disabled]="running()">
+                    {{ running() ? 'Assessing…' : 'Assess now' }}
+                  </button>
+                } @else {
+                  <button type="button" class="v-btn small primary" (click)="openClaude(snap)">Open Claude to assess</button>
+                  <button type="button" class="v-btn small" (click)="copyPrompt(handoff.assessSnapshot(snap.id, snap.label || snap.title))">Copy prompt</button>
+                }
               </div>
             </div>
           }
@@ -237,6 +243,18 @@ export class InboxPage {
 
   finished(r: AgentRun): boolean {
     return !['queued', 'running'].includes(r.status);
+  }
+
+  /** One run judges every frozen report that is waiting, so one button is enough. */
+  assessNow(): void {
+    this.error.set(null);
+    this.api.startAgentRun({ mode: 'assess' }).subscribe({
+      next: (r) => {
+        this.run.set(r);
+        this.poll(r.id);
+      },
+      error: (e: unknown) => this.error.set(describeError(e)),
+    });
   }
 
   processNow(): void {

@@ -34,10 +34,18 @@ from victus.application.use_cases import agent as agent_uc
 from victus.application.use_cases import captures as capture_uc
 from victus.application.use_cases import products as product_uc
 from victus.application.use_cases import rules as rules_uc
+from victus.application.use_cases import snapshots as snap_uc
 from victus.application.use_cases.settings import Regional, regional_of
 from victus.config.server import ServerConfig
 from victus.domain.services.calendar import day_of, today_in
-from victus.domain.values import CaptureKind, CaptureStatus, MessageKind, Period, RunStatus
+from victus.domain.values import (
+    AgentMode,
+    CaptureKind,
+    CaptureStatus,
+    MessageKind,
+    Period,
+    RunStatus,
+)
 from victus.infrastructure.db.uow import SqlAlchemyUnitOfWork
 from victus.infrastructure.reports.sqlalchemy_source import SqlAlchemyReportDataSource
 from victus.mcp.tools import (
@@ -75,6 +83,7 @@ class Prompts:
     system: str
     capture_to_draft: str
     product_capture: str
+    assess: str
     summary: str
     version: str
 
@@ -84,13 +93,14 @@ def load_prompts() -> Prompts:
     package = resources.files("victus.agent.prompts")
     texts = {
         name: (package / f"{name}.md").read_text(encoding="utf-8")
-        for name in ("system", "capture_to_draft", "product_capture", "summary")
+        for name in ("system", "capture_to_draft", "product_capture", "assess", "summary")
     }
     digest = hashlib.sha256("\n".join(texts[n] for n in sorted(texts)).encode("utf-8"))
     return Prompts(
         system=texts["system"],
         capture_to_draft=texts["capture_to_draft"],
         product_capture=texts["product_capture"],
+        assess=texts["assess"],
         summary=texts["summary"],
         version=digest.hexdigest()[:12],
     )
@@ -300,6 +310,10 @@ class DayDrafter:
             if use.name == "product_propose" and isinstance(result, dict):
                 outcome.draft = result
                 outcome.outcome = "proposed"
+            if use.name == "report_assess" and isinstance(result, dict):
+                outcome.draft = result
+                outcome.markdown = str(result.get("assessment_md", ""))
+                outcome.outcome = "assessed"
             if isinstance(result, ImageResult):
                 content: Any = [
                     {
@@ -469,6 +483,39 @@ class DayDrafter:
         self._record(run_id, outcome, started)
         return outcome
 
+    def run_snapshot_assessment(self, run_id: str, snap: dto.ReportSnapshotView) -> DayOutcome:
+        """Judge one frozen report (R72).
+
+        The frozen figures go into the prompt, so the model judges the moment that was
+        kept rather than fetching today's numbers, which would describe a different
+        period. It has one job: write the text and hand it to ``report_assess``.
+        """
+        outcome = DayOutcome(date=snap.today, outcome="assess_skipped")
+        started = self._now()
+        tools = anthropic_tool_definitions(tools_for(self.tc.ctx, WORKER_TOOLS))
+        content: list[dict[str, Any]] = [
+            {
+                "type": "text",
+                "text": self.prompts.assess.format(
+                    run_id=run_id,
+                    snapshot_id=snap.id,
+                    today=snap.today.isoformat(),
+                    language=tenant_language(self.tc),
+                ),
+            },
+            {
+                "type": "text",
+                "text": "## Frozen report (JSON)\n" + json.dumps(jsonable(snap)),
+            },
+        ]
+        report_rules = tenant_rules(self.tc, "reports")
+        if report_rules:
+            content.append({"type": "text", "text": report_rules})
+        messages: list[dict[str, Any]] = [{"role": "user", "content": content}]
+        self._converse(run_id, None, messages, outcome, tools, success="assessed")
+        self._record(run_id, outcome, started)
+        return outcome
+
     def _record(self, run_id: str, outcome: DayOutcome, started: datetime) -> None:
         agent_uc.RecordAgentSession(self.tc.uow_factory, self.tc.ctx).execute(
             run_id,
@@ -512,11 +559,14 @@ class RunProcessor:
             prompt_version=prompts.version,
         )
         self.tc.run_id = run_id
+        self.tc.prompt_version = prompts.version
         budget = Budget.from_config(self.cfg.agent.budget)
         drafter = DayDrafter(self.tc, self.model, self.cfg, budget)
         outcomes: list[DayOutcome] = []
         skipped = dict(start.skipped_days)
         status = RunStatus.FINISHED.value
+        if start.run.mode == AgentMode.ASSESS.value:
+            return self._assess_run(run_id, start, drafter, budget)
         # product captures first: short, independent of any day lock
         product_outcomes: list[DayOutcome] = []
         for cap in capture_uc.ListCaptures(self.tc.uow_factory, self.tc.ctx).execute(
@@ -570,6 +620,62 @@ class RunProcessor:
             error="; ".join(errors) if errors else None,
         )
         return RunOutcome(run=run, days=outcomes, skipped=skipped, summary_md=summary)
+
+    def _assess_run(
+        self,
+        run_id: str,
+        start: dto.RunStartView,
+        drafter: DayDrafter,
+        budget: Budget,
+    ) -> RunOutcome:
+        """Judge every frozen report waiting for an assessment.
+
+        No day is locked and no draft is written: an assessment only adds text to numbers
+        that are already fixed, so it cannot collide with drafting (R72).
+        """
+        pending = snap_uc.PendingSnapshots(self.tc.uow_factory, self.tc.ctx).execute(limit=10)
+        outcomes: list[DayOutcome] = []
+        for snap in pending:
+            if budget.exceeded:
+                break
+            try:
+                outcomes.append(drafter.run_snapshot_assessment(run_id, snap))
+            except Exception as exc:
+                log.exception("run %s: snapshot %s failed", run_id, snap.id)
+                outcomes.append(DayOutcome(date=snap.today, outcome="failed", error=str(exc)))
+        done = sum(1 for o in outcomes if o.outcome == "assessed")
+        if not pending:
+            summary = "### Assessments\n\nNo frozen report was waiting for one.\n"
+            status = RunStatus.FINISHED.value
+        else:
+            lines = [f"### Assessments · {done} of {len(pending)}"]
+            for snap, outcome in zip(pending, outcomes, strict=False):
+                label = snap.label or snap.title
+                if outcome.outcome == "assessed":
+                    lines.append(f"- {label} ({snap.today.isoformat()}): assessed")
+                else:
+                    reason = outcome.error or outcome.outcome.replace("_", " ")
+                    lines.append(f"- {label} ({snap.today.isoformat()}): {reason}")
+            summary = "\n".join(lines) + "\n"
+            budget_hit = any(o.outcome == "budget_exceeded" for o in outcomes) or (
+                budget.exceeded and len(outcomes) < len(pending)
+            )
+            if budget_hit:
+                status = RunStatus.BUDGET_EXCEEDED.value
+            elif outcomes and all(o.outcome == "failed" for o in outcomes):
+                status = RunStatus.FAILED.value
+            else:
+                status = RunStatus.FINISHED.value
+        errors = [f"{o.date.isoformat()}: {o.error}" for o in outcomes if o.error]
+        run = agent_uc.FinishAgentRun(self.tc.uow_factory, self.tc.ctx).execute(
+            run_id,
+            status=status,
+            summary_md=summary,
+            error="; ".join(errors) if errors else None,
+        )
+        return RunOutcome(
+            run=run, days=outcomes, skipped=dict(start.skipped_days), summary_md=summary
+        )
 
     # -- summary (see prompts/summary.md) --
 

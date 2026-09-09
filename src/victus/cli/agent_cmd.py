@@ -45,7 +45,7 @@ def _parse_date(value: str | None, name: str) -> date | None:
 def agent_run(
     tenant: Tenant,
     mode: Annotated[
-        str, typer.Option(help="historical | batch | manual | follow_up")
+        str, typer.Option(help="historical | batch | manual | follow_up | assess")
     ] = "historical",
     captures: Annotated[
         str | None, typer.Option(help="Comma-separated capture ids (mode manual).")

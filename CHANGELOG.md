@@ -131,6 +131,10 @@ All notable changes to Victus are documented here. The format follows
   did with the captures rather than where the numbers stand. With no assessment yet, the block says how
   to get one.
 
+- The worker can write those assessments itself (R72, migration 0008): run mode `assess` judges every
+  frozen report that is waiting, one short session each, and locks no day. With a model key the inbox
+  shows "Assess now"; without one it still hands the job to the user's own Claude.
+
 ### Changed
 - No importer in the product (ADR 0011): existing data enters through the backup archive format, REST or MCP.
 - One model session per day (ADR 0009) and a resumable per-day thread (ADR 0010); lock TTL 5 minutes;

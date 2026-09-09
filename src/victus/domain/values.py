@@ -86,6 +86,8 @@ class AgentMode(enum.StrEnum):
     BATCH = "batch"
     MANUAL = "manual"
     FOLLOW_UP = "follow_up"
+    #: Judge frozen reports rather than draft days; locks no day (R72).
+    ASSESS = "assess"
 
 
 class RunStatus(enum.StrEnum):

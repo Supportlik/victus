@@ -422,7 +422,8 @@ export interface Capture {
 }
 
 export type AgentRunStatus = 'queued' | 'running' | 'finished' | 'budget_exceeded' | 'failed' | 'cancelled';
-export type AgentRunMode = 'historical' | 'batch' | 'manual' | 'follow_up';
+/** `assess` judges frozen reports instead of drafting days and locks no day (R72). */
+export type AgentRunMode = 'historical' | 'batch' | 'manual' | 'follow_up' | 'assess';
 
 export interface AgentSession {
   date: string;

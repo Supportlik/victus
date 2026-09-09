@@ -134,6 +134,20 @@ describe('InboxPage', () => {
     expect(frozen[0].textContent).toContain('before the trip');
   });
 
+  // T-WEB-040: with a runner the frozen report is assessed by the worker, in one run (R72).
+  it('queues an assess run when a runner is available', async () => {
+    const el = await header('ready');
+    const assess = Array.from(el.querySelectorAll('.frozen .snap button')).find((b) =>
+      b.textContent?.includes('Assess now'),
+    ) as HTMLButtonElement;
+    assess.click();
+
+    const req = http.expectOne('/api/v1/agent/runs');
+    expect(req.request.body).toEqual({ mode: 'assess' });
+    req.flush({ id: 'r1', mode: 'assess', status: 'queued', runner: 'worker', days: [], captures: [] });
+    http.match(() => true).forEach((r) => r.flush([]));
+  });
+
   it('accepts a single drafted item', async () => {
     const f = TestBed.createComponent(InboxPage);
     f.detectChanges();

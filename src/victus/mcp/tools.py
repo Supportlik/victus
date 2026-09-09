@@ -73,6 +73,8 @@ class ToolContext:
     blobs: BlobStorage | None = None
     transcription: TranscriptionPort | None = None
     run_id: str | None = None
+    #: Set by the in-house runner so a written assessment records which prompt produced it.
+    prompt_version: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -346,7 +348,8 @@ class ProductProposeIn(_In):
 
 
 class AgentRunStartIn(_In):
-    mode: Literal["historical", "batch", "manual", "follow_up"] = "historical"
+    #: "assess" records that this run judged frozen reports rather than drafting days.
+    mode: Literal["historical", "batch", "manual", "follow_up", "assess"] = "historical"
     dates: list[dt.date] | None = Field(
         default=None, description="Explicit days to lock; otherwise days with open captures."
     )
@@ -824,7 +827,7 @@ def _report_assess(tc: ToolContext, inp: ReportAssessIn) -> ToolResult:
         inp.snapshot_id,
         inp.assessment_md,
         model=tc.config.agent.model if tc.config else None,
-        prompt_version="external",
+        prompt_version=tc.prompt_version or "external",
         run_id=tc.run_id,
     )
     return cast(dict[str, Any], jsonable(view))
