@@ -6,8 +6,8 @@ fallback is deliberate, because English is correct rather than broken, but it al
 gap leaves no trace. This script finds the gap.
 
 It scans the web templates for the strings passed to ``i18n.t(...)`` and compares them with
-every dictionary beside it (German, Spanish, French). Exit code 1 with ``--strict``, so CI can hold the line once the
-translation is complete; without it the script only reports.
+every dictionary beside it (German, Spanish, French). Exit code 1 with ``--strict``, so CI
+can hold the line once the translation is complete; without it the script only reports.
 
     uv run python scripts/check_translations.py
     uv run python scripts/check_translations.py --strict

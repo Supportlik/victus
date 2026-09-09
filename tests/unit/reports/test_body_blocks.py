@@ -131,6 +131,7 @@ def test_an_unknown_sex_stops_the_ratio_but_not_the_bmi(ref) -> None:  # type: i
     assert energy.basal_kcal is None
     assert any("'x'" in m for m in energy.missing)
 
+
 def test_no_circumference_is_left_out_of_the_change(ref) -> None:  # type: ignore[no-untyped-def]
     """A value that did not move must read as 0.0, not as unmeasured.
 
@@ -139,8 +140,13 @@ def test_no_circumference_is_left_out_of_the_change(ref) -> None:  # type: ignor
     """
     end = max(ref.daily)
     everything = dict(
-        waist_cm=100.0, belly_cm=110.0, hip_cm=105.0, chest_cm=104.0,
-        neck_cm=45.0, thigh_cm=60.0, arm_cm=35.0,
+        waist_cm=100.0,
+        belly_cm=110.0,
+        hip_cm=105.0,
+        chest_cm=104.0,
+        neck_cm=45.0,
+        thigh_cm=60.0,
+        arm_cm=35.0,
     )
     source = _source(
         ref,
@@ -154,6 +160,7 @@ def test_no_circumference_is_left_out_of_the_change(ref) -> None:  # type: ignor
     assert set(result.changes) == set(everything), "every measured circumference is compared"
     assert result.changes["waist_cm"] == -2.0
     assert result.changes["neck_cm"] == 0.0
+
 
 def test_each_bmi_class_carries_both_scales_and_the_distance_to_it(ref) -> None:  # type: ignore[no-untyped-def]
     """T-REP-033: a class index means nothing on a scale; a weight and a gap do (R81)."""
