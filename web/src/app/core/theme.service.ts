@@ -52,14 +52,28 @@ export class ThemeService {
   readonly palette = signal<string>(read(PALETTE_KEY, 'graphite'));
 
   constructor() {
+    let first = true;
     effect(() => {
       const scheme = this.scheme();
       const palette = PALETTES.some((p) => p.id === this.palette()) ? this.palette() : 'graphite';
       const root = this.doc.documentElement;
+      const changing = !first && (root.dataset['scheme'] !== scheme || root.dataset['palette'] !== palette);
+      first = false;
+      // Every colour changes at once, so no element should animate its way there: a
+      // page-wide fade reads as a fault, and Chrome otherwise keeps the pre-switch value
+      // of any transitioned property that takes its colour from a custom property — the
+      // rail stayed dark on a light page until the next reload.
+      if (changing) {
+        root.classList.add('v-switching');
+      }
       root.dataset['scheme'] = scheme;
       root.dataset['palette'] = palette;
       write(SCHEME_KEY, scheme);
       write(PALETTE_KEY, palette);
+      if (changing) {
+        void root.offsetHeight;
+        requestAnimationFrame(() => root.classList.remove('v-switching'));
+      }
     });
   }
 

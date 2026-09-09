@@ -12,6 +12,20 @@
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="icon" type="image/x-icon" href="favicon.ico">
   <link rel="apple-touch-icon" href="logo.svg">
+  <!--
+    The scheme is applied before Angular boots. The theme service sets the same two
+    attributes from an effect, which runs after the first paint: without this the page
+    flashed light for a moment on every full load.
+  -->
+  <script>
+    try {
+      var r = document.documentElement;
+      r.dataset.scheme = localStorage.getItem('victus.scheme') || 'system';
+      r.dataset.palette = localStorage.getItem('victus.palette') || 'graphite';
+    } catch (e) {
+      /* blocked storage: the defaults below apply and the service takes over */
+    }
+  </script>
 </head>
 <body>
   <app-root></app-root>

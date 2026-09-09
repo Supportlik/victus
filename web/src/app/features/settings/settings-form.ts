@@ -178,6 +178,8 @@ function obj(v: unknown): Json {
               <option value="">{{ i18n.t('Default (English)') }}</option>
               <option value="en">{{ i18n.t('English') }}</option>
               <option value="de">Deutsch</option>
+              <option value="es">Español</option>
+              <option value="fr">Français</option>
             </select>
           </label>
           <label class="v-field">
@@ -209,18 +211,23 @@ function obj(v: unknown): Json {
     </form>
   `,
   styles: `
-    .grid { display: grid; gap: 1rem; }
-    fieldset { border: 1px solid var(--v-line); border-radius: var(--v-radius-l); padding: 0.75rem 1rem 1rem; display: grid; gap: 0.75rem; min-width: 0; }
+    .grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
+    fieldset { border: 1px solid var(--v-line); border-radius: var(--v-radius-l); padding: 0.75rem 1rem 1rem; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.75rem; min-width: 0; }
     legend { padding: 0 0.4rem; color: var(--v-ink-2); font-size: var(--v-fs-s); }
-    .goal { display: grid; gap: 0.6rem; padding: 0.6rem; border: 1px solid var(--v-line); border-radius: var(--v-radius); }
+    .goal { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.6rem; padding: 0.6rem; border: 1px solid var(--v-line); border-radius: var(--v-radius); }
     .goal.active { border-color: var(--v-primary); background: var(--v-primary-soft); }
     .goal .head { grid-template-columns: minmax(8rem, 1fr) minmax(7rem, 1fr) minmax(8rem, 1fr) auto auto; align-items: end; }
-    .band-wrap { display: grid; gap: 0.4rem; justify-items: start; }
-    .stages { display: grid; gap: 0.5rem; }
+    .band-wrap { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.4rem; justify-items: start; }
+    .stages { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.5rem; }
     .stage { grid-template-columns: 2fr 1fr 2fr auto; align-items: center; }
     .stage input { padding: 0.35rem 0.5rem; border: 1px solid var(--v-line-strong); border-radius: var(--v-radius); background: var(--v-surface); }
     .check { display: flex; gap: 0.5rem; align-items: center; font-size: var(--v-fs-s); color: var(--v-ink-2); align-self: end; padding-bottom: 0.5rem; }
-    @media (max-width: 40rem) { .stage { grid-template-columns: 1fr 1fr; } }
+    // A phone fits one field per line. Pinned columns would push the page sideways,
+    // and a page that scrolls sideways takes the tab bar with it.
+    @media (max-width: 40rem) {
+      .stage { grid-template-columns: minmax(0, 1fr); }
+      .goal .head { grid-template-columns: minmax(0, 1fr); }
+    }
   `,
 })
 export class TenantSettingsForm {

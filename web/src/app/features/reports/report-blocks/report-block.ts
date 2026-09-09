@@ -39,12 +39,12 @@ import { CHART_PALETTE } from './palette';
   imports: [NgxEchartsDirective, MarkdownPipe, StatusTag],
   template: `
     @if (block().error) {
-      <div class="v-panel failed"><h3>{{ block().meta.title }}</h3><p class="v-small">{{ i18n.t('Could not compute this block:') }} {{ failed().message }}</p></div>
+      <div class="v-panel failed"><h3>{{ i18n.t(block().meta.title) }}</h3><p class="v-small">{{ i18n.t('Could not compute this block:') }} {{ failed().message }}</p></div>
     } @else {
       @switch (block().meta.type) {
         @case ('kpi_tile') {
           <div class="tile" [class]="'tile ' + toneOf(kpi().zone ?? kpi().quality)">
-            <span class="t">{{ kpi().meta.title }}</span>
+            <span class="t">{{ i18n.t(kpi().meta.title) }}</span>
             <span class="v">{{ kpiValue() }} <span class="u">{{ kpi().unit }}</span></span>
             @if (kpi().delta != null) { <span class="d">{{ formatSigned(kpi().delta, kpi().decimals) }} {{ i18n.t('vs. previous period') }}</span> }
             @if (kpi().note) { <span class="d">{{ kpi().note }}</span> }
@@ -52,96 +52,106 @@ import { CHART_PALETTE } from './palette';
         }
         @case ('band_distribution') {
           <div class="v-panel">
-            <h3>{{ block().meta.title }}</h3>
-            <table class="v-table">
-              <thead><tr><th>{{ i18n.t('Nutrient') }}</th><th>{{ i18n.t('Distribution') }}</th><th class="num">{{ i18n.t('below min') }}</th><th class="num">{{ i18n.t('below opt.') }}</th><th class="num">{{ i18n.t('optimal') }}</th><th class="num">{{ i18n.t('above opt.') }}</th><th class="num">{{ i18n.t('above max') }}</th><th class="num">Ø</th><th class="num">{{ i18n.t('days') }}</th></tr></thead>
-              <tbody>
-                @for (r of dist().rows; track r.macro) {
-                  <tr>
-                    <td>{{ r.macro }}@if (r.band) { <span class="v-small v-muted"> {{ r.band.min }} / {{ r.band.opt_min }}–{{ r.band.opt_max }} / {{ r.band.max }}</span> }</td>
-                    <td class="bar"><div class="stack">
-                      <span style="background: #eb6834" [style.flex]="r.stat.below_min"></span><span style="background: #eda100" [style.flex]="r.stat.below_optimum"></span>
-                      <span style="background: #1baf7a" [style.flex]="r.stat.optimal"></span><span style="background: #eda100" [style.flex]="r.stat.above_optimum"></span><span style="background: #eb6834" [style.flex]="r.stat.above_max"></span>
-                    </div></td>
-                    <td class="num">{{ r.stat.below_min }}</td><td class="num">{{ r.stat.below_optimum }}</td><td class="num">{{ r.stat.optimal }}</td><td class="num">{{ r.stat.above_optimum }}</td><td class="num">{{ r.stat.above_max }}</td>
-                    <td class="num">{{ formatMacro(r.stat.mean, asMacro(r.macro)) }}</td><td class="num">{{ r.days_rated }}</td>
-                  </tr>
-                }
-              </tbody>
-            </table>
+            <h3>{{ i18n.t(block().meta.title) }}</h3>
+            <div class="v-scroll-x">
+              <table class="v-table">
+                <thead><tr><th>{{ i18n.t('Nutrient') }}</th><th>{{ i18n.t('Distribution') }}</th><th class="num">{{ i18n.t('below min') }}</th><th class="num">{{ i18n.t('below opt.') }}</th><th class="num">{{ i18n.t('optimal') }}</th><th class="num">{{ i18n.t('above opt.') }}</th><th class="num">{{ i18n.t('above max') }}</th><th class="num">Ø</th><th class="num">{{ i18n.t('days') }}</th></tr></thead>
+                <tbody>
+                  @for (r of dist().rows; track r.macro) {
+                    <tr>
+                      <td>{{ i18n.t(r.macro) }}@if (r.band) { <span class="v-small v-muted"> {{ r.band.min }} / {{ r.band.opt_min }}–{{ r.band.opt_max }} / {{ r.band.max }}</span> }</td>
+                      <td class="bar"><div class="stack">
+                        <span style="background: #eb6834" [style.flex]="r.stat.below_min"></span><span style="background: #eda100" [style.flex]="r.stat.below_optimum"></span>
+                        <span style="background: #1baf7a" [style.flex]="r.stat.optimal"></span><span style="background: #eda100" [style.flex]="r.stat.above_optimum"></span><span style="background: #eb6834" [style.flex]="r.stat.above_max"></span>
+                      </div></td>
+                      <td class="num">{{ r.stat.below_min }}</td><td class="num">{{ r.stat.below_optimum }}</td><td class="num">{{ r.stat.optimal }}</td><td class="num">{{ r.stat.above_optimum }}</td><td class="num">{{ r.stat.above_max }}</td>
+                      <td class="num">{{ formatMacro(r.stat.mean, asMacro(r.macro)) }}</td><td class="num">{{ r.days_rated }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
           </div>
         }
         @case ('tdee_windows') {
           <div class="v-panel">
-            <h3>{{ block().meta.title }} @if (tdee().reference_tdee != null) { <span class="v-small v-muted">{{ i18n.t('reference') }} {{ formatMacro(tdee().reference_tdee, 'kcal') }} kcal, {{ basisLabel(tdee().reference_basis) }}</span> }</h3>
-            <table class="v-table">
-              <thead><tr><th>{{ i18n.t('Window') }}</th><th class="num">Ø kcal</th><th class="num">Δ {{ i18n.t('weight') }}</th><th class="num">TDEE</th><th class="num">{{ i18n.t('Coverage') }}</th><th class="num">{{ i18n.t('in / above corridor') }}</th>@if (tdee().show_quality) { <th>{{ i18n.t('Grade') }}</th> }</tr></thead>
-              <tbody>
-                @for (r of tdee().rows; track r.window_days) {
-                  <tr>
-                    <td>{{ i18n.t('{n} days', { n: r.window_days }) }}</td><td class="num">{{ formatMacro(r.mean_kcal, 'kcal') }}</td>
-                    <td class="num">{{ formatSigned(r.delta_ma_kg, 2, 'kg') }}</td>
-                    <td class="num">{{ formatMacro(r.tdee, 'kcal') }}@if (r.tdee == null && r.rejected_tdee != null) { <span class="v-small v-muted" [title]="i18n.t('rejected as implausible')">({{ formatMacro(r.rejected_tdee, 'kcal') }})</span> }</td>
-                    <td class="num">{{ r.coverage_pct }} %</td><td class="num">{{ r.in_corridor }} / {{ r.above_corridor }}</td>
-                    @if (tdee().show_quality) { <td><span class="v-tag" [class]="'v-tag ' + toneOf(r.quality)">{{ gradeLabel(r.quality) }}</span>@if (r.days_without_macros) { <span class="v-small v-muted"> {{ i18n.t('{n} days without macros', { n: r.days_without_macros }) }}</span> }</td> }
-                  </tr>
-                }
-              </tbody>
-            </table>
+            <h3>{{ i18n.t(block().meta.title) }} @if (tdee().reference_tdee != null) { <span class="v-small v-muted">{{ i18n.t('reference') }} {{ formatMacro(tdee().reference_tdee, 'kcal') }} kcal, {{ basisLabel(tdee().reference_basis) }}</span> }</h3>
+            <div class="v-scroll-x">
+              <table class="v-table">
+                <thead><tr><th>{{ i18n.t('Window') }}</th><th class="num">Ø kcal</th><th class="num">Δ {{ i18n.t('weight') }}</th><th class="num">TDEE</th><th class="num">{{ i18n.t('Coverage') }}</th><th class="num">{{ i18n.t('in / above corridor') }}</th>@if (tdee().show_quality) { <th>{{ i18n.t('Grade') }}</th> }</tr></thead>
+                <tbody>
+                  @for (r of tdee().rows; track r.window_days) {
+                    <tr>
+                      <td>{{ i18n.t('{n} days', { n: r.window_days }) }}</td><td class="num">{{ formatMacro(r.mean_kcal, 'kcal') }}</td>
+                      <td class="num">{{ formatSigned(r.delta_ma_kg, 2, 'kg') }}</td>
+                      <td class="num">{{ formatMacro(r.tdee, 'kcal') }}@if (r.tdee == null && r.rejected_tdee != null) { <span class="v-small v-muted" [title]="i18n.t('rejected as implausible')">({{ formatMacro(r.rejected_tdee, 'kcal') }})</span> }</td>
+                      <td class="num">{{ r.coverage_pct }} %</td><td class="num">{{ r.in_corridor }} / {{ r.above_corridor }}</td>
+                      @if (tdee().show_quality) { <td><span class="v-tag" [class]="'v-tag ' + toneOf(r.quality)">{{ gradeLabel(r.quality) }}</span>@if (r.days_without_macros) { <span class="v-small v-muted"> {{ i18n.t('{n} days without macros', { n: r.days_without_macros }) }}</span> }</td> }
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
           </div>
         }
         @case ('trend') {
           <div class="v-panel">
-            <h3>{{ block().meta.title }}</h3>
-            <table class="v-table">
-              <thead><tr><th>{{ i18n.t('Window') }}</th><th class="num">{{ i18n.t('kg / day') }}</th><th class="num">{{ i18n.t('kg / week') }}</th><th class="num">{{ i18n.t('actual change') }}</th><th class="num">{{ i18n.t('weigh-ins') }}</th></tr></thead>
-              <tbody>@for (r of trend().rows; track r.window) {
-                <tr><td>{{ i18n.t('{n} days', { n: r.window }) }}</td><td class="num">{{ formatSigned(r.slope_per_day, 3) }}</td><td class="num">{{ formatSigned(r.kg_per_week, 2) }}</td><td class="num">{{ formatSigned(r.actual_delta, 1, 'kg') }}</td><td class="num">{{ r.measured_days }}</td></tr>
-              }</tbody>
-            </table>
+            <h3>{{ i18n.t(block().meta.title) }}</h3>
+            <div class="v-scroll-x">
+              <table class="v-table">
+                <thead><tr><th>{{ i18n.t('Window') }}</th><th class="num">{{ i18n.t('kg / day') }}</th><th class="num">{{ i18n.t('kg / week') }}</th><th class="num">{{ i18n.t('actual change') }}</th><th class="num">{{ i18n.t('weigh-ins') }}</th></tr></thead>
+                <tbody>@for (r of trend().rows; track r.window) {
+                  <tr><td>{{ i18n.t('{n} days', { n: r.window }) }}</td><td class="num">{{ formatSigned(r.slope_per_day, 3) }}</td><td class="num">{{ formatSigned(r.kg_per_week, 2) }}</td><td class="num">{{ formatSigned(r.actual_delta, 1, 'kg') }}</td><td class="num">{{ r.measured_days }}</td></tr>
+                }</tbody>
+              </table>
+            </div>
           </div>
         }
         @case ('forecast') {
           <div class="v-panel">
-            <h3>{{ block().meta.title }} <span class="v-small v-muted">{{ i18n.t('goal {kg} by {date}', { kg: formatKg(forecast().goal_kg) + ' kg', date: forecast().goal_date }) }}@if (forecast().current_kg != null) { · {{ i18n.t('now') }} {{ formatKg(forecast().current_kg) }} kg }</span></h3>
-            <table class="v-table">
-              <thead><tr><th>{{ i18n.t('Based on') }}</th><th class="num">{{ i18n.t('kg / week') }}</th><th class="num">{{ i18n.t('in 1 month') }}</th><th class="num">{{ i18n.t('3 months') }}</th><th class="num">{{ i18n.t('6 months') }}</th><th class="num">{{ i18n.t('at goal date') }}</th>@if (forecast().with_eta) { <th>{{ i18n.t('goal reached') }}</th> }</tr></thead>
-              <tbody>@for (r of forecast().rows; track r.window) {
-                <tr><td>{{ i18n.t('{n}-day trend', { n: r.window }) }}</td><td class="num">{{ formatSigned(r.kg_per_week, 2) }}</td><td class="num">{{ formatKg(r.m1) }}</td><td class="num">{{ formatKg(r.m3) }}</td><td class="num">{{ formatKg(r.m6) }}</td><td class="num">{{ formatKg(r.at_goal_date) }}</td>@if (forecast().with_eta) { <td>{{ r.eta ?? i18n.t('not on this trend') }}</td> }</tr>
-              }</tbody>
-            </table>
+            <h3>{{ i18n.t(block().meta.title) }} <span class="v-small v-muted">{{ i18n.t('goal {kg} by {date}', { kg: formatKg(forecast().goal_kg) + ' kg', date: forecast().goal_date }) }}@if (forecast().current_kg != null) { · {{ i18n.t('now') }} {{ formatKg(forecast().current_kg) }} kg }</span></h3>
+            <div class="v-scroll-x">
+              <table class="v-table">
+                <thead><tr><th>{{ i18n.t('Based on') }}</th><th class="num">{{ i18n.t('kg / week') }}</th><th class="num">{{ i18n.t('in 1 month') }}</th><th class="num">{{ i18n.t('3 months') }}</th><th class="num">{{ i18n.t('6 months') }}</th><th class="num">{{ i18n.t('at goal date') }}</th>@if (forecast().with_eta) { <th>{{ i18n.t('goal reached') }}</th> }</tr></thead>
+                <tbody>@for (r of forecast().rows; track r.window) {
+                  <tr><td>{{ i18n.t('{n}-day trend', { n: r.window }) }}</td><td class="num">{{ formatSigned(r.kg_per_week, 2) }}</td><td class="num">{{ formatKg(r.m1) }}</td><td class="num">{{ formatKg(r.m3) }}</td><td class="num">{{ formatKg(r.m6) }}</td><td class="num">{{ formatKg(r.at_goal_date) }}</td>@if (forecast().with_eta) { <td>{{ r.eta ?? i18n.t('not on this trend') }}</td> }</tr>
+                }</tbody>
+              </table>
+            </div>
           </div>
         }
         @case ('burndown') {
           <div class="v-panel">
-            <h3>{{ block().meta.title }} <span class="v-small v-muted">{{ formatSigned(burndown().result.gap, 1, 'kg') }} {{ i18n.t('vs. plan') }} · {{ i18n.t('actual') }} {{ formatSigned(burndown().result.actual_rate_per_week, 2, 'kg/week') }} · {{ i18n.t('required') }} {{ formatSigned(burndown().result.required_rate_per_week, 2, 'kg/week') }}</span></h3>
+            <h3>{{ i18n.t(block().meta.title) }} <span class="v-small v-muted">{{ formatSigned(burndown().result.gap, 1, 'kg') }} {{ i18n.t('vs. plan') }} · {{ i18n.t('actual') }} {{ formatSigned(burndown().result.actual_rate_per_week, 2, 'kg/week') }} · {{ i18n.t('required') }} {{ formatSigned(burndown().result.required_rate_per_week, 2, 'kg/week') }}</span></h3>
             <div echarts [options]="burndownChart()" class="echart" [attr.aria-label]="i18n.t('Planned versus actual weight')"></div>
             @if (burndown().result.stages.length) {
               <p class="v-small v-muted">{{ i18n.t('Below the goal line means ahead of plan. Each dotted line is one of your stages.') }}</p>
-              <table class="v-table stages">
-                <thead><tr><th>{{ i18n.t('Stage') }}</th><th>{{ i18n.t('Date') }}</th><th class="num">{{ i18n.t('gap') }}</th><th class="num">{{ i18n.t('required kg / week') }}</th><th class="num">{{ i18n.t('eat kcal / day') }}</th><th>{{ i18n.t('feasible') }}</th></tr></thead>
-                <tbody>@for (st of burndown().result.stages; track st.name) {
-                  <tr><td>{{ st.name }}</td><td>{{ st.date }}</td><td class="num">{{ formatSigned(st.gap, 1, 'kg') }}</td><td class="num">{{ formatSigned(st.required_kg_per_week, 2) }}</td><td class="num">{{ st.eat_kcal_per_day == null ? '–' : formatMacro(st.eat_kcal_per_day, 'kcal') }}</td><td>{{ st.feasible ? i18n.t('yes') : i18n.t('no') }}</td></tr>
-                }</tbody>
-              </table>
+              <div class="v-scroll-x">
+                <table class="v-table stages">
+                  <thead><tr><th>{{ i18n.t('Stage') }}</th><th>{{ i18n.t('Date') }}</th><th class="num">{{ i18n.t('gap') }}</th><th class="num">{{ i18n.t('required kg / week') }}</th><th class="num">{{ i18n.t('eat kcal / day') }}</th><th>{{ i18n.t('feasible') }}</th></tr></thead>
+                  <tbody>@for (st of burndown().result.stages; track st.name) {
+                    <tr><td>{{ st.name }}</td><td>{{ st.date }}</td><td class="num">{{ formatSigned(st.gap, 1, 'kg') }}</td><td class="num">{{ formatSigned(st.required_kg_per_week, 2) }}</td><td class="num">{{ st.eat_kcal_per_day == null ? '–' : formatMacro(st.eat_kcal_per_day, 'kcal') }}</td><td>{{ st.feasible ? i18n.t('yes') : i18n.t('no') }}</td></tr>
+                  }</tbody>
+                </table>
+              </div>
             }
           </div>
         }
         @case ('weekly_chart') {
           <div class="v-panel">
-            <h3>{{ block().meta.title }}</h3>
+            <h3>{{ i18n.t(block().meta.title) }}</h3>
             <div echarts [options]="weeklyChart()" class="echart" [attr.aria-label]="i18n.t('Weekly intake and expenditure')"></div>
           </div>
         }
         @case ('timeline') {
           <div class="v-panel">
-            <h3>{{ block().meta.title }} <span class="v-small v-muted">{{ i18n.t('weight, intake, rolling {n}-day TDEE and macros on one axis', { n: timeline().tdee_window }) }}</span></h3>
+            <h3>{{ i18n.t(block().meta.title) }} <span class="v-small v-muted">{{ i18n.t('weight, intake, rolling {n}-day TDEE and macros on one axis', { n: timeline().tdee_window }) }}</span></h3>
             <div echarts [options]="timelineChart()" class="echart tall" [attr.aria-label]="i18n.t('Weight, intake, TDEE and macros over time')"></div>
           </div>
         }
         @case ('day_list') {
           <div class="v-panel">
-            <h3>{{ block().meta.title }}</h3>
+            <h3>{{ i18n.t(block().meta.title) }}</h3>
             <div class="v-scroll-x"><table class="v-table">
               <thead><tr><th>{{ i18n.t('Day') }}</th>@for (c of dayList().columns; track c) { <th class="num">{{ c }}</th> }</tr></thead>
               <tbody>@for (r of dayList().rows; track r.date) {
@@ -160,7 +170,7 @@ import { CHART_PALETTE } from './palette';
         }
         @case ('text_finding') {
           <div class="v-panel finding">
-            <h3>{{ block().meta.title }}</h3>
+            <h3>{{ i18n.t(block().meta.title) }}</h3>
             @if (finding().markdown) { <div class="v-md" [innerHTML]="finding().markdown | markdown"></div> } @else {
               <p class="v-muted">{{ i18n.t('No assessment yet. Freeze this report below to keep its numbers, then let Claude judge that moment. The text and the figures then belong together.') }}</p>
             }
@@ -168,7 +178,7 @@ import { CHART_PALETTE } from './palette';
         }
         @case ('body_composition') {
           <div class="v-panel body">
-            <h3>{{ block().meta.title }}</h3>
+            <h3>{{ i18n.t(block().meta.title) }}</h3>
             @if (body().weight_kg != null) {
               <p class="v-small v-muted">
                 {{ format.number(body().weight_kg!, 1) }} kg@if (body().height_cm) { {{ i18n.t('at {cm} cm', { cm: body().height_cm! }) }} }
@@ -179,52 +189,71 @@ import { CHART_PALETTE } from './palette';
               <div class="measure">
                 <div class="head">
                   <span class="what">{{ m.label }}</span>
-                  <span class="val">{{ format.number(m.rated.value, m.decimals) }}</span>
-                  <span class="v-tag" [class]="'v-tag ' + toneTag(m.rated.tone)">{{ m.rated.band }}</span>
-                  @if (m.rated.to_next != null) {
-                    <span class="v-small v-muted">{{ format.number(absOf(m.rated.to_next), m.decimals) }} {{ i18n.t('to the next class') }}</span>
-                  }
+                  <span class="mid">
+                    <span class="val">{{ format.number(m.rated.value, m.decimals) }}</span>
+                    @if (m.rated.to_next != null) {
+                      <span class="v-small v-muted">{{ format.number(absOf(m.rated.to_next), m.decimals) }} {{ i18n.t('to the next class') }}</span>
+                    }
+                  </span>
+                  <span [class]="'v-tag ' + toneTag(m.rated.tone)">{{ i18n.t(m.rated.band) }}</span>
                 </div>
-                <div class="scale" [attr.aria-label]="m.label + ': ' + m.rated.band">
+                <div class="scale" [attr.aria-label]="m.label + ': ' + i18n.t(m.rated.band)">
                   @for (seg of segments(m.rated); track seg.name) {
-                    <span class="seg" [class]="'seg ' + seg.tone" [class.here]="seg.here" [style.flex]="seg.weight" [title]="seg.title"></span>
+                    <span [class]="seg.classes" [style.flex]="seg.weight" [title]="seg.title"></span>
                   }
                   <span class="pin" [style.left.%]="position(m.rated)"></span>
                 </div>
               </div>
             }
             @if (body().bmi_weight_bands.length && body().weight_kg != null) {
-              <details class="marks">
-                <summary class="v-small">{{ i18n.t('What the classes mean in kilograms') }}</summary>
-                <table class="v-table">
-                  <thead><tr><th>{{ i18n.t('Class') }}</th><th class="num">{{ i18n.t('from') }}</th><th class="num">{{ i18n.t('to') }}</th></tr></thead>
+              <div class="marks">
+                <p class="v-small v-muted title">{{ i18n.t('What the classes mean in kilograms') }}</p>
+                <div class="v-scroll-x">
+                  <table class="v-table">
+                    <thead>
+                      <tr>
+                        <th>{{ i18n.t('Class') }}</th>
+                        <th class="num">BMI</th>
+                        <th class="num">kg</th>
+                        <th class="num">{{ i18n.t('still needed') }}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (m of body().bmi_weight_bands; track m.name) {
+                        <tr [class.here]="inBand(m)">
+                          <td>{{ i18n.t(m.name) }}</td>
+                          <td class="num">{{ range(m.lower, m.upper, 1) }}</td>
+                          <td class="num">{{ range(m.lower_kg, m.upper_kg, 1) }}</td>
+                          <td class="num">
+                            @if (inBand(m)) { {{ i18n.t('you are here') }} }
+                            @else if (m.to_reach_kg != null) {
+                              {{ (m.to_reach_kg > 0 ? '+' : '−') + format.number(absOf(m.to_reach_kg), 1) }} kg
+                            } @else { – }
+                          </td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            }
+            @if (circumferences().length) {
+              <div class="v-scroll-x">
+                <table class="v-table circ">
+                  <thead><tr><th></th><th class="num">{{ i18n.t('now') }}</th><th class="num">{{ i18n.t('Change') }}</th></tr></thead>
                   <tbody>
-                    @for (m of body().bmi_weight_bands; track m.name) {
-                      <tr [class.here]="inBand(m)">
-                        <td>{{ m.name }}</td>
-                        <td class="num">{{ m.lower ? format.number(m.lower, 1) + ' kg' : '–' }}</td>
-                        <td class="num">{{ m.upper ? format.number(m.upper, 1) + ' kg' : '–' }}</td>
+                    @for (c of circumferences(); track c.key) {
+                      <tr>
+                        <td>{{ c.label }}</td>
+                        <td class="num">{{ format.number(c.value, 1) }} cm</td>
+                        <td class="num" [class.down]="(c.change ?? 0) < 0" [class.up]="(c.change ?? 0) > 0">
+                          {{ c.change == null ? '–' : (c.change > 0 ? '+' : '−') + format.number(absOf(c.change), 1) + ' cm' }}
+                        </td>
                       </tr>
                     }
                   </tbody>
                 </table>
-              </details>
-            }
-            @if (circumferences().length) {
-              <table class="v-table circ">
-                <thead><tr><th></th><th class="num">{{ i18n.t('now') }}</th><th class="num">{{ i18n.t('Change') }}</th></tr></thead>
-                <tbody>
-                  @for (c of circumferences(); track c.key) {
-                    <tr>
-                      <td>{{ c.label }}</td>
-                      <td class="num">{{ format.number(c.value, 1) }} cm</td>
-                      <td class="num" [class.down]="(c.change ?? 0) < 0" [class.up]="(c.change ?? 0) > 0">
-                        {{ c.change == null ? '–' : (c.change > 0 ? '+' : '−') + format.number(absOf(c.change), 1) + ' cm' }}
-                      </td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
+              </div>
             }
             @if (body().missing.length) {
               <p class="v-small v-muted">{{ i18n.t('Not shown: {reasons}.', { reasons: body().missing.join('; ') }) }}</p>
@@ -233,21 +262,31 @@ import { CHART_PALETTE } from './palette';
         }
         @case ('energy_split') {
           <div class="v-panel energy">
-            <h3>{{ block().meta.title }}</h3>
+            <h3>{{ i18n.t(block().meta.title) }}</h3>
             @if (energy().tdee_kcal == null) {
               <p class="v-muted">{{ i18n.t('Not available: {reasons}.', { reasons: energy().missing.join('; ') || i18n.t('no data') }) }}</p>
             } @else {
               <div class="rows">
                 <div><span>{{ i18n.t('Expenditure') }}</span><b>{{ format.number(energy().tdee_kcal!) }} kcal</b><span class="v-small v-muted">{{ basisLabel(energy().basis) }}</span></div>
                 @if (energy().basal_kcal != null) {
-                  <div><span>{{ i18n.t('At rest') }}</span><b>{{ format.number(energy().basal_kcal!) }} kcal</b><span class="v-small v-muted">{{ i18n.t('age {n}', { n: energy().age_years ?? '' }) }}</span></div>
-                  <div><span>{{ i18n.t('From moving') }}</span><b>{{ format.number(energy().activity_kcal!) }} kcal</b><span class="v-small v-muted">{{ format.number(energy().pal!, 2) }} × {{ i18n.t('resting') }}</span></div>
+                  <div>
+                    <span>{{ i18n.t('At rest') }}</span>
+                    <b>{{ format.number(energy().basal_kcal!) }} kcal</b>
+                    <span class="share">{{ format.number(sharePct(energy().basal_kcal!), 0) }} %</span>
+                    <span class="v-small v-muted">{{ i18n.t('age {n}', { n: energy().age_years ?? '' }) }}</span>
+                  </div>
+                  <div>
+                    <span>{{ i18n.t('From moving') }}</span>
+                    <b>{{ format.number(energy().activity_kcal!) }} kcal</b>
+                    <span class="share">{{ format.number(sharePct(energy().activity_kcal!), 0) }} %</span>
+                    <span class="v-small v-muted">{{ format.number(energy().pal!, 2) }} × {{ i18n.t('resting') }}</span>
+                  </div>
                 }
               </div>
               @if (energy().basal_kcal != null) {
                 <div class="split" [attr.aria-label]="i18n.t('resting versus activity')">
-                  <span class="rest" [style.flex]="energy().basal_kcal!">{{ i18n.t('at rest') }}</span>
-                  <span class="move" [style.flex]="maxOf(energy().activity_kcal!, 1)">{{ i18n.t('moving') }}</span>
+                  <span class="rest" [style.flex]="energy().basal_kcal!">{{ i18n.t('at rest') }} {{ format.number(sharePct(energy().basal_kcal!), 0) }} %</span>
+                  <span class="move" [style.flex]="maxOf(energy().activity_kcal!, 1)">{{ i18n.t('moving') }} {{ format.number(sharePct(energy().activity_kcal!), 0) }} %</span>
                 </div>
               }
               @if (energy().caveat) { <p class="v-small warn-text">{{ energy().caveat }}</p> }
@@ -262,32 +301,48 @@ import { CHART_PALETTE } from './palette';
     }
   `,
   styles: `
-    .body, .energy { display: grid; gap: 0.6rem; }
-    .measure { display: grid; gap: 0.3rem; }
-    .measure .head { display: flex; gap: 0.5rem; align-items: baseline; flex-wrap: wrap; }
-    .measure .what { min-width: 8rem; color: var(--v-ink-2); }
+    .body, .energy { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.6rem; }
+    .measure { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.3rem; }
+    /* Name on the left, the figure in the middle, the class it falls in on the right:
+       the chip is the answer, so it sits where the eye stops. */
+    .measure .head { display: flex; gap: 0.5rem 0.75rem; align-items: center; }
+    .measure .what { color: var(--v-ink-2); }
+    .measure .mid { flex: 1; display: flex; justify-content: center; align-items: baseline; gap: 0.5rem; min-width: 0; }
     .measure .val { font-size: var(--v-fs-l); font-weight: 600; font-variant-numeric: tabular-nums; }
+    .measure .v-tag { flex: none; }
     .scale { position: relative; display: flex; height: 0.7rem; border-radius: 999px; overflow: hidden; background: var(--v-surface-2); }
-    .seg { display: block; opacity: 0.35; }
-    .seg.here { opacity: 0.9; }
-    .seg.ok { background: var(--v-ok); }
-    .seg.watch { background: var(--v-warn); }
-    .seg.warn { background: var(--v-warn); }
-    .seg.bad { background: var(--v-bad); }
+    /* A segment is coloured by what its class means, so the bar and the chip beside it
+       agree. Where a scale repeats a meaning — WHO has three classes of obesity, all of
+       them "bad" — the further one takes the next step of the ramp, which is the only
+       thing the ramp is for. The class the value falls in is not highlighted: the pin
+       already says where it is. */
+    .seg { display: block; }
+    .seg.t-ok { background: var(--v-scale-1); }
+    .seg.t-watch { background: var(--v-scale-2); }
+    .seg.t-warn { background: var(--v-scale-3); }
+    .seg.t-warn.lvl2 { background: var(--v-scale-4); }
+    .seg.t-warn.lvl3 { background: var(--v-scale-5); }
+    .seg.t-bad { background: var(--v-scale-5); }
+    .seg.t-bad.lvl2 { background: var(--v-scale-5); filter: brightness(0.85); }
     .pin { position: absolute; top: -0.15rem; width: 2px; height: 1rem; background: var(--v-ink); transform: translateX(-1px); }
-    .marks summary { cursor: pointer; color: var(--v-ink-2); }
-    .marks tr.here { background: var(--v-primary-soft); font-weight: 500; }
-    .circ .down { color: var(--v-ok); }
-    .circ .up { color: var(--v-warn); }
-    .energy .rows { display: grid; gap: 0.3rem; }
+    .marks { margin-top: 0.4rem; }
+    .marks .title { margin: 0 0 0.2rem; }
+    /* The row the weight falls in is marked at its edge, not filled: a bright band across
+       a table of numbers reads as an alert, and this is only "you are here". */
+    .marks tr.here td { font-weight: 600; }
+    .marks tr.here td:first-child { box-shadow: inset 3px 0 0 var(--v-primary); }
+    .circ .down { color: var(--v-ok-ink); }
+    .circ .up { color: var(--v-warn-ink); }
+    .energy .rows { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.3rem; }
     .energy .rows > div { display: flex; gap: 0.5rem; align-items: baseline; }
     .energy .rows > div > span:first-child { min-width: 8rem; color: var(--v-ink-2); }
     .energy .rows b { font-variant-numeric: tabular-nums; }
+    .energy .share { color: var(--v-ink-2); font-variant-numeric: tabular-nums; min-width: 3rem; }
     .split { display: flex; height: 1.4rem; border-radius: var(--v-radius); overflow: hidden; font-size: var(--v-fs-xs); }
-    .split span { display: grid; place-items: center; color: var(--v-primary-ink); }
+    .split span { display: grid; grid-template-columns: minmax(0, 1fr); place-items: center; color: var(--v-primary-ink); }
     .split .rest { background: var(--v-primary); }
     .split .move { background: var(--v-ok); }
-    .warn-text { color: var(--v-warn); }
+    .warn-text { color: var(--v-warn-ink); }
 
     :host { display: block; min-width: 0; }
     /* One row each for title, value and note, so tiles line up whether or not a note is present. */
@@ -368,7 +423,8 @@ export class ReportBlockView {
     const goal = bd.goal_kg;
     const actual = bd.result.actual as [string, number][];
     const kg = (v: number) => `${v.toFixed(1)} kg`;
-    const day = (v: string | number) => new Date(v).toLocaleDateString();
+    const day = (v: string | number) =>
+      this.format.day(typeof v === 'number' ? new Date(v).toISOString() : v);
     const dot = (c?: string) => `<span style="display:inline-block;width:.55em;height:.55em;border-radius:50%;background:${c ?? 'currentColor'};margin-right:.4em"></span>`;
 
     const head = rows[0]?.value ? day(rows[0].value[0]) : '';
@@ -642,6 +698,12 @@ export class ReportBlockView {
     return Math.abs(value);
   }
 
+  /** One part of the day's expenditure as a share of it: a ratio reads faster than two totals. */
+  sharePct(part: number): number {
+    const total = this.energy().tdee_kcal;
+    return total ? (part / total) * 100 : 0;
+  }
+
   maxOf(value: number, floor: number): number {
     return Math.max(value, floor);
   }
@@ -674,18 +736,71 @@ export class ReportBlockView {
    * The open classes at either end have no width of their own, so they are drawn as wide
    * as the average closed one; otherwise a bar with an open top would be meaningless.
    */
-  segments(r: RatedValue): { name: string; tone: string; weight: number; here: boolean; title: string }[] {
+  segments(
+    r: RatedValue,
+  ): { name: string; classes: string; weight: number; span: number; title: string }[] {
     const widths = r.bands
       .filter((b) => b.lower != null && b.upper != null)
       .map((b) => b.upper! - b.lower!);
     const fallback = widths.length ? widths.reduce((a, c) => a + c, 0) / widths.length : 1;
-    return r.bands.map((b) => ({
+    const healthy = r.bands.findIndex((b) => b.tone === 'ok');
+    const raw = r.bands.map((b) =>
+      b.lower != null && b.upper != null ? b.upper - b.lower : fallback,
+    );
+    const total = raw.reduce((a, c) => a + c, 0) || 1;
+    // A segment says what its class means, so the bar agrees with the chip beside it. Only
+    // where a scale repeats a meaning does it need more: the three obesity classes are all
+    // "bad", so the further one from the healthy class takes the next step of the ramp.
+    const anchor = healthy < 0 ? 0 : healthy;
+    const rank = new Map<number, number>();
+    const perTone = new Map<string, number>();
+    // Each side of the healthy class is ranked on its own: underweight and obesity I are
+    // both the first "warn" of their direction, and sharing a colour at opposite ends of
+    // the bar reads fine. Ranking them together is what made two neighbours identical.
+    for (const { i, key } of r.bands
+      .map((b, i) => ({ i, key: b.tone + (i < anchor ? '-' : '+'), distance: Math.abs(i - anchor) }))
+      .sort((a, c) => a.distance - c.distance)) {
+      const next = (perTone.get(key) ?? 0) + 1;
+      perTone.set(key, next);
+      rank.set(i, next);
+    }
+    return r.bands.map((b, i) => ({
       name: b.name,
-      tone: b.tone,
-      weight: b.lower != null && b.upper != null ? b.upper - b.lower : fallback,
-      here: b.name === r.band,
-      title: `${b.name}: ${b.lower ?? '–'} ${this.i18n.t('to')} ${b.upper ?? '–'}`,
+      // one expression, because [class] and [class.x] together drop the flag
+      classes: `seg t-${b.tone} lvl${rank.get(i) ?? 1}`,
+      // normalised: flex-grow factors summing below 1 fill only that share of the bar
+      weight: (raw[i] / total) * 100,
+      span: raw[i],
+      title: this.segmentTitle(b, r),
     }));
+  }
+
+  /** What a segment says on hover: its own range in every unit it has, and the way there. */
+  private segmentTitle(b: ThresholdMark, r: RatedValue): string {
+    const parts = [this.i18n.t(b.name), this.range(b.lower, b.upper, r.unit === '' ? 1 : 2)];
+    if (b.lower_kg != null || b.upper_kg != null) {
+      parts.push(`${this.range(b.lower_kg, b.upper_kg, 1)} kg`);
+    }
+    if (b.name === r.band) {
+      parts.push(this.i18n.t('you are here'));
+    } else if (b.to_reach_kg != null) {
+      const sign = b.to_reach_kg > 0 ? '+' : '−';
+      parts.push(
+        this.i18n.t('{kg} kg still needed', {
+          kg: sign + this.format.number(Math.abs(b.to_reach_kg), 1),
+        }),
+      );
+    }
+    return parts.join(' · ');
+  }
+
+  /** A range as one string, with an open end shown as such rather than as a dash. */
+  range(lower: number | null | undefined, upper: number | null | undefined, decimals: number): string {
+    const n = (v: number) => this.format.number(v, decimals);
+    if (lower != null && upper != null) return `${n(lower)}–${n(upper)}`;
+    if (upper != null) return `< ${n(upper)}`;
+    if (lower != null) return `≥ ${n(lower)}`;
+    return '–';
   }
 
   /** Where the value sits along the drawn scale, as a percentage. */
@@ -699,8 +814,9 @@ export class ReportBlockView {
         before += segs[i].weight;
         continue;
       }
-      const lower = band.lower ?? r.value - segs[i].weight;
-      const upper = band.upper ?? r.value + segs[i].weight;
+      // an open class has no range of its own, so its drawn width stands in for one
+      const lower = band.lower ?? r.value - segs[i].span;
+      const upper = band.upper ?? r.value + segs[i].span;
       const within = upper > lower ? (r.value - lower) / (upper - lower) : 0.5;
       const clamped = Math.min(Math.max(within, 0), 1);
       return ((before + clamped * segs[i].weight) / total) * 100;

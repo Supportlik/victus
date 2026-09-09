@@ -25,17 +25,21 @@ import { DayThread } from './day-thread';
       <header class="v-page-head">
         <div>
           <nav class="daynav v-small">
-            <a [routerLink]="['/days', prev()]">← {{ i18n.t('previous') }}</a>
-            <a routerLink="/days">{{ i18n.t('all days') }}</a>
-            <a [routerLink]="['/days', next()]">{{ i18n.t('next') }} →</a>
+            <a class="step" [routerLink]="['/days', prev()]" [title]="i18n.t('previous')">
+              <span aria-hidden="true">←</span><span class="word">{{ i18n.t('previous') }}</span>
+            </a>
+            <a class="all" routerLink="/days">{{ i18n.t('all days') }}</a>
+            <a class="step" [routerLink]="['/days', next()]" [title]="i18n.t('next')">
+              <span class="word">{{ i18n.t('next') }}</span><span aria-hidden="true">→</span>
+            </a>
           </nav>
           <h2>{{ date() | dayName }}</h2>
           @if (day(); as d) {
             <p class="sub">
               <v-status-tag [status]="d.status" />
-              @if (d.reliable === false) { <span class="v-tag warn">estimated day</span> }
-              @if (d.reliable === null) { <span class="v-tag bad">reliable flag missing</span> }
-              @if (d.target_band) { <span class="v-muted">band: {{ d.target_band.name }}</span> }
+              @if (d.reliable === false) { <span class="v-tag warn">{{ i18n.t('estimated day') }}</span> }
+              @if (d.reliable === null) { <span class="v-tag bad">{{ i18n.t('reliable flag missing') }}</span> }
+              @if (d.target_band) { <span class="v-muted">{{ i18n.t('band') }}: {{ d.target_band.name }}</span> }
             </p>
           }
         </div>
@@ -43,7 +47,7 @@ import { DayThread } from './day-thread';
           <div class="v-actions">
             <label class="v-field"><span>{{ i18n.t('Training') }}</span>
               <select [ngModel]="d.training_type ?? ''" (ngModelChange)="setTraining($event)">
-                <option value="">none / rest</option><option value="rest">rest</option><option value="strength">strength</option><option value="martial_arts">martial arts</option>
+                <option value="">{{ i18n.t('none / rest') }}</option><option value="rest">{{ i18n.t('rest') }}</option><option value="strength">{{ i18n.t('strength') }}</option><option value="martial_arts">{{ i18n.t('martial arts') }}</option>
               </select>
             </label>
             <label class="v-field"><span>{{ i18n.t('Reliable') }}</span>
@@ -56,7 +60,7 @@ import { DayThread } from './day-thread';
             } @else if (d.status === 'open') {
               <button type="button" class="v-btn primary" (click)="close()">{{ i18n.t('Close day') }}</button>
             } @else {
-              <a class="v-btn primary" [routerLink]="['/drafts', date()]">Review draft</a>
+              <a class="v-btn primary" [routerLink]="['/drafts', date()]">{{ i18n.t('Review draft') }}</a>
             }
           </div>
         }
@@ -65,17 +69,17 @@ import { DayThread } from './day-thread';
       @if (missing()) {
         <section class="v-panel create-day">
           <h3>{{ i18n.t('Nothing logged for this day yet') }}</h3>
-          <p class="v-small v-muted">Create the day to start adding meals. Say whether it will count: a day you only estimate as a whole (travel, party) does not enter the statistics.</p>
+          <p class="v-small v-muted">{{ i18n.t('Create the day to start adding meals. Say whether it will count: a day you only estimate as a whole (travel, party) does not enter the statistics.') }}</p>
           <form class="v-form-row" (ngSubmit)="createDay()">
-            <label class="v-field"><span>Counts for statistics?</span>
+            <label class="v-field"><span>{{ i18n.t('Counts for statistics?') }}</span>
               <select name="rel" [(ngModel)]="newReliable" required>
-                <option value="true">yes, I log it properly</option>
-                <option value="false">no, whole day estimated</option>
+                <option value="true">{{ i18n.t('yes, I log it properly') }}</option>
+                <option value="false">{{ i18n.t('no, whole day estimated') }}</option>
               </select>
             </label>
-            <label class="v-field"><span>Training</span>
+            <label class="v-field"><span>{{ i18n.t('Training') }}</span>
               <select name="tt" [(ngModel)]="newTraining">
-                <option value="">none / rest</option><option value="rest">rest</option><option value="strength">strength</option><option value="martial_arts">martial arts</option>
+                <option value="">{{ i18n.t('none / rest') }}</option><option value="rest">{{ i18n.t('rest') }}</option><option value="strength">{{ i18n.t('strength') }}</option><option value="martial_arts">{{ i18n.t('martial arts') }}</option>
               </select>
             </label>
             <button type="submit" class="v-btn primary">{{ i18n.t('Create this day') }}</button>
@@ -84,9 +88,9 @@ import { DayThread } from './day-thread';
       } @else if (error(); as e) { <div class="v-error">{{ e }}</div> }
 
       @if (day(); as d) {
-        <section class="gauges" aria-label="Targets">
+        <section class="gauges" [attr.aria-label]="i18n.t('Targets')">
           @for (k of macroKeys; track k) {
-            <v-band-gauge [macro]="k" [label]="label[k]" [unit]="unit[k]" [value]="d.macros[k]" [band]="bandFor(d, k)" [zone]="d.zones?.[k]" />
+            <v-band-gauge [macro]="k" [label]="i18n.t(label[k])" [unit]="unit[k]" [value]="d.macros[k]" [band]="bandFor(d, k)" [zone]="d.zones?.[k]" />
           }
         </section>
 
@@ -100,10 +104,10 @@ import { DayThread } from './day-thread';
           <section class="ledger">
             @if (d.has_drafts) {
               <div class="v-notice drafts-bar">
-                <span>This day has draft items from the agent. Accept them one by one below, or all at once.</span>
+                <span>{{ i18n.t('This day has draft items from the agent. Accept them one by one below, or all at once.') }}</span>
                 <span class="v-actions">
-                  <button type="button" class="v-btn small primary" (click)="acceptAll()">Accept all</button>
-                  <a class="v-btn small" routerLink="/inbox">Open the inbox</a>
+                  <button type="button" class="v-btn small primary" (click)="acceptAll()">{{ i18n.t('Accept all') }}</button>
+                  <a class="v-btn small" routerLink="/inbox">{{ i18n.t('Open the inbox') }}</a>
                 </span>
               </div>
             }
@@ -112,14 +116,14 @@ import { DayThread } from './day-thread';
                 <header>
                   @if (editingMeal() === meal.id) {
                     <form class="meal-edit" (ngSubmit)="saveMeal(meal)">
-                      <input name="mn{{ meal.id }}" [(ngModel)]="mealName" aria-label="Meal name" required />
-                      <input name="mt{{ meal.id }}" type="time" [(ngModel)]="mealTime" aria-label="Meal time" />
-                      <button type="submit" class="v-btn small primary" [disabled]="!mealName.trim()">Save</button>
-                      <button type="button" class="v-btn small quiet" (click)="editingMeal.set(null)">Cancel</button>
+                      <input name="mn{{ meal.id }}" [(ngModel)]="mealName" [attr.aria-label]="i18n.t('Meal name')" required />
+                      <input name="mt{{ meal.id }}" type="time" [(ngModel)]="mealTime" [attr.aria-label]="i18n.t('Meal time')" />
+                      <button type="submit" class="v-btn small primary" [disabled]="!mealName.trim()">{{ i18n.t('Save') }}</button>
+                      <button type="button" class="v-btn small quiet" (click)="editingMeal.set(null)">{{ i18n.t('Cancel') }}</button>
                     </form>
                   } @else {
                     <h3>
-                      <button type="button" class="meal-name" (click)="editMeal(meal)" title="Rename or set the time">{{ meal.name }}</button>
+                      <button type="button" class="meal-name" (click)="editMeal(meal)" [title]="i18n.t('Rename or set the time')">{{ meal.name }}</button>
                       @if (meal.time) { <span class="v-muted v-small"> {{ meal.time }}</span> }
                     </h3>
                   }
@@ -128,7 +132,7 @@ import { DayThread } from './day-thread';
                       {{ i18n.t(adding() === meal.id ? 'Cancel' : 'Add item') }}
                     </button>
                     <button type="button" class="v-btn quiet small danger" (click)="deleteMeal(meal)" [disabled]="meal.line_items.length > 0"
-                      [title]="meal.line_items.length ? 'Delete or move the items first' : 'Delete this meal'">Delete</button>
+                      [title]="i18n.t(meal.line_items.length ? 'Delete or move the items first' : 'Delete this meal')">{{ i18n.t('Delete') }}</button>
                   </span>
                 </header>
                 @if (adding() === meal.id) {
@@ -137,32 +141,32 @@ import { DayThread } from './day-thread';
                       <v-product-search [on]="date()" (picked)="pending.set($event)" />
                     } @else {
                       <form class="v-form-row" (ngSubmit)="addItem(meal)">
-                        <div class="picked">{{ pending()!.name }} <button type="button" class="v-btn quiet small" (click)="pending.set(null)">change</button></div>
+                        <div class="picked">{{ pending()!.name }} <button type="button" class="v-btn quiet small" (click)="pending.set(null)">{{ i18n.t('change') }}</button></div>
                         <label class="v-field"><span>{{ i18n.t('Amount') }}</span><input name="amount" type="number" step="any" min="0" [(ngModel)]="amount" required /></label>
                         <label class="v-field"><span>{{ i18n.t('Unit') }}</span>
-                          <select name="unit" [(ngModel)]="unitCode">
+                          <select name="unit" [ngModel]="unitCode()" (ngModelChange)="unitCode.set($event)">
                             <optgroup [attr.label]="i18n.t('Weight and volume')">
-                              @for (u of measuredUnits(); track u.code) { <option [value]="u.code">{{ u.singular }}</option> }
+                              @for (u of measuredUnits(); track u.code) { <option [value]="u.code">{{ i18n.t(u.singular) }}</option> }
                             </optgroup>
                             @if (pending()!.portions?.length) {
                               <optgroup [attr.label]="i18n.t('Portions of this product')">
-                                @for (p of pending()!.portions ?? []; track p.id) { <option [value]="'portion:' + p.id">{{ p.label }} ({{ p.amount }} {{ p.amount_unit }})</option> }
+                                @for (p of pending()!.portions ?? []; track p.id) { <option [value]="'portion:' + p.id">{{ p.label }} ({{ p.amount }} {{ i18n.t(p.amount_unit) }})</option> }
                               </optgroup>
                             }
                             <optgroup [attr.label]="i18n.t('Needs a size once')">
-                              @for (u of undeclaredUnits(); track u.code) { <option [value]="u.code">{{ u.singular }}</option> }
+                              @for (u of undeclaredUnits(); track u.code) { <option [value]="u.code">{{ i18n.t(u.singular) }}</option> }
                             </optgroup>
                           </select>
                         </label>
                         @if (needsSize()) {
-                          <label class="v-field">
-                            <span>{{ i18n.t('One {unit} of {product} is', { unit: unitLabel(), product: pending()!.name }) }}</span>
+                          <label class="v-field size-field">
+                            <span>{{ i18n.t('One {unit} is', { unit: unitLabel() }) }}</span>
                             <span class="size">
                               <input name="psize" type="number" step="any" min="0" [(ngModel)]="portionAmount" required />
                               <span class="fixed">{{ pending()!.reference_unit }}</span>
                             </span>
                           </label>
-                          <p class="v-small v-muted hint">{{ i18n.t('Saved with the product, so “{unit}” works from now on.', { unit: unitLabel() }) }}</p>
+                          <p class="v-small v-muted hint">{{ i18n.t('Saved with {product}, so “{unit}” works from now on.', { product: pending()!.name, unit: unitLabel() }) }}</p>
                         }
                         <label class="v-field check"><span>{{ i18n.t('Estimated') }}</span><input name="est" type="checkbox" [(ngModel)]="estimated" /></label>
                         <button type="submit" class="v-btn primary" [disabled]="!amount || (needsSize() && !portionAmount)">{{ i18n.t('Add') }}</button>
@@ -179,15 +183,15 @@ import { DayThread } from './day-thread';
                           <td>
                             <v-food-icon [name]="it.consumable_name" [category]="it.category" [kind]="it.consumable_kind" [icon]="it.icon" />
                             @if (it.consumable_kind === 'product') {
-                              <a [routerLink]="['/products', it.consumable_id]" title="Open the product">{{ it.consumable_name }}</a>
+                              <a [routerLink]="['/products', it.consumable_id]" [title]="i18n.t('Open the product')">{{ it.consumable_name }}</a>
                             } @else if (it.consumable_kind === 'recipe_batch') {
-                              <a [routerLink]="['/recipes']" title="Recipes">{{ it.consumable_name }}</a>
+                              <a [routerLink]="['/recipes']" [title]="i18n.t('Recipes')">{{ it.consumable_name }}</a>
                             } @else { {{ it.consumable_name }} }
-                            @if (it.is_draft) { <span class="v-tag draft">draft</span> }
-                            @if (it.estimated || it.amount_estimated) { <span class="warn-mark" title="estimated">⚠️</span> }
-                            @if (it.consumable_kind === 'ad_hoc') { <span class="v-tag">unmatched</span> }
+                            @if (it.is_draft) { <span class="v-tag draft">{{ i18n.t('draft') }}</span> }
+                            @if (it.estimated || it.amount_estimated) { <span class="warn-mark" [title]="i18n.t('estimated')">⚠️</span> }
+                            @if (it.consumable_kind === 'ad_hoc') { <span class="v-tag">{{ i18n.t('unmatched') }}</span> }
                           </td>
-                          <td class="num">{{ it.amount ?? it.base_amount }} {{ it.unit_code ?? it.base_unit }}</td>
+                          <td class="num">{{ it.amount ?? it.base_amount }} {{ i18n.t(it.unit_code ?? it.base_unit) }}</td>
                           <td class="num">{{ it.kcal | macro: 'kcal' }}</td>
                           <td class="num">{{ it.protein | macro: 'protein' }}</td>
                           <td class="num">{{ it.carbs | macro: 'carbs' }}</td>
@@ -195,16 +199,16 @@ import { DayThread } from './day-thread';
                           <td class="num">{{ it.fiber | macro: 'fiber' }}</td>
                           <td class="num">{{ it.salt | macro: 'salt' }}</td>
                           <td class="row-actions">
-                            @if (it.is_draft) { <button type="button" class="v-btn small primary" (click)="acceptItem(it)" title="Accept this drafted item">Accept</button> }
-                            <button type="button" class="v-btn quiet small" (click)="editAmount(it)">edit</button>
-                            <button type="button" class="v-btn quiet small danger" (click)="remove(it)">remove</button>
+                            @if (it.is_draft) { <button type="button" class="v-btn small primary" (click)="acceptItem(it)" [title]="i18n.t('Accept this drafted item')">{{ i18n.t('Accept') }}</button> }
+                            <button type="button" class="v-btn quiet small" (click)="editAmount(it)">{{ i18n.t('edit') }}</button>
+                            <button type="button" class="v-btn quiet small danger" (click)="remove(it)">{{ i18n.t('remove') }}</button>
                           </td>
                         </tr>
                       } @empty {
                         <tr><td colspan="9" class="v-muted">{{ i18n.t('Nothing logged in this meal.') }}</td></tr>
                       }
                       <tr class="total">
-                        <td>Total</td><td></td>
+                        <td>{{ i18n.t('Total') }}</td><td></td>
                         <td class="num">{{ meal.totals.kcal | macro: 'kcal' }}</td>
                         <td class="num">{{ meal.totals.protein | macro: 'protein' }}</td>
                         <td class="num v-hide-m">{{ meal.totals.carbs | macro: 'carbs' }}</td>
@@ -225,27 +229,60 @@ import { DayThread } from './day-thread';
           <v-day-thread [date]="date()" />
         </div>
       } @else if (!error() && !missing()) {
-        <p class="v-muted">Loading…</p>
+        <p class="v-muted">{{ i18n.t('Loading…') }}</p>
       }
     </div>
   `,
   styles: `
-    .daynav { display: flex; gap: 1rem; margin-bottom: 0.25rem; }
-    .create-day { display: grid; gap: 0.75rem; margin-bottom: 1.25rem; }
+    // Three loose links were hard to hit and read as body text. As one pill they read as
+    // what they are: a switch between neighbouring days, with the list in the middle.
+    .daynav {
+      display: inline-flex;
+      align-items: stretch;
+      gap: 2px;
+      width: max-content;
+      max-width: 100%;
+      margin-bottom: 0.5rem;
+      padding: 2px;
+      border: 1px solid var(--v-line);
+      border-radius: 999px;
+      background: var(--v-surface);
+
+      a {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        min-height: 1.9rem;
+        padding: 0 0.7rem;
+        border-radius: 999px;
+        color: var(--v-ink-2);
+        text-decoration: none;
+        font-size: var(--v-fs-s);
+        white-space: nowrap;
+        &:hover { background: var(--v-surface-2); color: var(--v-ink); }
+      }
+      .all { color: var(--v-ink); }
+    }
+    .create-day { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.75rem; margin-bottom: 1.25rem; }
     .create-day form { align-items: end; }
     .sub { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
     .gauges { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: 1rem 1.5rem; padding: 1rem 1.25rem; margin-bottom: 1.25rem; background: var(--v-surface); border: 1px solid var(--v-line); border-radius: var(--v-radius-l); }
     .columns { display: grid; grid-template-columns: minmax(0, 2fr) minmax(16rem, 1fr); gap: 1.5rem; align-items: start; }
-    .ledger { display: grid; gap: 1.25rem; }
+    .ledger { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.25rem; }
     .drafts-bar { display: flex; justify-content: space-between; gap: 1rem; align-items: center; flex-wrap: wrap; }
-    .meal header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.25rem; }
-    .meal h3 { font-size: var(--v-fs-m); }
+    // The name takes the line it needs; the actions stay together and keep to the right,
+    // on their own row when the name is long. Before this, "Delete" wrapped on its own and
+    // landed in the middle of the panel.
+    .meal header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.15rem 0.75rem; margin-bottom: 0.35rem; }
+    .meal header > .v-actions { margin-left: auto; }
+    .meal h3 { font-size: var(--v-fs-m); margin: 0; }
     .meal-name { all: unset; cursor: text; border-bottom: 1px dashed transparent; } .meal-name:hover { border-bottom-color: var(--v-line-strong); }
     .meal-edit { display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; }
     .meal-edit input { padding: 0.3rem 0.5rem; border: 1px solid var(--v-line-strong); border-radius: var(--v-radius); background: var(--v-surface); }
     .add { padding: 0.75rem; margin-bottom: 0.5rem; border: 1px solid var(--v-line); border-radius: var(--v-radius-l); background: var(--v-surface); }
     .picked { align-self: end; font-weight: 500; }
     .check { align-items: center; grid-template-columns: auto auto; }
+    .size-field { grid-column: 1 / -1; }
     .size { display: flex; gap: 0.4rem; align-items: center; }
     .size .fixed { color: var(--v-ink-2); font-size: var(--v-fs-s); }
     .size input { min-width: 5rem; }
@@ -253,9 +290,20 @@ import { DayThread } from './day-thread';
     tr.draft td { background: var(--v-agent-soft); }
     .warn-mark { margin-left: 0.25rem; }
     .row-actions { white-space: nowrap; text-align: right; }
-    .new-meal { display: flex; gap: 0.5rem; }
-    .new-meal input { flex: 1; padding: 0.45rem 0.6rem; border: 1px solid var(--v-line-strong); border-radius: var(--v-radius); background: var(--v-surface); }
+    .new-meal { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    .new-meal input { flex: 1 1 12rem; padding: 0.45rem 0.6rem; border: 1px solid var(--v-line-strong); border-radius: var(--v-radius); background: var(--v-surface); }
     @media (max-width: 64rem) { .columns { grid-template-columns: 1fr; } }
+    // A phone: the switcher spans the width with thumb-sized ends, the words drop out, and
+    // anything that would otherwise sit in a half-empty row takes the full line.
+    @media (max-width: 40rem) {
+      .daynav { display: flex; width: 100%; }
+      .daynav .word { display: none; }
+      .daynav .step { min-width: 3rem; min-height: 2.4rem; justify-content: center; font-size: var(--v-fs-m); }
+      .daynav .all { flex: 1; justify-content: center; }
+      .new-meal { flex-direction: column; }
+      .new-meal .v-btn { width: 100%; justify-content: center; }
+      .add .v-btn[type='submit'] { width: 100%; justify-content: center; }
+    }
   `,
 })
 export class DayView {
@@ -272,7 +320,12 @@ export class DayView {
   readonly prev = computed(() => shiftDate(this.date(), -1));
   readonly next = computed(() => shiftDate(this.date(), 1));
   /** Grams and millilitres always work; they need no portion. */
-  readonly measuredUnits = computed(() => this.units().filter((u) => u.unit_type !== 'count'));
+  readonly measuredUnits = computed(() => {
+    // A product declared per 100 g cannot be measured in millilitres: it carries no
+    // density, and the server would refuse the item. Offer its own family only.
+    const family = this.pending()?.reference_unit === 'ml' ? 'volume' : 'mass';
+    return this.units().filter((u) => u.unit_type === family);
+  });
 
   /**
    * Count units this product has no portion for. Offering them without saying so was the
@@ -284,18 +337,19 @@ export class DayView {
   });
 
   readonly needsSize = computed(() =>
-    this.undeclaredUnits().some((u) => u.code === this.unitCode),
+    this.undeclaredUnits().some((u) => u.code === this.unitCode()),
   );
 
-  readonly unitLabel = computed(
-    () => this.units().find((u) => u.code === this.unitCode)?.singular ?? this.unitCode,
+  readonly unitLabel = computed(() =>
+    this.i18n.t(this.units().find((u) => u.code === this.unitCode())?.singular ?? this.unitCode()),
   );
 
   readonly macroKeys = MACRO_KEYS;
   readonly label = MACRO_LABEL;
   readonly unit = MACRO_UNIT;
   amount: number | null = null;
-  unitCode = 'g';
+  /** A signal, because needsSize() and unitLabel() are derived from it. */
+  readonly unitCode = signal('g');
   /** Size of a unit the chosen product has no portion for; stored with the product. */
   portionAmount: number | null = null;
   estimated = false;
@@ -422,7 +476,7 @@ export class DayView {
     // a unit without a portion is declared once, then used like any other
     if (this.needsSize()) {
       if (!this.portionAmount) return;
-      const code = this.unitCode;
+      const code = this.unitCode();
       const label = this.unitLabel();
       this.api
         .createPortion(p.id, {
@@ -438,7 +492,7 @@ export class DayView {
             this.pending.update((prod) =>
               prod ? { ...prod, portions: [...(prod.portions ?? []), portion] } : prod,
             );
-            this.unitCode = 'portion:' + portion.id;
+            this.unitCode.set('portion:' + portion.id);
             this.portionAmount = null;
             this.addItem(meal);
           },
@@ -446,13 +500,14 @@ export class DayView {
         });
       return;
     }
-    const portionId = this.unitCode.startsWith('portion:') ? Number(this.unitCode.slice(8)) : null;
+    const chosen = this.unitCode();
+    const portionId = chosen.startsWith('portion:') ? Number(chosen.slice(8)) : null;
     const portion = portionId ? p.portions?.find((x) => x.id === portionId) : undefined;
     this.api
       .addLineItem(meal.id, {
         consumable_id: p.id,
         amount: this.amount,
-        unit_code: portion ? portion.unit_code : this.unitCode,
+        unit_code: portion ? portion.unit_code : chosen,
         portion_id: portionId,
         estimated: this.estimated,
       })
@@ -462,7 +517,7 @@ export class DayView {
           this.adding.set(null);
           this.amount = null;
           this.estimated = false;
-          this.unitCode = 'g';
+          this.unitCode.set('g');
           this.portionAmount = null;
           this.reload();
         },
@@ -471,7 +526,13 @@ export class DayView {
   }
 
   editAmount(it: LineItem): void {
-    const v = window.prompt(`Amount for ${it.consumable_name} (${it.unit_code ?? it.base_unit})`, String(it.amount ?? it.base_amount));
+    const v = window.prompt(
+      this.i18n.t('Amount for {name} ({unit})', {
+        name: it.consumable_name,
+        unit: this.i18n.t(it.unit_code ?? it.base_unit),
+      }),
+      String(it.amount ?? it.base_amount),
+    );
     if (v === null) return;
     const amount = Number(v.replace(',', '.'));
     if (!Number.isFinite(amount) || amount <= 0) return;

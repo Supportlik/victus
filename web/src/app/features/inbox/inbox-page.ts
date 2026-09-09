@@ -123,22 +123,22 @@ type Filter = 'open' | 'assigned' | 'processed' | 'discarded' | 'failed' | 'all'
     </div>
   `,
   styles: `
-    .add { display: grid; gap: 0.75rem; }
+    .add { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.75rem; }
     .add-head { display: flex; justify-content: space-between; align-items: end; gap: 1rem; flex-wrap: wrap; }
     .day { min-width: 11rem; }
     .run { margin-top: 1rem; } .run.active { border-color: var(--v-agent); }
-    .frozen { margin-top: 1.5rem; display: grid; gap: 0.5rem; }
+    .frozen { margin-top: 1.5rem; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.5rem; }
     .frozen h3 { font-size: var(--v-fs-l); }
     .snap { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; padding: 0.6rem 0.75rem; border: 1px solid var(--v-line); border-left: 3px solid var(--v-warn); border-radius: var(--v-radius-l); background: var(--v-surface); }
-    .snap .what { display: grid; gap: 0.1rem; min-width: 0; }
-    .drafts, .captures { margin-top: 1.5rem; display: grid; gap: 0.75rem; }
+    .snap .what { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.1rem; min-width: 0; }
+    .drafts, .captures { margin-top: 1.5rem; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.75rem; }
     .drafts h3, .captures h3 { font-size: var(--v-fs-l); }
     .captures .head { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; align-items: baseline; }
     .filters { display: flex; gap: 0.35rem; flex-wrap: wrap; }
     .chip { border: 1px solid var(--v-line-strong); background: var(--v-surface); border-radius: 999px; padding: 0.3rem 0.8rem; cursor: pointer; font-size: var(--v-fs-s); display: inline-flex; gap: 0.4rem; align-items: center; }
-    .chip.active { background: var(--v-primary-soft); border-color: var(--v-primary); color: var(--v-primary); }
+    .chip.active { background: var(--v-primary-soft); border-color: var(--v-primary); color: var(--v-link); }
     .chip .n { font-size: var(--v-fs-xs); color: var(--v-ink-3); }
-    .cards { display: grid; gap: 0.6rem; }
+    .cards { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.6rem; }
   `,
 })
 export class InboxPage {

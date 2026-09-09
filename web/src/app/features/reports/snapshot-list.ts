@@ -80,9 +80,9 @@ import { ReportBlockView } from './report-blocks/report-block';
     </section>
   `,
   styles: `
-    .snaps { display: grid; gap: 0.6rem; }
+    .snaps { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.6rem; }
     .snaps > header { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; align-items: start; }
-    .list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.35rem; }
+    .list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.35rem; }
     .list li { border: 1px solid var(--v-line); border-radius: var(--v-radius); overflow: hidden; }
     .list li.empty { border: 0; padding: 0.25rem 0; }
     .row { width: 100%; display: grid; grid-template-columns: 6.5rem minmax(0, 1fr) auto 1.5rem; gap: 0.6rem; align-items: center; padding: 0.5rem 0.6rem; background: var(--v-surface); border: 0; cursor: pointer; text-align: left; color: inherit; font: inherit; }
@@ -91,12 +91,12 @@ import { ReportBlockView } from './report-blocks/report-block';
     .when { font-variant-numeric: tabular-nums; color: var(--v-ink-2); }
     .what { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
     .chev { color: var(--v-ink-3); text-align: center; }
-    .detail { padding: 0.75rem 0.6rem; border-top: 1px solid var(--v-line); display: grid; gap: 0.75rem; }
+    .detail { padding: 0.75rem 0.6rem; border-top: 1px solid var(--v-line); display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.75rem; }
     .assessment h4 { font-size: var(--v-fs-m); margin-bottom: 0.25rem; }
     .own { display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; align-items: start; }
     .own textarea { padding: 0.5rem; border: 1px solid var(--v-line-strong); border-radius: var(--v-radius); background: var(--v-surface); }
     .numbers summary { cursor: pointer; color: var(--v-ink-2); font-size: var(--v-fs-s); }
-    .blocks { display: grid; gap: 0.75rem; margin-top: 0.6rem; }
+    .blocks { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.75rem; margin-top: 0.6rem; }
     @media (max-width: 48rem) { .row { grid-template-columns: 1fr auto; } .when { grid-column: 1 / -1; } .own { grid-template-columns: 1fr; } }
   `,
 })

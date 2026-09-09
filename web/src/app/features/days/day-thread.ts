@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, effect, inject, input, signal } from '@angular/core';
 import { ApiClient, Capture, DayMessage } from '../../api';
 import { BadgesService } from '../../core/badges.service';
+import { I18nService } from '../../core/i18n.service';
 import { describeError } from '../../core/problem';
 import { CaptureCard } from '../../shared/capture-card';
 import { CaptureInput } from '../../shared/capture-input';
@@ -16,41 +17,41 @@ import { MarkdownPipe } from '../../shared/markdown.pipe';
   imports: [MarkdownPipe, CaptureInput, CaptureCard],
   template: `
     <aside class="thread">
-      <h3>Talk to this day</h3>
-      <p class="v-small v-muted">Text, voice or photo — each becomes a capture for this day. The agent reads it on its next run and answers here.</p>
+      <h3>{{ i18n.t('Talk to this day') }}</h3>
+      <p class="v-small v-muted">{{ i18n.t('Text, voice or photo — each becomes a capture for this day. The agent reads it on its next run and answers here.') }}</p>
       @if (error(); as e) { <div class="v-error">{{ e }}</div> }
       <ol class="messages" aria-live="polite">
         @for (m of messages(); track m.id) {
           <li class="msg" [class]="'msg ' + m.role + ' ' + m.kind" [class.card]="!!m.capture_id">
             @if (m.role === 'agent' || m.role === 'system') {
               <div class="meta">
-                <span class="who">{{ m.role === 'agent' ? 'Agent' : 'System' }}</span>
-                @if (m.kind !== 'text') { <span class="v-tag" [class]="'v-tag ' + kindClass(m.kind)">{{ m.kind }}</span> }
+                <span class="who">{{ i18n.t(m.role === 'agent' ? 'Agent' : 'System') }}</span>
+                @if (m.kind !== 'text') { <span class="v-tag" [class]="'v-tag ' + kindClass(m.kind)">{{ i18n.t(m.kind) }}</span> }
                 <time [attr.datetime]="m.created_at">{{ m.created_at.slice(11, 16) }}</time>
               </div>
               <div class="body v-md" [innerHTML]="m.content | markdown"></div>
             } @else if (m.capture_id) {
               <v-capture-card [capture]="asCapture(m)" [compact]="true" [showTarget]="false" (changed)="reload()" (deleted)="reload()" />
             } @else {
-              <div class="meta"><span class="who">You</span><time [attr.datetime]="m.created_at">{{ m.created_at.slice(11, 16) }}</time></div>
+              <div class="meta"><span class="who">{{ i18n.t('You') }}</span><time [attr.datetime]="m.created_at">{{ m.created_at.slice(11, 16) }}</time></div>
               <div class="body">{{ m.content }}</div>
             }
           </li>
         } @empty {
-          <li class="v-muted v-small">No messages yet.</li>
+          <li class="v-muted v-small">{{ i18n.t('No messages yet.') }}</li>
         }
       </ol>
       <v-capture-input
         [targetDate]="date()"
         [compact]="true"
-        placeholder="Add to this day, or correct it: the chicken was 300 g, not 400"
+        [placeholder]="i18n.t('Add to this day, or correct it: the chicken was 300 g, not 400')"
         (uploaded)="reload()"
       />
     </aside>
   `,
   styles: `
-    .thread { display: grid; gap: 0.6rem; align-content: start; }
-    .messages { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; max-height: 60vh; overflow: auto; }
+    .thread { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.6rem; align-content: start; }
+    .messages { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.5rem; max-height: 60vh; overflow: auto; }
     .msg:not(.card) { padding: 0.5rem 0.7rem; border-radius: var(--v-radius-l); background: var(--v-surface-2); }
     .msg.agent, .msg.system { background: var(--v-agent-soft); border-left: 3px solid var(--v-agent); }
     .msg.question { border-left-color: var(--v-warn); }
@@ -64,6 +65,7 @@ import { MarkdownPipe } from '../../shared/markdown.pipe';
 export class DayThread {
   private readonly api = inject(ApiClient);
   private readonly badges = inject(BadgesService);
+  readonly i18n = inject(I18nService);
   readonly date = input.required<string>();
   readonly messages = signal<DayMessage[]>([]);
   readonly error = signal<string | null>(null);

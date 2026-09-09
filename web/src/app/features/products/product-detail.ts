@@ -77,23 +77,25 @@ import { ProductForm } from './product-form';
         @if (versions().length > 1) {
           <section class="v-panel history">
             <h3>{{ i18n.t('Values over time') }}</h3>
-            <table class="v-table">
-              <thead><tr><th>{{ i18n.t('Validity') }}</th><th class="num">kcal</th><th class="num">{{ i18n.t('Protein') }}</th><th class="num">{{ i18n.t('Carbs') }}</th><th class="num">{{ i18n.t('Fat') }}</th><th>{{ i18n.t('Source') }}</th></tr></thead>
-              <tbody>
-                @for (v of versions(); track v.id) {
-                  <tr [class.current]="v.id === p.id">
-                    <td>
-                      @if (v.id === p.id) { <b>{{ validity(v) }}</b> } @else { <a [routerLink]="['/products', v.id]">{{ validity(v) }}</a> }
-                    </td>
-                    <td class="num">{{ v.kcal | macro: 'kcal' }}</td>
-                    <td class="num">{{ v.protein | macro: 'protein' }}</td>
-                    <td class="num">{{ v.carbs | macro: 'carbs' }}</td>
-                    <td class="num">{{ v.fat | macro: 'fat' }}</td>
-                    <td class="v-small v-muted">{{ v.source }}</td>
-                  </tr>
-                }
-              </tbody>
-            </table>
+            <div class="v-scroll-x">
+              <table class="v-table">
+                <thead><tr><th>{{ i18n.t('Validity') }}</th><th class="num">kcal</th><th class="num">{{ i18n.t('Protein') }}</th><th class="num">{{ i18n.t('Carbs') }}</th><th class="num">{{ i18n.t('Fat') }}</th><th>{{ i18n.t('Source') }}</th></tr></thead>
+                <tbody>
+                  @for (v of versions(); track v.id) {
+                    <tr [class.current]="v.id === p.id">
+                      <td>
+                        @if (v.id === p.id) { <b>{{ validity(v) }}</b> } @else { <a [routerLink]="['/products', v.id]">{{ validity(v) }}</a> }
+                      </td>
+                      <td class="num">{{ v.kcal | macro: 'kcal' }}</td>
+                      <td class="num">{{ v.protein | macro: 'protein' }}</td>
+                      <td class="num">{{ v.carbs | macro: 'carbs' }}</td>
+                      <td class="num">{{ v.fat | macro: 'fat' }}</td>
+                      <td class="v-small v-muted">{{ v.source }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
             <p class="v-small v-muted">{{ i18n.t('A day keeps the version that applied when it was logged. Reports read each day with its own numbers.') }}</p>
           </section>
         }
@@ -104,19 +106,21 @@ import { ProductForm } from './product-form';
             <p class="v-small v-muted">{{ i18n.t('The agent read these from your label photos or notes. Nothing changes until you approve.') }}</p>
             @for (pr of proposals(); track pr.id) {
               <div class="proposal">
-                <table class="v-table diff">
-                  <thead><tr><th>{{ i18n.t('Apply') }}</th><th>{{ i18n.t('Field') }}</th><th class="num">{{ i18n.t('Now') }}</th><th class="num">{{ i18n.t('Proposed') }}</th></tr></thead>
-                  <tbody>
-                    @for (k of keys(pr); track k) {
-                      <tr>
-                        <td><input type="checkbox" [checked]="isSelected(pr, k)" (change)="toggle(pr, k)" [attr.aria-label]="i18n.t('apply {field}', { field: k })" /></td>
-                        <td>{{ k }}</td>
-                        <td class="num v-muted">{{ pr.current[k] ?? '–' }}</td>
-                        <td class="num"><strong>{{ pr.changes[k] }}</strong></td>
-                      </tr>
-                    }
-                  </tbody>
-                </table>
+                <div class="v-scroll-x">
+                  <table class="v-table diff">
+                    <thead><tr><th>{{ i18n.t('Apply') }}</th><th>{{ i18n.t('Field') }}</th><th class="num">{{ i18n.t('Now') }}</th><th class="num">{{ i18n.t('Proposed') }}</th></tr></thead>
+                    <tbody>
+                      @for (k of keys(pr); track k) {
+                        <tr>
+                          <td><input type="checkbox" [checked]="isSelected(pr, k)" (change)="toggle(pr, k)" [attr.aria-label]="i18n.t('apply {field}', { field: k })" /></td>
+                          <td>{{ k }}</td>
+                          <td class="num v-muted">{{ pr.current[k] ?? '–' }}</td>
+                          <td class="num"><strong>{{ pr.changes[k] }}</strong></td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
                 @if (pr.rationale) { <p class="v-small">{{ pr.rationale }}</p> }
                 <p class="v-small v-muted">{{ pr.source }} · {{ pr.created_at.replace('T', ' ').slice(0, 16) }}</p>
                 <div class="v-actions">
@@ -157,7 +161,7 @@ import { ProductForm } from './product-form';
                     <tr>
                       <td><a [routerLink]="['/days', e.date]">{{ e.date }}</a></td>
                       <td>{{ e.meal }}</td>
-                      <td class="num">{{ e.amount ?? e.base_amount }} {{ e.unit_code ?? e.base_unit }}@if (e.estimated) { <span [title]="i18n.t('estimated')"> ⚠️</span> }</td>
+                      <td class="num">{{ e.amount ?? e.base_amount }} {{ i18n.t(e.unit_code ?? e.base_unit) }}@if (e.estimated) { <span [title]="i18n.t('estimated')"> ⚠️</span> }</td>
                       <td class="num">{{ e.kcal | number: '1.0-0' }}</td>
                       <td>@if (e.is_draft) { <span class="v-tag draft">{{ i18n.t('draft') }}</span> }</td>
                     </tr>
@@ -173,23 +177,25 @@ import { ProductForm } from './product-form';
         <section class="portions">
           <h3>{{ i18n.t('Portions') }}</h3>
           <p class="v-small v-muted">{{ i18n.t('Piece weights live only here, and they are measured in {unit} like the values above. One portion per unit can be the default.', { unit: p.reference_unit }) }}</p>
-          <table class="v-table">
-            <thead><tr><th>{{ i18n.t('Label') }}</th><th>{{ i18n.t('Unit') }}</th><th class="num">{{ i18n.t('Weight') }}</th><th>{{ i18n.t('Default') }}</th><th>{{ i18n.t('Weighed') }}</th><th></th></tr></thead>
-            <tbody>
-              @for (po of p.portions ?? []; track po.id) {
-                <tr>
-                  <td>{{ po.label }}</td><td>{{ po.unit_code }}</td><td class="num">{{ po.amount }} {{ po.amount_unit }}</td>
-                  <td>{{ po.is_default ? i18n.t('yes') : '' }}</td><td>{{ po.weight_source === 'weighed' ? i18n.t('yes') : po.weight_source === 'estimated' ? i18n.t('estimated') : '' }}</td>
-                  <td class="num"><button type="button" class="v-btn quiet small danger" (click)="deletePortion(po)">{{ i18n.t('remove') }}</button></td>
-                </tr>
-              } @empty { <tr><td colspan="6" class="v-muted">{{ i18n.t('No portions yet.') }}</td></tr> }
-            </tbody>
-          </table>
+          <div class="v-scroll-x">
+            <table class="v-table">
+              <thead><tr><th>{{ i18n.t('Label') }}</th><th>{{ i18n.t('Unit') }}</th><th class="num">{{ i18n.t('Weight') }}</th><th>{{ i18n.t('Default') }}</th><th>{{ i18n.t('Weighed') }}</th><th></th></tr></thead>
+              <tbody>
+                @for (po of p.portions ?? []; track po.id) {
+                  <tr>
+                    <td>{{ po.label }}</td><td>{{ i18n.t(po.unit_code) }}</td><td class="num">{{ po.amount }} {{ i18n.t(po.amount_unit) }}</td>
+                    <td>{{ po.is_default ? i18n.t('yes') : '' }}</td><td>{{ po.weight_source === 'weighed' ? i18n.t('yes') : po.weight_source === 'estimated' ? i18n.t('estimated') : '' }}</td>
+                    <td class="num"><button type="button" class="v-btn quiet small danger" (click)="deletePortion(po)">{{ i18n.t('remove') }}</button></td>
+                  </tr>
+                } @empty { <tr><td colspan="6" class="v-muted">{{ i18n.t('No portions yet.') }}</td></tr> }
+              </tbody>
+            </table>
+          </div>
           <form class="v-form-row add" (ngSubmit)="addPortion()">
             <label class="v-field">
               <span>{{ i18n.t('Sold or eaten as') }}</span>
               <select name="unit" [(ngModel)]="np.unit_code" (ngModelChange)="onPortionUnit($event)">
-                @for (u of countUnits(); track u.code) { <option [value]="u.code">{{ u.singular }}</option> }
+                @for (u of countUnits(); track u.code) { <option [value]="u.code">{{ i18n.t(u.singular) }}</option> }
               </select>
             </label>
             <label class="v-field">
@@ -219,24 +225,24 @@ import { ProductForm } from './product-form';
   styles: `
     dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr)); gap: 0.75rem; margin: 0.5rem 0; }
     dt { font-size: var(--v-fs-xs); color: var(--v-ink-3); } dd { margin: 0; font-size: var(--v-fs-l); font-weight: 560; }
-    .portions { margin-top: 1.5rem; display: grid; gap: 0.6rem; }
+    .portions { margin-top: 1.5rem; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.6rem; }
     .portions h3 { font-size: var(--v-fs-l); }
     .portions p { margin: 0; }
     .portions .v-table { margin: 0; }
     .add { margin-top: 0.25rem; align-items: end; row-gap: 0.75rem; }
-    .captures { margin-top: 1.5rem; display: grid; gap: 0.6rem; }
-    .usage { margin-top: 1.5rem; display: grid; gap: 0.5rem; }
-    .newver, .history { margin-top: 1rem; display: grid; gap: 0.5rem; }
+    .captures { margin-top: 1.5rem; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.6rem; }
+    .usage { margin-top: 1.5rem; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.5rem; }
+    .newver, .history { margin-top: 1rem; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.5rem; }
     .newver .wide { grid-column: 1 / -1; }
     .history tr.current { background: var(--v-primary-soft); }
-    .cap-list { display: grid; gap: 0.5rem; }
-    .proposals { margin-top: 1.5rem; display: grid; gap: 0.75rem; border-color: var(--v-agent); }
-    .proposal { display: grid; gap: 0.4rem; padding-top: 0.5rem; border-top: 1px dashed var(--v-line); }
+    .cap-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.5rem; }
+    .proposals { margin-top: 1.5rem; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.75rem; border-color: var(--v-agent); }
+    .proposal { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.4rem; padding-top: 0.5rem; border-top: 1px dashed var(--v-line); }
     .diff { max-width: 28rem; }
     .check { grid-template-columns: 1fr auto; align-items: center; }
-    .pair { display: flex; gap: 0.4rem; align-items: center; }
+    .pair { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
     .pair .fixed { color: var(--v-ink-2); font-size: var(--v-fs-s); }
-    .pair input { min-width: 5rem; }
+    .pair input { flex: 1 1 4rem; min-width: 0; }
     .add .hint { grid-column: 1 / -1; margin: 0; }
   `,
 })
@@ -255,8 +261,10 @@ export class ProductDetail {
   readonly units = signal<Unit[]>([]);
   /** Portions only make sense for count units; grams need no portion. */
   readonly countUnits = computed(() => this.units().filter((u) => u.unit_type === 'count'));
-  readonly portionUnitLabel = computed(
-    () => this.units().find((u) => u.code === this.np.unit_code)?.singular ?? this.np.unit_code,
+  readonly portionUnitLabel = computed(() =>
+    this.i18n.t(
+      this.units().find((u) => u.code === this.np.unit_code)?.singular ?? this.np.unit_code,
+    ),
   );
   readonly versionForm = signal(false);
   readonly saving = signal(false);
@@ -333,7 +341,9 @@ export class ProductDetail {
 
   /** The name follows the unit unless it was typed by hand. */
   onPortionUnit(code: string): void {
-    const previous = this.units().find((u) => u.code !== code && u.singular === this.np.label);
+    const previous = this.units().find(
+      (u) => u.code !== code && this.i18n.t(u.singular) === this.np.label,
+    );
     if (!this.np.label || previous) this.np.label = '';
     void code;
   }

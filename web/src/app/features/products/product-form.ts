@@ -65,9 +65,9 @@ const ICON_CHOICES = ['🍽', '🥩', '🍗', '🐟', '🧀', '🥛', '🥚', '�
     </form>
   `,
   styles: `
-    .form { display: grid; gap: 1rem; }
+    .form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
     .form h3 { font-size: var(--v-fs-l); }
-    fieldset { border: 1px solid var(--v-line); border-radius: var(--v-radius-l); padding: 0.75rem 1rem 1rem; display: grid; gap: 0.75rem; min-width: 0; }
+    fieldset { border: 1px solid var(--v-line); border-radius: var(--v-radius-l); padding: 0.75rem 1rem 1rem; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.75rem; min-width: 0; }
     legend { padding: 0 0.4rem; color: var(--v-ink-2); font-size: var(--v-fs-s); }
     .identity { grid-template-columns: 5.5rem minmax(10rem, 2fr) minmax(8rem, 1fr) minmax(8rem, 1fr) minmax(7rem, 1fr); }
     .icon .picker { display: flex; gap: 0.35rem; align-items: center; }

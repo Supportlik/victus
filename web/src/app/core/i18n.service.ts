@@ -1,11 +1,16 @@
 import { computed, Injectable, signal } from '@angular/core';
 import { DE } from './i18n.de';
+import { ES } from './i18n.es';
+import { FR } from './i18n.fr';
 
-export const LANGUAGES = ['en', 'de'] as const;
+export const LANGUAGES = ['en', 'de', 'es', 'fr'] as const;
 export type Language = (typeof LANGUAGES)[number];
 
 export const DEFAULT_LANGUAGE: Language = 'en';
 const LANG_KEY = 'victus.language';
+
+/** English has no dictionary: it is what the templates already say. */
+const DICTS: Partial<Record<Language, Record<string, string>>> = { de: DE, es: ES, fr: FR };
 
 /** Read the mirrored choice before Angular boots, where injection is unavailable. */
 export function storedLanguage(): Language {
@@ -55,7 +60,7 @@ export class I18nService {
    * translated yet reads as English instead of breaking.
    */
   t(text: string, params?: Record<string, string | number>): string {
-    const dict = this.language() === 'de' ? DE : undefined;
+    const dict = DICTS[this.language()];
     let out = dict?.[text] ?? text;
     if (params) {
       for (const [key, value] of Object.entries(params)) {

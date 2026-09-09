@@ -179,6 +179,42 @@ All notable changes to Victus are documented here. The format follows
   known. Circumferences are entered on the weight page and listed with their change against the
   previous session.
 
+- Spanish and French join German and English (R78). The three dictionaries carry the same keys in
+  the same order, `scripts/check_translations.py` checks every one of them, and the settings offer
+  the language beside the number format, which stays a separate choice.
+
+### Fixed
+- Choosing a unit the product has no portion for asks what it holds again. The chosen unit was a
+  plain field read inside a `computed()`, so picking "bag" never re-evaluated the question — the
+  field stayed hidden and the item was refused on save with "no portion for unit". A product is now
+  also offered only the units of its own reference family: a product declared per 100 g carries no
+  density, so millilitres are not something it can be measured in.
+- "Nothing found" waits for an answer. The empty state was tied to the result list alone, so it
+  appeared during the debounce and while the request was in flight: a search for two words claimed
+  nothing was found while five products were on their way.
+- A wide table no longer stretches the page. Every data table sits in its own horizontal scroller and
+  single-column grids have a floor of zero, so a phone no longer scrolls sideways and takes the tab
+  bar with it. The mobile table hack that made a table shrink to its content — rows ending two thirds
+  across the panel with the head rule running past them — is gone with it.
+- Switching light and dark repaints everything. Chrome keeps the pre-switch value of any transitioned
+  property whose colour comes from a custom property, so the rail and the phone bar stayed in the old
+  scheme until the next reload. The appearance change now runs with transitions suspended for a frame,
+  which also removes the page-wide colour fade.
+- Labels can be read on every palette. The meaning colours have text variants (`--v-*-ink`): amber on
+  pale amber measured 1.9:1 in the light schemes, and a link in dark mode 2.5:1. Table heads moved from
+  the faintest ink to the middle one, and the primary button's white sits on a shade deeper than the
+  plain accent.
+- The report's body block reads left to right: the measure, then its figure, then the class it falls
+  in. The class the value falls in is no longer filled white — the pin says where it is — the segment
+  colours follow what each class means instead of an invented ramp, and the kilogram table with the
+  BMI range and the distance to each class is shown rather than folded away.
+- The day page on a phone: the three loose day links became one pill with thumb-sized ends, a meal's
+  actions stay together on their own row instead of leaving "Delete" mid-panel, and page heads stack
+  with full-width controls. Day names and every number follow the tenant's locale.
+- The browser tab icon is legible on a dark tab strip: the plate of `favicon.svg` follows the
+  browser's own theme.
+- `victus token revoke` takes the prefix that `victus token list` prints, not only the internal id.
+
 ### Changed
 - No importer in the product (ADR 0011): existing data enters through the backup archive format, REST or MCP.
 - One model session per day (ADR 0009) and a resumable per-day thread (ADR 0010); lock TTL 5 minutes;

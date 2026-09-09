@@ -143,7 +143,7 @@ describe('DayView', () => {
       verified: true, kcal: 96, protein: 8, portions: [],
     });
     fixture.componentInstance.amount = 1;
-    fixture.componentInstance.unitCode = 'bag';
+    fixture.componentInstance.unitCode.set('bag');
     fixture.detectChanges();
 
     // the unit is in the group that needs a size, and the form says so
@@ -151,7 +151,7 @@ describe('DayView', () => {
     const groups = Array.from(el.querySelectorAll('optgroup')).map((g) => g.getAttribute('label'));
     expect(groups).toContain('Weight and volume');
     expect(groups).toContain('Needs a size once');
-    expect(el.textContent).toContain('One bag of Frosta High Protein is');
+    expect(el.textContent).toContain('One bag is');
 
     fixture.componentInstance.portionAmount = 500;
     fixture.detectChanges();

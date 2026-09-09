@@ -6,7 +6,7 @@ fallback is deliberate, because English is correct rather than broken, but it al
 gap leaves no trace. This script finds the gap.
 
 It scans the web templates for the strings passed to ``i18n.t(...)`` and compares them with
-the German dictionary. Exit code 1 with ``--strict``, so CI can hold the line once the
+every dictionary beside it (German, Spanish, French). Exit code 1 with ``--strict``, so CI can hold the line once the
 translation is complete; without it the script only reports.
 
     uv run python scripts/check_translations.py
@@ -27,7 +27,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 WEB = ROOT / "web" / "src" / "app"
-DICTIONARY = WEB / "core" / "i18n.de.ts"
+#: One dictionary per language; English needs none, it is what the templates already say.
+DICTIONARIES = {
+    "de": WEB / "core" / "i18n.de.ts",
+    "es": WEB / "core" / "i18n.es.ts",
+    "fr": WEB / "core" / "i18n.fr.ts",
+}
 
 #: i18n.t('...') or i18n.t("..."), the first argument only.
 CALL = re.compile(r"""i18n\.t\(\s*(['"])(?P<text>(?:\\.|(?!\1).)*)\1""")
@@ -40,7 +45,7 @@ def used_strings() -> dict[str, list[str]]:
     """Every string passed to ``t()``, with the files it appears in."""
     found: dict[str, list[str]] = {}
     for path in sorted(WEB.rglob("*.ts")) + sorted(WEB.rglob("*.html")):
-        if path.name.endswith(".spec.ts") or path == DICTIONARY:
+        if path.name.endswith(".spec.ts") or path in DICTIONARIES.values():
             continue
         text = path.read_text(encoding="utf-8")
         for match in CALL.finditer(text):
@@ -49,11 +54,11 @@ def used_strings() -> dict[str, list[str]]:
     return found
 
 
-def translated() -> set[str]:
-    if not DICTIONARY.exists():
+def translated(dictionary: Path) -> set[str]:
+    if not dictionary.exists():
         return set()
     keys: set[str] = set()
-    for line in DICTIONARY.read_text(encoding="utf-8").splitlines():
+    for line in dictionary.read_text(encoding="utf-8").splitlines():
         match = ENTRY.match(line)
         if match:
             raw = match.group("quoted") or match.group("bare") or ""
@@ -67,23 +72,25 @@ def main() -> int:
     args = parser.parse_args()
 
     used = used_strings()
-    have = translated()
-    missing = sorted(k for k in used if k not in have)
-    unused = sorted(k for k in have if k not in used)
-
-    print(f"strings in use: {len(used)}   translated: {len(have)}")
-    if missing:
-        print(f"\nnot translated ({len(missing)}):")
-        for key in missing:
-            where = used[key][0]
-            print(f"  {key!r}  ({where})")
-    if unused:
-        print(f"\nin the dictionary but no longer used ({len(unused)}):")
-        for key in unused:
-            print(f"  {key!r}")
-    if not missing and not unused:
-        print("translations: complete")
-    return 1 if (args.strict and missing) else 0
+    print(f"strings in use: {len(used)}")
+    gaps = 0
+    for code, path in DICTIONARIES.items():
+        have = translated(path)
+        missing = sorted(k for k in used if k not in have)
+        unused = sorted(k for k in have if k not in used)
+        gaps += len(missing)
+        print(f"\n{code}: {len(have)} entries")
+        if missing:
+            print(f"  not translated ({len(missing)}):")
+            for key in missing:
+                print(f"    {key!r}  ({used[key][0]})")
+        if unused:
+            print(f"  in the dictionary but no longer used ({len(unused)}):")
+            for key in unused:
+                print(f"    {key!r}")
+        if not missing and not unused:
+            print("  complete")
+    return 1 if (args.strict and gaps) else 0
 
 
 if __name__ == "__main__":

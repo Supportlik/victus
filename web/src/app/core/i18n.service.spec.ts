@@ -33,8 +33,16 @@ describe('I18nService', () => {
     expect(i18n.t('Appearance: {mode}', { mode: 'Hell' })).toBe('Darstellung: Hell');
   });
 
-  it('ignores a language it does not ship and mirrors the choice for the next load', () => {
+  it('translates the languages it ships', () => {
+    i18n.adopt('es');
+    expect(i18n.t('Today')).toBe('Hoy');
+
     i18n.adopt('fr');
+    expect(i18n.t('Today')).toBe('Aujourd’hui');
+  });
+
+  it('ignores a language it does not ship and mirrors the choice for the next load', () => {
+    i18n.adopt('kl');
     expect(i18n.language()).toBe(DEFAULT_LANGUAGE);
 
     i18n.adopt('de');

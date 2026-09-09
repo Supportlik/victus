@@ -64,16 +64,16 @@ import { Logo } from '../../shared/logo';
       margin: 0 auto;
       padding: 2rem 1.5rem;
     }
-    .pitch { display: grid; gap: 1rem; }
+    .pitch { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
     .mark { display: flex; align-items: center; gap: 0.75rem; }
     .word { font-size: 2.5rem; font-weight: 600; letter-spacing: -0.01em; }
     .tag { font-size: var(--v-fs-l); color: var(--v-ink-2); margin: 0; max-width: 26ch; }
-    .points { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.6rem; color: var(--v-ink-2); font-size: var(--v-fs-s); }
+    .points { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.6rem; color: var(--v-ink-2); font-size: var(--v-fs-s); }
     .points li { display: flex; gap: 0.6rem; align-items: center; }
     .points span { width: 1.4rem; text-align: center; color: var(--v-primary); }
 
     .card {
-      display: grid;
+      display: grid; grid-template-columns: minmax(0, 1fr);
       gap: 0.75rem;
       padding: 1.75rem;
       background: var(--v-surface);
@@ -84,7 +84,7 @@ import { Logo } from '../../shared/logo';
     .card h1 { font-size: var(--v-fs-xl); }
     .big { justify-content: center; padding: 0.7rem 1rem; font-size: var(--v-fs-m); }
     .recovery summary { cursor: pointer; color: var(--v-ink-2); font-size: var(--v-fs-s); }
-    .rec-form { display: grid; gap: 0.6rem; margin-top: 0.6rem; }
+    .rec-form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.6rem; margin-top: 0.6rem; }
     .hint { margin: 0; }
 
     @media (max-width: 52rem) {

@@ -133,15 +133,15 @@ function localDateTimeValue(at: Date = new Date()): string {
   styles: `
     .chart { margin-bottom: 1.25rem; } .echart { height: 20rem; width: 100%; }
     .grid { display: grid; grid-template-columns: minmax(16rem, 1fr) minmax(0, 2fr); gap: 1.5rem; align-items: start; }
-    .add { display: grid; gap: 0.75rem; }
+    .add { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.75rem; }
     .add .cm { grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr)); }
-    .body-log { margin-top: 1.5rem; display: grid; gap: 0.6rem; }
+    .body-log { margin-top: 1.5rem; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.6rem; }
     /* the measure names stay put while the sessions scroll past on a narrow screen */
     .body-log .what { position: sticky; left: 0; background: var(--v-surface); white-space: nowrap; text-align: left; }
     .body-log .session { white-space: nowrap; }
     .body-log .session .day { display: block; }
-    .body-log .down { color: var(--v-ok); }
-    .body-log .up { color: var(--v-warn); }
+    .body-log .down { color: var(--v-ok-ink); }
+    .body-log .up { color: var(--v-warn-ink); }
     @media (max-width: 52rem) { .grid { grid-template-columns: 1fr; } }
   `,
 })
@@ -250,7 +250,7 @@ export class WeightPage {
   /**
    * One row per measure across the shown sessions.
    *
-   * Michael keeps this by hand as measures down the side and dates across the top, and with
+   * A tape measure is kept as measures down the side and dates across the top, and with
    * seven measures against two or three sessions that is also the shape that fits a screen.
    * A measure nobody ever taped would be a row of dashes, so it is dropped entirely.
    */

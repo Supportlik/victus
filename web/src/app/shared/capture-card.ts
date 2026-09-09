@@ -89,11 +89,11 @@ import { describeError } from '../core/problem';
     .card.compact { grid-template-columns: 3rem 1fr; padding: 0.5rem; }
     .card.discarded { opacity: 0.7; }
     .card.processed { border-style: dashed; }
-    .media { display: grid; gap: 0.25rem; place-items: center; align-content: start; }
+    .media { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.25rem; place-items: center; align-content: start; }
     .media img { width: 4.5rem; height: 4.5rem; object-fit: cover; border-radius: var(--v-radius); display: block; }
     .compact .media img { width: 3rem; height: 3rem; }
     .glyph { font-size: 1.4rem; color: var(--v-ink-3); }
-    .body { min-width: 0; display: grid; gap: 0.35rem; }
+    .body { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.35rem; }
     .meta { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; font-size: var(--v-fs-xs); color: var(--v-ink-3); }
     .target { font-weight: 500; }
     .text { margin: 0; white-space: pre-wrap; font-size: var(--v-fs-s); }
@@ -101,7 +101,7 @@ import { describeError } from '../core/problem';
     audio { width: 100%; max-width: 20rem; display: block; }
     .actions { display: flex; gap: 0.3rem; flex-wrap: wrap; align-items: center; }
     .actions input { padding: 0.25rem 0.4rem; border: 1px solid var(--v-line-strong); border-radius: var(--v-radius); background: var(--v-surface); }
-    .err { color: var(--v-bad); }
+    .err { color: var(--v-bad-ink); }
   `,
 })
 export class CaptureCard {

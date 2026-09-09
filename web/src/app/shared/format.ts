@@ -1,23 +1,36 @@
 import { Pipe, PipeTransform } from '@angular/core';
 import { BandZone, MacroKey, Quality } from '../api';
 import { isoDayIn } from '../core/format.service';
+import { storedLocale } from '../core/format.service';
 
 /** kcal as integer, salt with two decimals, everything else one decimal. */
+/**
+ * A number in the tenant's own convention: 1.234,5 in German, 1,234.5 in English (R69).
+ *
+ * These formatters are called from templates as plain functions, so they read the locale
+ * mirrored into browser storage rather than injecting the service that owns it.
+ */
+function decimal(value: number, digits: number): string {
+  return value.toLocaleString(storedLocale(), {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+}
+
 export function formatMacro(value: number | null | undefined, key: MacroKey): string {
   if (value === null || value === undefined || Number.isNaN(value)) return '–';
   const digits = key === 'kcal' ? 0 : key === 'salt' ? 2 : 1;
-  return value.toLocaleString('en-GB', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  return decimal(value, digits);
 }
 
 export function formatKg(value: number | null | undefined, digits = 1): string {
   if (value === null || value === undefined || Number.isNaN(value)) return '–';
-  return value.toLocaleString('en-GB', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  return decimal(value, digits);
 }
 
 export function formatSigned(value: number | null | undefined, digits = 1, unit = ''): string {
   if (value === null || value === undefined || Number.isNaN(value)) return '–';
-  const s = value.toLocaleString('en-GB', { minimumFractionDigits: digits, maximumFractionDigits: digits });
-  return `${value > 0 ? '+' : ''}${s}${unit ? ' ' + unit : ''}`;
+  return `${value > 0 ? '+' : ''}${decimal(value, digits)}${unit ? ' ' + unit : ''}`;
 }
 
 export const ZONE_LABEL: Record<BandZone, string> = {
@@ -72,8 +85,14 @@ export class SignedPipe implements PipeTransform {
 export class DayNamePipe implements PipeTransform {
   transform(iso: string | null | undefined): string {
     if (!iso) return '';
-    const d = new Date(`${iso}T00:00:00`);
-    return d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    const d = new Date(`${iso}T00:00:00Z`);
+    return d.toLocaleDateString(storedLocale(), {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'UTC',
+    });
   }
 }
 

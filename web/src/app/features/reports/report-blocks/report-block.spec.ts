@@ -62,6 +62,11 @@ describe('ReportBlockView', () => {
     }).compileComponents();
   });
 
+  beforeEach(() => {
+    // the formatters read the mirrored locale, so pin it rather than inheriting a default
+    TestBed.inject(FormatService).adopt('en-GB', 'Europe/London');
+  });
+
   async function render(block: ReportBlock): Promise<HTMLElement> {
     const fixture = TestBed.createComponent(ReportBlockView);
     fixture.componentRef.setInput('block', block);
@@ -158,10 +163,13 @@ describe('ReportBlockView', () => {
     expect(el.textContent).toContain('obesity class I');
     expect(el.textContent).toContain('to the next class');
 
-    // one segment per class, the current one marked, and the pin inside the bar
+    // one segment per class, each coloured by what its class means, and the pin inside the
+    // bar — the pin is what marks the current class, the segments are not highlighted
     const segments = el.querySelectorAll('.scale .seg');
     expect(segments.length).toBe(5);
-    expect(el.querySelectorAll('.scale .seg.here').length).toBe(1);
+    const classes = [...segments].map((s) => s.getAttribute('class') ?? '').join(' ');
+    expect(classes).toContain('t-ok');
+    expect(classes).toContain('t-bad');
     const left = Number((el.querySelector('.scale .pin') as HTMLElement).style.left.replace('%', ''));
     expect(left).toBeGreaterThan(0);
     expect(left).toBeLessThan(100);

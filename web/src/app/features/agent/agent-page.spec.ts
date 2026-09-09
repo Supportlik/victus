@@ -5,6 +5,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
 import { AgentLock, AgentRun } from '../../api';
+import { FormatService } from '../../core/format.service';
 import { AgentPage } from './agent-page';
 
 const runs: AgentRun[] = [
@@ -48,7 +49,8 @@ describe('AgentPage', () => {
     expect(rows.length).toBe(2);
     expect(rows[0].textContent).toContain('finished');
     expect(rows[0].textContent).toContain('12,800');
-    expect(rows[0].textContent).toContain('0.08 USD');
+    // the cost follows the tenant's number format, not a fixed English one
+    expect(rows[0].textContent).toContain(`${TestBed.inject(FormatService).number(0.08, 2)} USD`);
     expect(rows[1].textContent).toContain('external');
     expect(el.querySelector('[data-lock="2026-01-05"]')?.textContent).toContain('external');
   });

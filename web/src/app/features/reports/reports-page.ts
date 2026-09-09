@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiClient, ReportBlock, ReportDefinition, ReportResult } from '../../api';
+import { FormatService } from '../../core/format.service';
 import { I18nService } from '../../core/i18n.service';
 import { describeError } from '../../core/problem';
 import { isoDate, shiftDate } from '../../shared/format';
@@ -15,11 +16,11 @@ import { SnapshotList } from './snapshot-list';
   template: `
     <div class="v-page">
       <header class="v-page-head">
-        <div><h2>{{ current()?.title ?? i18n.t('Reports') }}</h2>@if (current()?.description) { <p class="sub">{{ current()!.description }}</p> }</div>
+        <div><h2>{{ i18n.t(current()?.title ?? 'Reports') }}</h2>@if (current()?.description) { <p class="sub">{{ i18n.t(current()!.description!) }}</p> }</div>
         <div class="v-actions controls">
           <label class="v-field"><span>{{ i18n.t('Report') }}</span>
             <select [ngModel]="name()" (ngModelChange)="name.set($event); render()">
-              @for (r of definitions(); track r.name) { <option [value]="r.name">{{ r.title }}@if (!r.builtin) { {{ i18n.t('(custom)') }} }</option> }
+              @for (r of definitions(); track r.name) { <option [value]="r.name">{{ i18n.t(r.title) }}@if (!r.builtin) { {{ i18n.t('(custom)') }} }</option> }
             </select>
           </label>
           <label class="v-field"><span>{{ i18n.t('As of') }}</span><input type="date" [ngModel]="asOf()" (ngModelChange)="setAsOf($event)" name="asof" /></label>
@@ -37,7 +38,7 @@ import { SnapshotList } from './snapshot-list';
       </div>
       @if (error(); as e) { <div class="v-error">{{ e }}</div> }
       @if (result(); as r) {
-        <p class="v-small v-muted">{{ r.period.start }} {{ i18n.t('to') }} {{ r.period.end }} ({{ i18n.t('{n} days', { n: r.period.days }) }}) · {{ i18n.t('generated') }} {{ r.generated_at.replace('T', ' ').slice(0, 16) }}@if (errorCount(); as n) { · <span class="v-tag bad">{{ i18n.t('{n} block(s) failed', { n }) }}</span> }</p>
+        <p class="v-small v-muted">{{ format.day(r.period.start) }} {{ i18n.t('to') }} {{ format.day(r.period.end) }} ({{ i18n.t('{n} days', { n: r.period.days }) }}) · {{ i18n.t('generated') }} {{ format.moment(r.generated_at) }}@if (errorCount(); as n) { · <span class="v-tag bad">{{ i18n.t('{n} block(s) failed', { n }) }}</span> }</p>
         @if (tiles().length) {
           <section class="tiles">@for (b of tiles(); track $index) { <v-report-block [block]="b" /> }</section>
         }
@@ -55,12 +56,13 @@ import { SnapshotList } from './snapshot-list';
     .range.shown { display: flex; flex-wrap: wrap; }
     .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 0.75rem; margin-bottom: 1rem; align-items: stretch; }
     .tiles v-report-block { display: block; height: 100%; }
-    .blocks { display: grid; gap: 1rem; }
+    .blocks { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
   `,
 })
 export class ReportsPage {
   private readonly api = inject(ApiClient);
   readonly i18n = inject(I18nService);
+  readonly format = inject(FormatService);
   readonly definitions = signal<ReportDefinition[]>([]);
   readonly name = signal('checkup');
   readonly period = signal('14d');

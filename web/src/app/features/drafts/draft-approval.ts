@@ -33,32 +33,34 @@ interface Row {
       @if (summary(); as s) {
         <div class="grid">
           <form (ngSubmit)="approve()" class="items">
-            <table class="v-table">
-              <thead><tr><th>{{ i18n.t('Meal') }}</th><th>{{ i18n.t('Item') }}</th><th class="num">{{ i18n.t('Amount') }}</th><th class="num">kcal</th><th>{{ i18n.t('Confidence') }}</th><th>{{ i18n.t('Reasoning') }}</th><th>{{ i18n.t('Keep') }}</th></tr></thead>
-              <tbody>
-                @for (r of rows(); track r.item.id) {
-                  <tr [class.removed]="r.remove">
-                    <td>{{ mealName(r.item.meal_id) }}</td>
-                    <td>
-                      @if (r.item.alternatives?.length) {
-                        <select [name]="'c' + r.item.id" [(ngModel)]="r.consumableId">
-                          <option [ngValue]="r.item.consumable_id">{{ r.item.consumable_name }}</option>
-                          @for (a of r.item.alternatives; track a.consumable_id) {
-                            @if (a.consumable_id !== r.item.consumable_id) { <option [ngValue]="a.consumable_id">{{ a.name }} ({{ (a.score * 100).toFixed(0) }} %)</option> }
-                          }
-                        </select>
-                      } @else { {{ r.item.consumable_name }} }
-                      @if (r.item.estimated || r.item.amount_estimated) { <span [title]="i18n.t('estimated')">⚠️</span> }
-                    </td>
-                    <td class="num"><input [name]="'a' + r.item.id" type="number" step="any" min="0" [(ngModel)]="r.amount" class="amount" /> {{ r.item.unit_code ?? r.item.base_unit }}</td>
-                    <td class="num">{{ r.item.kcal | macro: 'kcal' }}</td>
-                    <td>@if (r.item.confidence != null) { <span class="conf" [class.low]="r.item.confidence < 0.7">{{ (r.item.confidence * 100).toFixed(0) }} %</span> }</td>
-                    <td class="v-small v-muted">{{ r.item.rationale }}</td>
-                    <td><input type="checkbox" [name]="'k' + r.item.id" [ngModel]="!r.remove" (ngModelChange)="r.remove = !$event" /></td>
-                  </tr>
-                }
-              </tbody>
-            </table>
+            <div class="v-scroll-x">
+              <table class="v-table">
+                <thead><tr><th>{{ i18n.t('Meal') }}</th><th>{{ i18n.t('Item') }}</th><th class="num">{{ i18n.t('Amount') }}</th><th class="num">kcal</th><th>{{ i18n.t('Confidence') }}</th><th>{{ i18n.t('Reasoning') }}</th><th>{{ i18n.t('Keep') }}</th></tr></thead>
+                <tbody>
+                  @for (r of rows(); track r.item.id) {
+                    <tr [class.removed]="r.remove">
+                      <td>{{ mealName(r.item.meal_id) }}</td>
+                      <td>
+                        @if (r.item.alternatives?.length) {
+                          <select [name]="'c' + r.item.id" [(ngModel)]="r.consumableId">
+                            <option [ngValue]="r.item.consumable_id">{{ r.item.consumable_name }}</option>
+                            @for (a of r.item.alternatives; track a.consumable_id) {
+                              @if (a.consumable_id !== r.item.consumable_id) { <option [ngValue]="a.consumable_id">{{ a.name }} ({{ (a.score * 100).toFixed(0) }} %)</option> }
+                            }
+                          </select>
+                        } @else { {{ r.item.consumable_name }} }
+                        @if (r.item.estimated || r.item.amount_estimated) { <span [title]="i18n.t('estimated')">⚠️</span> }
+                      </td>
+                      <td class="num"><input [name]="'a' + r.item.id" type="number" step="any" min="0" [(ngModel)]="r.amount" class="amount" /> {{ r.item.unit_code ?? r.item.base_unit }}</td>
+                      <td class="num">{{ r.item.kcal | macro: 'kcal' }}</td>
+                      <td>@if (r.item.confidence != null) { <span class="conf" [class.low]="r.item.confidence < 0.7">{{ (r.item.confidence * 100).toFixed(0) }} %</span> }</td>
+                      <td class="v-small v-muted">{{ r.item.rationale }}</td>
+                      <td><input type="checkbox" [name]="'k' + r.item.id" [ngModel]="!r.remove" (ngModelChange)="r.remove = !$event" /></td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
             <div class="v-actions foot">
               <label class="v-field check"><input name="close" type="checkbox" [(ngModel)]="close" /> <span>{{ i18n.t('Close the day after approving') }}</span></label>
               <button type="submit" class="v-btn primary" [disabled]="busy()">{{ i18n.t('Approve') }}</button>
@@ -77,7 +79,7 @@ interface Row {
     .grid { display: grid; grid-template-columns: minmax(0, 3fr) minmax(16rem, 2fr); gap: 1.5rem; align-items: start; }
     .amount { width: 5.5rem; padding: 0.25rem 0.4rem; border: 1px solid var(--v-line-strong); border-radius: var(--v-radius); background: var(--v-surface); text-align: right; }
     .removed td { opacity: 0.45; text-decoration: line-through; }
-    .conf.low { color: var(--v-warn); }
+    .conf.low { color: var(--v-warn-ink); }
     .foot { margin-top: 1rem; }
     .check { display: flex; align-items: center; gap: 0.4rem; }
     @media (max-width: 64rem) { .grid { grid-template-columns: 1fr; } }

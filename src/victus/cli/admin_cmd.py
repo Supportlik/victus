@@ -143,12 +143,17 @@ def token_list(tenant: Annotated[str, typer.Option(help="Tenant slug.")]) -> Non
 @token_app.command("revoke")
 def token_revoke(
     tenant: Annotated[str, typer.Option(help="Tenant slug.")],
-    token_id: Annotated[str, typer.Argument(help="Token id (see `token list`).")],
+    token: Annotated[str, typer.Argument(help="Token prefix or id (see `token list`).")],
 ) -> None:
     """Revoke a token."""
     factory, _ = uow_factory_from_config()
+    ctx = _ctx_for(tenant)
+    # `token list` prints the prefix, so that is what a person has at hand. The internal
+    # id keeps working for anything that stored one.
+    rows = auth_uc.ListTokens(factory, ctx).execute()
+    match = next((t for t in rows if token in (t.prefix, t.id)), None)
     try:
-        auth_uc.RevokeToken(factory, _ctx_for(tenant)).execute(token_id)
+        auth_uc.RevokeToken(factory, ctx).execute(match.id if match else token)
     except ApplicationError as exc:
         raise typer.BadParameter(exc.detail) from exc
     typer.echo("token revoked")

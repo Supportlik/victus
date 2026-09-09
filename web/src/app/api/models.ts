@@ -692,6 +692,11 @@ export interface ThresholdMark {
   lower?: number | null;
   upper?: number | null;
   tone: 'ok' | 'watch' | 'warn' | 'bad' | string;
+  /** The same boundaries in kilograms, where the scale has a weight equivalent (R81). */
+  lower_kg?: number | null;
+  upper_kg?: number | null;
+  /** Kilograms from the current weight to this class; null when already in it. */
+  to_reach_kg?: number | null;
 }
 
 /** A measured value with the class it falls in and the scale behind it. */

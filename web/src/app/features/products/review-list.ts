@@ -38,23 +38,25 @@ interface ReviewRow {
           <button type="button" class="v-btn quiet" (click)="target.set(null)">{{ i18n.t('Cancel') }}</button>
         </div>
       }
-      <table class="v-table">
-        <thead><tr><th>{{ i18n.t('Day') }}</th><th>{{ i18n.t('Meal') }}</th><th>{{ i18n.t('Item as logged') }}</th><th class="num">{{ i18n.t('Amount') }}</th><th class="num">kcal</th><th></th></tr></thead>
-        <tbody>
-          @for (r of rows(); track r.item.id) {
-            <tr>
-              <td><a [routerLink]="['/days', r.date]">{{ r.date }}</a></td><td>{{ r.meal }}</td>
-              <td>{{ r.item.consumable_name }} <span class="v-small v-muted">{{ r.item.raw_text }}</span></td>
-              <td class="num">{{ r.item.amount ?? r.item.base_amount }} {{ r.item.unit_code ?? r.item.base_unit }}</td>
-              <td class="num">{{ r.item.kcal | macro: 'kcal' }}</td>
-              <td><button type="button" class="v-btn small" (click)="target.set(r)">{{ i18n.t('Assign') }}</button></td>
-            </tr>
-          }
-        </tbody>
-      </table>
+      <div class="v-scroll-x">
+        <table class="v-table">
+          <thead><tr><th>{{ i18n.t('Day') }}</th><th>{{ i18n.t('Meal') }}</th><th>{{ i18n.t('Item as logged') }}</th><th class="num">{{ i18n.t('Amount') }}</th><th class="num">kcal</th><th></th></tr></thead>
+          <tbody>
+            @for (r of rows(); track r.item.id) {
+              <tr>
+                <td><a [routerLink]="['/days', r.date]">{{ r.date }}</a></td><td>{{ r.meal }}</td>
+                <td>{{ r.item.consumable_name }} <span class="v-small v-muted">{{ r.item.raw_text }}</span></td>
+                <td class="num">{{ r.item.amount ?? r.item.base_amount }} {{ r.item.unit_code ?? r.item.base_unit }}</td>
+                <td class="num">{{ r.item.kcal | macro: 'kcal' }}</td>
+                <td><button type="button" class="v-btn small" (click)="target.set(r)">{{ i18n.t('Assign') }}</button></td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
     </div>
   `,
-  styles: `.assign { margin-bottom: 1rem; display: grid; gap: 0.5rem; }`,
+  styles: `.assign { margin-bottom: 1rem; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.5rem; }`,
 })
 export class ReviewList {
   private readonly api = inject(ApiClient);

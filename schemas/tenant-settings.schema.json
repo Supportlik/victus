@@ -349,7 +349,9 @@
           "type": "string",
           "enum": [
             "en",
-            "de"
+            "de",
+            "es",
+            "fr"
           ],
           "default": "en",
           "description": "Interface language. Separate from `locale`, which only decides how numbers and dates are written, so German numbers with an English interface is a valid combination."

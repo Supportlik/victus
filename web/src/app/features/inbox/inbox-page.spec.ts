@@ -56,10 +56,10 @@ const SUMMARY = {
 const FROZEN = [
   { id: 's1', report_name: 'checkup', title: 'Check-up', label: 'before the trip', period_start: '2026-01-01',
     period_end: '2026-01-14', today: '2026-01-14', status: 'frozen', created_at: '2026-01-14T18:00:00Z',
-    created_by: 'michael', assessment_md: null, assessed_at: null, model: null, prompt_version: null },
+    created_by: 'alice', assessment_md: null, assessed_at: null, model: null, prompt_version: null },
   { id: 's2', report_name: 'checkup', title: 'Check-up', label: 'december', period_start: '2025-12-01',
     period_end: '2025-12-31', today: '2025-12-31', status: 'assessed', created_at: '2025-12-31T18:00:00Z',
-    created_by: 'michael', assessment_md: 'on track', assessed_at: '2025-12-31T19:00:00Z', model: 'x', prompt_version: 'y' },
+    created_by: 'alice', assessment_md: 'on track', assessed_at: '2025-12-31T19:00:00Z', model: 'x', prompt_version: 'y' },
 ];
 
 /**

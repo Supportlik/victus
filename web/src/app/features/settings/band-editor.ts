@@ -145,7 +145,7 @@ export function emptyBand(): BandModel {
     </div>
   `,
   styles: `
-    .band { display: grid; gap: 0.6rem; padding: 0.6rem; border: 1px solid var(--v-line); border-radius: var(--v-radius); }
+    .band { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.6rem; padding: 0.6rem; border: 1px solid var(--v-line); border-radius: var(--v-radius); }
     .head { grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); }
     .levels input { width: 5rem; padding: 0.2rem 0.35rem; border: 1px solid var(--v-line-strong); border-radius: var(--v-radius); background: var(--v-surface); text-align: right; }
     .levels td, .levels th { padding: 0.3rem 0.4rem; }

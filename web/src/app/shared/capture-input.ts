@@ -105,7 +105,7 @@ interface Pending {
     }
   `,
   styles: `
-    .cap { display: grid; gap: 0.5rem; }
+    .cap { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.5rem; }
     .row { display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; }
     .note { width: 100%; box-sizing: border-box; padding: 0.5rem; border: 1px solid var(--v-line-strong); border-radius: var(--v-radius); background: var(--v-surface); color: inherit; font: inherit; resize: vertical; }
     .note:focus-visible { outline: 2px solid var(--v-primary); outline-offset: 1px; }
@@ -113,9 +113,9 @@ interface Pending {
     .cap.compact .v-btn { padding: 0.3rem 0.6rem; font-size: var(--v-fs-s); }
     .rec { font-variant-numeric: tabular-nums; }
     .pulse { width: 0.6rem; height: 0.6rem; border-radius: 50%; background: var(--v-bad); display: inline-block; animation: pulse 1s infinite; }
-    .err { color: var(--v-bad); }
+    .err { color: var(--v-bad-ink); }
 
-    .tray { display: grid; gap: 0.5rem; padding: 0.5rem; border: 1px dashed var(--v-line-strong); border-radius: var(--v-radius-l); }
+    .tray { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.5rem; padding: 0.5rem; border: 1px dashed var(--v-line-strong); border-radius: var(--v-radius-l); }
     .items { list-style: none; margin: 0; padding: 0; display: flex; gap: 0.5rem; flex-wrap: wrap; }
     .items li { display: flex; align-items: center; gap: 0.35rem; padding: 0.25rem 0.4rem; border: 1px solid var(--v-line); border-radius: var(--v-radius); background: var(--v-surface); }
     .items img { width: 3rem; height: 3rem; object-fit: cover; border-radius: var(--v-radius); }

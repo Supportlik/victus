@@ -70,9 +70,7 @@
           "defaultConfiguration": "development",
           "options": {
             "proxyConfig": "proxy.conf.js",
-            "allowedHosts": [
-              "victus.home.bortlik.io"
-            ]
+            "allowedHosts": true
           }
         },
         "test": {

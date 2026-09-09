@@ -35,9 +35,9 @@ import { formatMacro, toneOf, ZONE_LABEL } from './format';
     .head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; font-size: var(--v-fs-s); }
     .label { color: var(--v-ink-2); }
     .value { font-weight: 560; font-size: var(--v-fs-m); }
-    .value.warn { color: var(--v-warn); }
-    .value.bad { color: var(--v-bad); }
-    .value.ok { color: var(--v-ok); }
+    .value.warn { color: var(--v-warn-ink); }
+    .value.bad { color: var(--v-bad-ink); }
+    .value.ok { color: var(--v-ok-ink); }
     .unit { font-weight: 400; color: var(--v-ink-3); font-size: var(--v-fs-xs); }
     .strip { position: relative; display: flex; height: 6px; margin: 0.35rem 0 0.2rem; border-radius: 3px; overflow: visible; background: var(--v-surface-2); }
     .seg { height: 100%; }

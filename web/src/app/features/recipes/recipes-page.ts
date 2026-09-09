@@ -15,13 +15,14 @@ import { describeError } from '../../core/problem';
       @if (recipes().length === 0) { <div class="v-empty">{{ i18n.t('No recipes yet.') }}</div> } @else {
         <ul class="list">
           @for (r of recipes(); track r.id) {
-            <li><a [routerLink]="['/recipes', r.id]">{{ r.name }}</a> <span class="v-small v-muted">@if (r.default_servings) { {{ i18n.t('{n} servings', { n: r.default_servings }) }} · } {{ i18n.t('{n} batches', { n: r.batches?.length ?? 0 }) }}</span></li>
+            @let batches = r.batches?.length ?? 0;
+            <li><a [routerLink]="['/recipes', r.id]">{{ r.name }}</a> <span class="v-small v-muted">@if (r.default_servings; as s) { {{ s === 1 ? i18n.t('{n} serving', { n: s }) : i18n.t('{n} servings', { n: s }) }} · } {{ batches === 1 ? i18n.t('{n} batch', { n: batches }) : i18n.t('{n} batches', { n: batches }) }}</span></li>
           }
         </ul>
       }
     </div>
   `,
-  styles: `.list { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.4rem; } .list li { padding: 0.5rem 0; border-bottom: 1px solid var(--v-line); }`,
+  styles: `.list { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.4rem; } .list li { padding: 0.5rem 0; border-bottom: 1px solid var(--v-line); }`,
 })
 export class RecipesPage {
   private readonly api = inject(ApiClient);

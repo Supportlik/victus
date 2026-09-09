@@ -118,16 +118,16 @@ interface Row {
     </section>
   `,
   styles: `
-    .day { display: grid; gap: 0.75rem; }
+    .day { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.75rem; }
     .day > header { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; align-items: start; }
     .day h3 { font-size: var(--v-fs-l); } .day h3 a { color: inherit; text-decoration: none; } .day h3 a:hover { text-decoration: underline; }
-    .rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.6rem; }
+    .rows { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.6rem; }
     .row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 20rem); gap: 0.75rem; padding: 0.6rem; border: 1px solid var(--v-line); border-left: 3px solid var(--v-agent); border-radius: var(--v-radius-l); background: var(--v-surface-2); }
-    .what { display: grid; gap: 0.4rem; min-width: 0; }
+    .what { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.4rem; min-width: 0; }
     .head { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
     .name { font-weight: 500; }
     .pick { max-width: 22rem; padding: 0.25rem 0.4rem; border: 1px solid var(--v-line-strong); border-radius: var(--v-radius); background: var(--v-surface); }
-    .conf { font-size: var(--v-fs-xs); color: var(--v-ink-3); } .conf.low { color: var(--v-warn); }
+    .conf { font-size: var(--v-fs-xs); color: var(--v-ink-3); } .conf.low { color: var(--v-warn-ink); }
     .numbers { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; font-size: var(--v-fs-s); }
     .meal { display: inline-flex; gap: 0.35rem; align-items: center; }
     .meal select, .meal input { padding: 0.25rem 0.4rem; border: 1px solid var(--v-line-strong); border-radius: var(--v-radius); background: var(--v-surface); max-width: 11rem; }

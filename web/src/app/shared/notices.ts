@@ -41,7 +41,7 @@ import { Icon } from './icon';
       position: fixed;
       inset: auto 1rem 1rem auto;
       z-index: 60;
-      display: grid;
+      display: grid; grid-template-columns: minmax(0, 1fr);
       gap: 0.5rem;
       justify-items: end;
       max-width: min(26rem, calc(100vw - 2rem));
