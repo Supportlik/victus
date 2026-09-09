@@ -859,4 +859,9 @@ export const ES: Record<string, string> = {
   pending: 'pendiente',
   stale: 'obsoleta',
   'not writable': 'sin permiso de escritura',
+
+  // ── units a report prints beside a figure ─────────────────────────────
+  'kg/week': 'kg/semana',
+  'kcal/day': 'kcal/día',
+  'g/day': 'g/día',
 };

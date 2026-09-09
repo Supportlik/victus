@@ -45,7 +45,7 @@ import { CHART_PALETTE } from './palette';
         @case ('kpi_tile') {
           <div class="tile" [class]="'tile ' + toneOf(kpi().zone ?? kpi().quality)">
             <span class="t">{{ i18n.t(kpi().meta.title) }}</span>
-            <span class="v">{{ kpiValue() }} <span class="u">{{ kpi().unit }}</span></span>
+            <span class="v">{{ kpiValue() }} <span class="u">{{ i18n.t(kpi().unit) }}</span></span>
             @if (kpi().delta != null) { <span class="d">{{ formatSigned(kpi().delta, kpi().decimals) }} {{ i18n.t('vs. previous period') }}</span> }
             @if (kpi().note) { <span class="d">{{ kpi().note }}</span> }
           </div>

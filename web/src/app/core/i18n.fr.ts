@@ -865,4 +865,9 @@ export const FR: Record<string, string> = {
   pending: 'en attente',
   stale: 'obsolète',
   'not writable': 'non accessible en écriture',
+
+  // ── units a report prints beside a figure ─────────────────────────────
+  'kg/week': 'kg/semaine',
+  'kcal/day': 'kcal/jour',
+  'g/day': 'g/jour',
 };
