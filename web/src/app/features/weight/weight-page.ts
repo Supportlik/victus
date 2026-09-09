@@ -12,6 +12,18 @@ import { CHART_PALETTE } from '../reports/report-blocks/palette';
 /** The circumferences a session may carry. */
 type CircumferenceKey = 'waist_cm' | 'belly_cm' | 'hip_cm' | 'chest_cm' | 'neck_cm' | 'thigh_cm' | 'arm_cm';
 
+/** How many sessions fit across the table before the older ones only clutter it. */
+const BODY_COLUMNS = 4;
+
+/** A measure across the shown sessions: newest value first, oldest last. */
+interface BodyRow {
+  key: string;
+  label: string;
+  unit: string;
+  values: (number | null)[];
+  change: number | null;
+}
+
 /**
  * Value for a `datetime-local` field: the wall clock of the configured zone, not UTC.
  * `toISOString().slice(0, 16)` would offer the wrong hour, and just after midnight the
@@ -82,27 +94,33 @@ function localDateTimeValue(at: Date = new Date()): string {
           </table>
         </div>
       </div>
-      @if (measurements().length) {
+      @if (bodyRows().length) {
         <section class="v-panel body-log">
           <h3>{{ i18n.t('Body measurements') }}</h3>
           <div class="v-scroll-x">
             <table class="v-table">
               <thead>
                 <tr>
-                  <th>{{ i18n.t('When') }}</th>
-                  @for (f of bodyFields; track f.key) { <th class="num">{{ i18n.t(f.label) }}</th> }
-                  <th class="num">{{ i18n.t('Fat') }}</th><th></th>
+                  <th class="what">{{ i18n.t('Measure') }}</th>
+                  @for (c of bodyColumns(); track c.m.id) {
+                    <th class="num session">
+                      <span class="day">{{ format.day(c.day) }}</span>
+                      <button type="button" class="v-btn quiet small danger" (click)="removeBody(c.m)">{{ i18n.t('remove') }}</button>
+                    </th>
+                  }
+                  <th class="num">{{ i18n.t('Change') }}</th>
                 </tr>
               </thead>
               <tbody>
-                @for (m of measurements(); track m.id) {
+                @for (r of bodyRows(); track r.key) {
                   <tr>
-                    <td>{{ m.measured_at.replace('T', ' ').slice(0, 16) }}</td>
-                    @for (f of bodyFields; track f.key) {
-                      <td class="num">{{ valueOf(m, f.key) == null ? '–' : format.number(valueOf(m, f.key)!, 1) }}</td>
+                    <th scope="row" class="what">{{ i18n.t(r.label) }} <span class="v-muted">{{ r.unit }}</span></th>
+                    @for (v of r.values; track $index) {
+                      <td class="num">{{ v == null ? '–' : format.number(v, 1) }}</td>
                     }
-                    <td class="num">{{ m.body_fat_pct == null ? '–' : format.number(m.body_fat_pct, 1) + ' %' }}</td>
-                    <td class="num"><button type="button" class="v-btn quiet small danger" (click)="removeBody(m)">{{ i18n.t('remove') }}</button></td>
+                    <td class="num" [class.down]="(r.change ?? 0) < 0" [class.up]="(r.change ?? 0) > 0">
+                      {{ r.change == null ? '–' : (r.change > 0 ? '+' : '−') + format.number(abs(r.change), 1) }}
+                    </td>
                   </tr>
                 }
               </tbody>
@@ -118,6 +136,12 @@ function localDateTimeValue(at: Date = new Date()): string {
     .add { display: grid; gap: 0.75rem; }
     .add .cm { grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr)); }
     .body-log { margin-top: 1.5rem; display: grid; gap: 0.6rem; }
+    /* the measure names stay put while the sessions scroll past on a narrow screen */
+    .body-log .what { position: sticky; left: 0; background: var(--v-surface); white-space: nowrap; text-align: left; }
+    .body-log .session { white-space: nowrap; }
+    .body-log .session .day { display: block; }
+    .body-log .down { color: var(--v-ok); }
+    .body-log .up { color: var(--v-warn); }
     @media (max-width: 52rem) { .grid { grid-template-columns: 1fr; } }
   `,
 })
@@ -207,9 +231,45 @@ export class WeightPage {
     return Object.values(this.body).some((v) => v != null) || this.bodyFat != null;
   }
 
-  valueOf(m: BodyMeasurement, key: CircumferenceKey): number | null {
-    return m[key] ?? null;
+  abs(value: number): number {
+    return Math.abs(value);
   }
+
+  /**
+   * The sessions shown as columns, newest first.
+   *
+   * The day is resolved in the tenant's zone rather than sliced off the UTC timestamp: a
+   * measurement taken late in the evening otherwise lands on the next day (R69).
+   */
+  readonly bodyColumns = computed(() =>
+    this.measurements()
+      .slice(0, BODY_COLUMNS)
+      .map((m) => ({ m, day: isoDayIn(new Date(m.measured_at), this.format.timezone()) })),
+  );
+
+  /**
+   * One row per measure across the shown sessions.
+   *
+   * Michael keeps this by hand as measures down the side and dates across the top, and with
+   * seven measures against two or three sessions that is also the shape that fits a screen.
+   * A measure nobody ever taped would be a row of dashes, so it is dropped entirely.
+   */
+  readonly bodyRows = computed<BodyRow[]>(() => {
+    const sessions = this.bodyColumns().map((c) => c.m);
+    const sources: { key: string; label: string; unit: string; read: (m: BodyMeasurement) => number | null }[] = [
+      ...this.bodyFields.map((f) => ({ key: f.key, label: f.label, unit: 'cm', read: (m: BodyMeasurement) => m[f.key] ?? null })),
+      { key: 'body_fat_pct', label: 'Body fat', unit: '%', read: (m: BodyMeasurement) => m.body_fat_pct ?? null },
+    ];
+    return sources
+      .map(({ key, label, unit, read }) => {
+        const values = sessions.map(read);
+        const [now, before] = values;
+        // a gap on either side is not a change of zero, so it stays unanswered
+        const change = now != null && before != null ? now - before : null;
+        return { key, label, unit, values, change };
+      })
+      .filter((r) => r.values.some((v) => v != null));
+  });
 
   readonly recent = computed(() => [...this.entries()].sort((a, b) => (a.measured_at < b.measured_at ? 1 : -1)).slice(0, 60));
 

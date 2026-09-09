@@ -9,6 +9,7 @@ import { PrefsService } from './core/prefs.service';
 import { ThemeService } from './core/theme.service';
 import { Icon } from './shared/icon';
 import { Logo } from './shared/logo';
+import { Notices } from './shared/notices';
 
 interface NavItem {
   path: string;
@@ -29,7 +30,7 @@ const NUDGE_KEY = 'victus.passkeyNudgeDismissed';
  */
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, Icon, Logo],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, Icon, Logo, Notices],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })

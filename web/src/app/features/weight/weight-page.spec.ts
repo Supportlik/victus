@@ -5,6 +5,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { provideEchartsCore } from 'ngx-echarts';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { FormatService } from '../../core/format.service';
 import { WeightPage } from './weight-page';
 
 const WEIGHT = [
@@ -39,7 +40,7 @@ describe('WeightPage', () => {
     http = TestBed.inject(HttpTestingController);
   });
 
-  it('lists the measurements newest first and only sends what was filled in', async () => {
+  it('puts the measures in rows and the sessions in columns, and only sends what was filled in', async () => {
     const f = TestBed.createComponent(WeightPage);
     f.detectChanges();
     answer(http, { body: { height_cm: 170 } });
@@ -47,11 +48,34 @@ describe('WeightPage', () => {
     await f.whenStable();
 
     const el = f.nativeElement as HTMLElement;
-    const rows = el.querySelectorAll('.body-log tbody tr');
-    expect(rows.length).toBe(2);
-    expect(rows[0].textContent).toContain('2026-09-07'), 'newest first';
-    // an unmeasured circumference shows as a dash, not as zero
-    expect(rows[0].textContent).toContain('–');
+    const format = TestBed.inject(FormatService);
+
+    // sessions across the top, newest first
+    const heads = [...el.querySelectorAll('.body-log thead th.session')];
+    expect(heads.length).toBe(2);
+    expect(heads[0].textContent).toContain(format.day('2026-09-07')), 'newest first';
+    expect(heads[1].textContent).toContain(format.day('2026-08-07'));
+    // a session is still removable, from its own column head
+    expect(heads[0].querySelector('button.danger')).toBeTruthy();
+
+    // only the taped measures get a row; belly, chest, neck, thigh, arm and fat are absent
+    const rows = [...el.querySelectorAll('.body-log tbody tr')];
+    expect(rows.map((r) => r.querySelector('.what')?.textContent?.trim().split(' ')[0])).toEqual(['Waist', 'Hip']);
+
+    // the newest value leads the row, and the change reads as a shrink
+    const waist = [...rows[0].querySelectorAll('td')].map((c) => c.textContent!.trim());
+    expect(waist[0]).toBe(format.number(126.4, 1));
+    expect(waist[1]).toBe(format.number(132.3, 1));
+    expect(waist[2]).toBe(`−${format.number(5.9, 1)}`);
+    expect(rows[0].querySelector('td.down')).toBeTruthy(), 'a smaller waist is an improvement';
+
+    // an unmeasured value shows a dash, not a zero
+    expect(el.querySelector('.body-log tbody')!.textContent).not.toContain(format.number(0, 1));
+    f.componentInstance.measurements.update((m) => [{ ...m[0], hip_cm: null }, ...m.slice(1)]);
+    f.detectChanges();
+    const hip = [...el.querySelectorAll('.body-log tbody tr')[1].querySelectorAll('td')].map((c) => c.textContent!.trim());
+    expect(hip[0]).toBe('–'), 'missing value, not zero';
+    expect(hip[2]).toBe('–'), 'and no change can be worked out from a gap';
 
     // nothing to send while the form is empty
     expect(f.componentInstance.anyBodyValue()).toBe(false);

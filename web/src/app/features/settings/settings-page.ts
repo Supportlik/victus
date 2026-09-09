@@ -6,6 +6,8 @@ import { ThemeService } from '../../core/theme.service';
 import { TenantSettingsForm } from './settings-form';
 import { ApiClient, ApiToken, ApiTokenCreated, Health, Passkey, Rule, TargetBand, TenantSettingsVersion } from '../../api';
 import { AuthService } from '../../core/auth/auth.service';
+import { I18nService } from '../../core/i18n.service';
+import { NoticeService } from '../../core/notice.service';
 import { describeError } from '../../core/problem';
 
 const SCOPES = ['read', 'write', 'approve', 'capture:read', 'capture:write', 'agent:write', 'settings', 'backup', 'admin'];
@@ -23,7 +25,6 @@ interface SchemaLike {
     <div class="v-page settings">
       <header class="v-page-head"><div><h2>Settings</h2><p class="sub">{{ auth.me()?.tenant?.name }} · signed in as {{ auth.me()?.user?.display_name }}</p></div></header>
       @if (error(); as e) { <div class="v-error">{{ e }}</div> }
-      @if (saved(); as when) { <div class="v-notice" role="status">Saved as version {{ when }}.</div> }
 
       <section class="v-panel" id="appearance">
         <h3>Appearance</h3>
@@ -179,6 +180,8 @@ export class SettingsPage {
   readonly auth = inject(AuthService);
   readonly theme = inject(ThemeService);
   readonly prefs = inject(PrefsService);
+  private readonly notices = inject(NoticeService);
+  private readonly i18n = inject(I18nService);
   readonly landings = LANDINGS;
   readonly passkeys = signal<Passkey[]>([]);
   readonly bands = signal<TargetBand[]>([]);
@@ -187,10 +190,8 @@ export class SettingsPage {
   readonly tokens = signal<ApiToken[]>([]);
   readonly created = signal<ApiTokenCreated | null>(null);
   readonly health = signal<Health | null>(null);
+  /** Only what stays wrong while the page is open; anything momentary is a notice. */
   readonly error = signal<string | null>(null);
-  /** Version number of the last save; a silent success looks like a failure. */
-  readonly saved = signal<number | null>(null);
-  private savedTimer: ReturnType<typeof setTimeout> | null = null;
   readonly jsonError = signal<string | null>(null);
   readonly scopes = SCOPES;
   private schema: SchemaLike | null = null;
@@ -238,21 +239,21 @@ export class SettingsPage {
         this.ruleThen = '';
         this.afterRuleChange();
       },
-      error: (e: unknown) => this.error.set(describeError(e)),
+      error: (e: unknown) => this.failed(e),
     });
   }
 
   toggleRule(r: Rule): void {
     this.api.putRule({ ...r, enabled: !r.enabled }).subscribe({
       next: () => this.afterRuleChange(),
-      error: (e: unknown) => this.error.set(describeError(e)),
+      error: (e: unknown) => this.failed(e),
     });
   }
 
   removeRule(r: Rule): void {
     this.api.deleteRule(r.name).subscribe({
       next: () => this.afterRuleChange(),
-      error: (e: unknown) => this.error.set(describeError(e)),
+      error: (e: unknown) => this.failed(e),
     });
   }
 
@@ -269,12 +270,12 @@ export class SettingsPage {
       this.passkeyName = '';
       this.api.passkeys().subscribe({ next: (p) => this.passkeys.set(p) });
     } catch (e) {
-      this.error.set(describeError(e));
+      this.failed(e);
     }
   }
   removePasskey(p: Passkey): void {
     if (!window.confirm(`Remove passkey “${p.name}”?`)) return;
-    this.api.deletePasskey(p.id).subscribe({ next: () => this.passkeys.update((l) => l.filter((x) => x.id !== p.id)), error: (e: unknown) => this.error.set(describeError(e)) });
+    this.api.deletePasskey(p.id).subscribe({ next: () => this.passkeys.update((l) => l.filter((x) => x.id !== p.id)), error: (e: unknown) => this.failed(e) });
   }
 
   /** Light client-side check against the schema's top level before the server validates fully. */
@@ -310,23 +311,20 @@ export class SettingsPage {
   }
 
   saveSettingsData(data: Record<string, unknown>): void {
-    this.error.set(null);
-    this.saved.set(null);
     this.api.putSettings(data).subscribe({
       next: (s) => {
         this.settings.set(s);
         this.settingsJson = JSON.stringify(s.data, null, 2);
-        this.confirmSaved(s.version);
+        // the save sits at the end of a long form; the confirmation has to find the reader
+        this.notices.ok(this.i18n.t('Saved as version {version}.', { version: s.version }));
       },
-      error: (e: unknown) => this.error.set(describeError(e)),
+      error: (e: unknown) => this.failed(e),
     });
   }
 
-  /** Show the new version for a few seconds, then get out of the way. */
-  private confirmSaved(version: number): void {
-    this.saved.set(version);
-    if (this.savedTimer) clearTimeout(this.savedTimer);
-    this.savedTimer = setTimeout(() => this.saved.set(null), 6000);
+  /** A failed action is an event, not a state of the page, so it floats instead. */
+  private failed(e: unknown): void {
+    this.notices.error(describeError(e));
   }
 
   toggleScope(s: string, on: boolean): void {
@@ -340,10 +338,10 @@ export class SettingsPage {
         this.tokens.update((l) => [t, ...l]);
         this.tokenName = '';
       },
-      error: (e: unknown) => this.error.set(describeError(e)),
+      error: (e: unknown) => this.failed(e),
     });
   }
   revoke(t: ApiToken): void {
-    this.api.revokeToken(t.id).subscribe({ next: () => this.tokens.update((l) => l.map((x) => (x.id === t.id ? { ...x, revoked_at: new Date().toISOString() } : x))), error: (e: unknown) => this.error.set(describeError(e)) });
+    this.api.revokeToken(t.id).subscribe({ next: () => this.tokens.update((l) => l.map((x) => (x.id === t.id ? { ...x, revoked_at: new Date().toISOString() } : x))), error: (e: unknown) => this.failed(e) });
   }
 }

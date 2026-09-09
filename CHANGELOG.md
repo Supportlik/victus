@@ -158,6 +158,14 @@ All notable changes to Victus are documented here. The format follows
   needs them says which one is absent. Sessions arrive through the API, the MCP (`body_add`) or a
   capture, because a spoken "waist 126, hip 118" is a capture like any other.
 
+- Saving the settings says so (R79). The confirmation used to render at the top of a long form while
+  the button sits at its bottom, so a successful save looked like nothing happened. Messages now float
+  above the page at any scroll position, above the phone tab bar; a success clears itself, an error
+  waits to be dismissed. Every action on the settings page reports its failure the same way.
+- The body measurement table reads measures down and sessions across (R80), the way the data is kept
+  by hand, with the change between the two newest sessions. A measure nobody taped is left out instead
+  of filling a row with dashes, and the measure column stays put while the sessions scroll.
+
 - The interface speaks German or English, switchable in the settings without a rebuild (R78). The
   language is separate from the number format, so German numbers with an English interface is a valid
   choice. The English string is its own key, so an untranslated view reads as correct English rather

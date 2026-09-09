@@ -234,4 +234,5 @@ export const DE: Record<string, string> = {
   'Freeze this report': 'Diesen Bericht einfrieren',
   'Custom range': 'Eigener Zeitraum',
   'As of': 'Stand',
+  'Saved as version {version}.': 'Als Version {version} gespeichert.',
 };
