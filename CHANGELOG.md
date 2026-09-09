@@ -6,6 +6,8 @@ All notable changes to Victus are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-09-10
+
 ### Added
 - Licensed under **PolyForm Noncommercial 1.0.0** (ADR 0012): every noncommercial use is granted,
   including running it for yourself or your household and use by charities, schools and public

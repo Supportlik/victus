@@ -9,10 +9,10 @@ and is updated per stage.
 | Stage | State | Date |
 |---|---|---|
 | 0 — Scaffold | **done** | 08 Sep 2026 |
-| 1 — Core | **implemented, in review** | 08 Sep 2026 |
-| 2 — Reports | **implemented, in review** | 08 Sep 2026 |
-| 3 — Agent | **implemented, in review** (deployment on the home server pending) | 08 Sep 2026 |
-| Cross-cutting / v0.1.0 | in progress (isolation tests and restore drill done; deployment, release tag and predecessor hand-over pending) | |
+| 1 — Core | **done** | 08 Sep 2026 |
+| 2 — Reports | **done** | 08 Sep 2026 |
+| 3 — Agent | **done** | 09 Sep 2026 |
+| Cross-cutting / v1.0.0 | **done** (deployed, backed up daily, walked through end to end; predecessor hand-over pending) | 10 Sep 2026 |
 
 ## Stages
 
@@ -44,7 +44,7 @@ and is updated per stage.
 
 | Content | Definition of done |
 |---|---|
-| Multi-tenant isolation tests, backup schedule + restore drill, complete documentation, `CHANGELOG.md`, release **v0.1.0**; predecessor tooling marked "replaced by Victus" (nothing deleted) | A second test tenant is fully isolated; restore into a temporary database verified; SPEC requirements all point at implemented modules |
+| Multi-tenant isolation tests, backup schedule + restore drill, complete documentation, `CHANGELOG.md`, release **v1.0.0**; predecessor tooling marked "replaced by Victus" (nothing deleted) | A second test tenant is fully isolated; restore into a temporary database verified; SPEC requirements all point at implemented modules |
 
 ## Principles that do not change between stages
 

@@ -111,10 +111,16 @@ export class FormatService {
     });
   }
 
-  /** A stored UTC timestamp, shown as the wall clock of the tenant's zone. */
+  /** A stored UTC timestamp, shown as the wall clock of the tenant's zone.
+   *
+   * To the minute: the seconds of a capture or a run are noise in a list of them. */
   moment(iso: string): string {
     const at = new Date(iso);
     if (Number.isNaN(at.getTime())) return iso;
-    return at.toLocaleString(this.locale(), { timeZone: this.timezone() });
+    return at.toLocaleString(this.locale(), {
+      timeZone: this.timezone(),
+      dateStyle: 'short',
+      timeStyle: 'short',
+    });
   }
 }
