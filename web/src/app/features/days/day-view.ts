@@ -194,10 +194,10 @@ import { DayThread } from './day-thread';
                           <td class="num">{{ it.amount ?? it.base_amount }} {{ i18n.t(it.unit_code ?? it.base_unit) }}</td>
                           <td class="num">{{ it.kcal | macro: 'kcal' }}</td>
                           <td class="num">{{ it.protein | macro: 'protein' }}</td>
-                          <td class="num">{{ it.carbs | macro: 'carbs' }}</td>
-                          <td class="num">{{ it.fat | macro: 'fat' }}</td>
-                          <td class="num">{{ it.fiber | macro: 'fiber' }}</td>
-                          <td class="num">{{ it.salt | macro: 'salt' }}</td>
+                          <td class="num v-hide-m">{{ it.carbs | macro: 'carbs' }}</td>
+                          <td class="num v-hide-m">{{ it.fat | macro: 'fat' }}</td>
+                          <td class="num v-hide-m">{{ it.fiber | macro: 'fiber' }}</td>
+                          <td class="num v-hide-m">{{ it.salt | macro: 'salt' }}</td>
                           <td class="row-actions">
                             @if (it.is_draft) { <button type="button" class="v-btn small primary" (click)="acceptItem(it)" [title]="i18n.t('Accept this drafted item')">{{ i18n.t('Accept') }}</button> }
                             <button type="button" class="v-btn quiet small" (click)="editAmount(it)">{{ i18n.t('edit') }}</button>
@@ -276,6 +276,15 @@ import { DayThread } from './day-thread';
     .meal header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.15rem 0.75rem; margin-bottom: 0.35rem; }
     .meal header > .v-actions { margin-left: auto; }
     .meal h3 { font-size: var(--v-fs-m); margin: 0; }
+    // A product's full name can be a sentence. Two lines of it are enough to recognise it
+    // by; the rest is one hover (or one tap on the link) away.
+    .ledger .v-table td:first-child { max-width: 22rem; }
+    .ledger .v-table td:first-child a {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
     .meal-name { all: unset; cursor: text; border-bottom: 1px dashed transparent; } .meal-name:hover { border-bottom-color: var(--v-line-strong); }
     .meal-edit { display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; }
     .meal-edit input { padding: 0.3rem 0.5rem; border: 1px solid var(--v-line-strong); border-radius: var(--v-radius); background: var(--v-surface); }
