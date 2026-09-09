@@ -107,16 +107,18 @@ def settings_from_data(data: Mapping[str, Any]) -> TenantReportSettings:
 class SqlAlchemyReportDataSource:
     """Implements ``ReportDataSource`` on top of an open unit of work."""
 
-    def __init__(self, uow: SqlAlchemyUnitOfWork) -> None:
+    def __init__(self, uow: SqlAlchemyUnitOfWork, timezone: str | None = None) -> None:
         self._uow = uow
+        #: Zone the calendar days are measured in; ``None`` means the default (R69).
+        self._tz = timezone
 
     # ── weights ──────────────────────────────────────────────────────────
 
     def weights(self, period: Period) -> Mapping[date, float]:
-        return self._uow.weights.daily_means(period.start, period.end)
+        return self._uow.weights.daily_means(period.start, period.end, self._tz)
 
     def all_weights(self) -> Mapping[date, float]:
-        return self._uow.weights.daily_means()
+        return self._uow.weights.daily_means(tz=self._tz)
 
     # ── day totals ───────────────────────────────────────────────────────
 

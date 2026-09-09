@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, input, model } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { todayLocal } from '../../core/format.service';
 
 type Json = Record<string, unknown>;
 
@@ -85,7 +86,7 @@ export function emptyBand(): BandModel {
     if (m.stretch) row['stretch'] = '';
     values[m.key] = row;
   }
-  return { name: '', training_type: '', valid_from: new Date().toISOString().slice(0, 10), valid_until: '', note: '', values };
+  return { name: '', training_type: '', valid_from: todayLocal(), valid_until: '', note: '', values };
 }
 
 /**

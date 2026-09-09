@@ -114,6 +114,12 @@ All notable changes to Victus are documented here. The format follows
   collapsed rail is readable. On a phone the rail becomes a fixed bar with Today and four sections and a
   "More" sheet for the rest: nothing scrolls sideways and the bar no longer moves with the page.
 
+- A day is local (R69). Timestamps stay in UTC, but today, the day a weigh-in or capture counts on, the
+  report anchor and the app's date fields all follow `regional.timezone`, default `Europe/Berlin`. A
+  reading just after midnight no longer lands on the day before. Numbers and dates are written in
+  `regional.locale`, default `de-DE`, so 1.234,5 rather than 1,234.5. Both are per tenant with the
+  server configuration as fallback, and editable under Region in the settings.
+
 ### Changed
 - No importer in the product (ADR 0011): existing data enters through the backup archive format, REST or MCP.
 - One model session per day (ADR 0009) and a resumable per-day thread (ADR 0010); lock TTL 5 minutes;

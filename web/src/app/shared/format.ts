@@ -1,5 +1,6 @@
 import { Pipe, PipeTransform } from '@angular/core';
 import { BandZone, MacroKey, Quality } from '../api';
+import { isoDayIn } from '../core/format.service';
 
 /** kcal as integer, salt with two decimals, everything else one decimal. */
 export function formatMacro(value: number | null | undefined, key: MacroKey): string {
@@ -76,8 +77,9 @@ export class DayNamePipe implements PipeTransform {
   }
 }
 
+/** The ISO day an instant falls on, in the configured zone (R69). */
 export function isoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  return isoDayIn(d);
 }
 
 export function shiftDate(iso: string, days: number): string {

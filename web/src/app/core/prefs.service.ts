@@ -1,4 +1,5 @@
 import { Injectable, effect, signal } from '@angular/core';
+import { todayLocal } from './format.service';
 
 /** Where the app opens after sign-in (and when the brand is clicked). */
 export type Landing = 'today' | 'days' | 'inbox' | 'reports';
@@ -50,7 +51,7 @@ export class PrefsService {
       case 'reports':
         return '/reports';
       default:
-        return `/days/${new Date().toISOString().slice(0, 10)}`;
+        return `/days/${todayLocal()}`;
     }
   }
 }

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, input } from '@angular/core';
 import { NgxEchartsDirective } from 'ngx-echarts';
 import type { EChartsOption } from 'echarts';
 import {
@@ -17,6 +17,7 @@ import {
   TrendBlock,
   WeeklyChartBlock,
 } from '../../../api';
+import { FormatService } from '../../../core/format.service';
 import { formatKg, formatMacro, formatSigned, toneOf } from '../../../shared/format';
 import { MarkdownPipe } from '../../../shared/markdown.pipe';
 import { StatusTag } from '../../../shared/status-tag';
@@ -182,6 +183,7 @@ import { CHART_PALETTE } from './palette';
   `,
 })
 export class ReportBlockView {
+  private readonly format = inject(FormatService);
   readonly block = input.required<ReportBlock>();
   readonly formatMacro = formatMacro;
   readonly formatKg = formatKg;
@@ -286,9 +288,7 @@ export class ReportBlockView {
     if (!row) return '';
     const dot = (c: string) =>
       `<span style="display:inline-block;width:.55em;height:.55em;border-radius:50%;background:${c};margin-right:.4em"></span>`;
-    // the interface is English throughout; the browser locale must not reformat these
-    const num = (v: number, digits = 0) =>
-      v.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+    const num = (v: number, digits = 0) => this.format.number(v, digits);
     const line = (color: string, label: string, value: number | null | undefined, unit: string, digits = 0) =>
       value == null ? '' : `<div>${dot(color)}${label}: <b>${num(value, digits)}</b> ${unit}</div>`;
 
@@ -305,7 +305,7 @@ export class ReportBlockView {
       .join(' · ');
 
     return [
-      `<div style="margin-bottom:.25em"><b>${day}</b>${row.countable ? '' : ' · not counted'}</div>`,
+      `<div style="margin-bottom:.25em"><b>${this.format.day(day ?? '')}</b>${row.countable ? '' : ' · not counted'}</div>`,
       line(CHART_PALETTE[0], 'Weight', weight, 'kg', 1),
       line(CHART_PALETTE[1], 'Intake', row.kcal, 'kcal'),
       line(CHART_PALETTE[2], `TDEE (${this.timeline().tdee_window} d)`, row.tdee, 'kcal'),

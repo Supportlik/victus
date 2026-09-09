@@ -8,6 +8,7 @@ from victus.application import dto
 from victus.application.errors import Conflict, Forbidden, NotFound, ValidationFailed
 from victus.application.tenant_context import SCOPE_READ, SCOPE_WRITE
 from victus.application.use_cases._base import UseCase
+from victus.application.use_cases.settings import regional_of
 from victus.domain.values import WeightSource
 from victus.infrastructure.db import orm
 
@@ -29,7 +30,7 @@ class DailyMeans(UseCase):
     def execute(self, start: date | None = None, end: date | None = None) -> dict[date, float]:
         self.ctx.require(SCOPE_READ)
         with self._uow() as uow:
-            return uow.weights.daily_means(start, end)
+            return uow.weights.daily_means(start, end, regional_of(uow).timezone)
 
 
 class AddManualWeight(UseCase):

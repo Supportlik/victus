@@ -17,7 +17,7 @@ import enum
 import json
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, time
+from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Any, Literal, cast
 
@@ -48,7 +48,9 @@ from victus.application.use_cases import rules as rules_uc
 from victus.application.use_cases import snapshots as snapshot_uc
 from victus.application.use_cases import weights as weight_uc
 from victus.application.use_cases._base import UowFactory
+from victus.application.use_cases.settings import Regional, regional_of
 from victus.config.server import ServerConfig
+from victus.domain.services.calendar import today_in
 from victus.domain.values import CaptureKind, CaptureStatus, Period
 from victus.infrastructure.db.uow import SqlAlchemyUnitOfWork
 from victus.infrastructure.reports.sqlalchemy_source import SqlAlchemyReportDataSource
@@ -463,6 +465,13 @@ def _require(tc: ToolContext, scope: str) -> None:
         raise ToolError("forbidden", f"scope '{scope}' required")
 
 
+def _timezone(tc: ToolContext) -> str:
+    """The tenant's zone, so a day means the same thing here as in the app (R69)."""
+    fallback = Regional(tc.config.regional.timezone, tc.config.regional.locale)
+    with tc.uow_factory(tc.ctx) as uow:
+        return regional_of(uow, fallback).timezone
+
+
 def _compact_product(p: Any) -> dict[str, Any]:
     return {
         "id": p.id,
@@ -491,7 +500,8 @@ def _render_report(tc: ToolContext, inp: ReportRenderIn) -> ToolResult:
         definition = registry.get(inp.name)
     except KeyError as exc:
         raise ToolError("not_found", f"unknown report '{inp.name}'") from exc
-    today = inp.as_of or datetime.now(UTC).date()
+    tz = _timezone(tc)
+    today = inp.as_of or today_in(tz)
     if inp.from_ and inp.to:
         if inp.to < inp.from_:
             raise ToolError("validation", "'to' lies before 'from'")
@@ -504,7 +514,7 @@ def _render_report(tc: ToolContext, inp: ReportRenderIn) -> ToolResult:
     else:
         period = definition.default_period(today)
     with tc.uow_factory(tc.ctx) as uow:
-        source = SqlAlchemyReportDataSource(cast(SqlAlchemyUnitOfWork, uow))
+        source = SqlAlchemyReportDataSource(cast(SqlAlchemyUnitOfWork, uow), tz)
         result = ReportEngine(source).render(definition, period, today=today)
     if inp.format == "json":
         return to_dict(result)
@@ -731,7 +741,8 @@ def _line_item_approve(tc: ToolContext, inp: LineItemApproveIn) -> ToolResult:
 
 def _report_snapshot_create(tc: ToolContext, inp: ReportSnapshotCreateIn) -> ToolResult:
     definition = ReportRegistry().get(inp.name)
-    today = inp.as_of or datetime.now(UTC).date()
+    tz = _timezone(tc)
+    today = inp.as_of or today_in(tz)
     if inp.start and inp.end:
         period = Period(inp.start, inp.end)
     elif inp.period:
@@ -739,7 +750,7 @@ def _report_snapshot_create(tc: ToolContext, inp: ReportSnapshotCreateIn) -> Too
     else:
         period = definition.default_period(today)
     with tc.uow_factory(tc.ctx) as uow:
-        source = SqlAlchemyReportDataSource(cast(SqlAlchemyUnitOfWork, uow))
+        source = SqlAlchemyReportDataSource(cast(SqlAlchemyUnitOfWork, uow), tz)
         result = ReportEngine(source).render(definition, period, today=today)
     payload = to_dict(result)
     payload["from"] = period.start.isoformat()

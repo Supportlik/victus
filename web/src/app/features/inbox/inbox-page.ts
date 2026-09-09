@@ -9,6 +9,7 @@ import { CaptureCard } from '../../shared/capture-card';
 import { CaptureInput } from '../../shared/capture-input';
 import { MarkdownPipe } from '../../shared/markdown.pipe';
 import { DraftDayCard } from './draft-day-card';
+import { todayLocal } from '../../core/format.service';
 
 type Filter = 'open' | 'assigned' | 'processed' | 'discarded' | 'failed' | 'all';
 
@@ -152,7 +153,7 @@ export class InboxPage {
     { id: 'failed', label: 'Failed' },
     { id: 'all', label: 'All' },
   ];
-  targetDate = new Date().toISOString().slice(0, 10);
+  targetDate = todayLocal();
   private timer: ReturnType<typeof setTimeout> | null = null;
 
   readonly visible = computed(() => this.captures().filter((c) => this.matches(c, this.filter())));

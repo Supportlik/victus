@@ -22,6 +22,8 @@ from pydantic_settings import (
     SettingsConfigDict,
 )
 
+from victus.domain.services.calendar import DEFAULT_TIMEZONE
+
 
 class DatabaseConfig(BaseModel):
     url: str = "sqlite:///data/victus.db"
@@ -120,6 +122,15 @@ class ServerSection(BaseModel):
     log_level: str = "info"
 
 
+class RegionalConfig(BaseModel):
+    """Server-wide defaults for days and formatting; a tenant may override both (R69)."""
+
+    #: IANA name. Decides which calendar day a UTC timestamp belongs to.
+    timezone: str = DEFAULT_TIMEZONE
+    #: BCP 47 tag. Decides how numbers and dates are written in the interface.
+    locale: str = "de-DE"
+
+
 class ServerConfig(BaseSettings):
     """Process-wide configuration; see module docstring for precedence."""
 
@@ -138,6 +149,7 @@ class ServerConfig(BaseSettings):
     mcp: McpConfig = Field(default_factory=McpConfig)
     backup: BackupConfig = Field(default_factory=BackupConfig)
     server: ServerSection = Field(default_factory=ServerSection)
+    regional: RegionalConfig = Field(default_factory=RegionalConfig)
 
     @classmethod
     def settings_customise_sources(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
@@ -14,7 +15,33 @@ from victus.application.schemas_loader import load_schema
 from victus.application.tenant_context import SCOPE_READ, SCOPE_WRITE
 from victus.application.use_cases._base import UseCase
 from victus.application.use_cases._mappers import target_band_view
+from victus.domain.services.calendar import DEFAULT_TIMEZONE, today_in
 from victus.infrastructure.db import orm
+
+
+@dataclass(frozen=True, slots=True)
+class Regional:
+    """The tenant's day boundary and its way of writing numbers (R69)."""
+
+    timezone: str
+    locale: str
+
+
+def regional_of(uow: UnitOfWork, fallback: Regional | None = None) -> Regional:
+    """Read the tenant's regional settings, falling back to the server defaults."""
+    base = fallback or Regional(DEFAULT_TIMEZONE, "de-DE")
+    current = uow.settings.current()
+    data: dict[str, Any] = dict(current.data) if current is not None else {}
+    section = data.get("regional")
+    if not isinstance(section, dict):
+        return base
+    tz = section.get("timezone")
+    loc = section.get("locale")
+    return Regional(
+        str(tz) if isinstance(tz, str) and tz else base.timezone,
+        str(loc) if isinstance(loc, str) and loc else base.locale,
+    )
+
 
 BAND_KEYS = ("min", "opt_min", "opt_max", "target", "max")
 MACRO_PREFIXES = ("kcal", "protein", "carbs", "fat", "fiber", "salt")
@@ -110,7 +137,8 @@ class PutSettings(UseCase):
         self.ctx.require(SCOPE_WRITE)
         validate_settings(data)
         with self._uow() as uow:
-            row = uow.settings.add_version(data, valid_from or date.today(), self.ctx.actor_id)
+            when = valid_from or today_in(regional_of(uow).timezone)
+            row = uow.settings.add_version(data, when, self.ctx.actor_id)
             sync_target_bands(uow, data)
             uow.audit.record(
                 "settings.put",

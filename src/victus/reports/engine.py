@@ -9,6 +9,7 @@ from __future__ import annotations
 from datetime import UTC, date, datetime
 
 from victus.application.ports.report_data import ReportDataSource
+from victus.domain.services.calendar import today_in
 from victus.domain.values import Period
 from victus.reports.blocks import COMPUTERS
 from victus.reports.blocks._meta import meta_for
@@ -29,7 +30,8 @@ class ReportEngine:
         *,
         now: datetime | None = None,
     ) -> ReportResult:
-        today = today or datetime.now(UTC).date()
+        # callers pass the day in the tenant's zone; this only covers direct use
+        today = today or today_in()
         period = period or parse_period_token(definition.period.default, today)
         ctx = ReportContext(self.source, period, today)
         blocks: list[BlockResult] = []

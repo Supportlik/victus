@@ -186,7 +186,7 @@ class WeightRepository(Protocol):
     def delete(self, entry: orm.WeightEntry) -> None: ...
 
     def daily_means(
-        self, start: date | None = None, end: date | None = None
+        self, start: date | None = None, end: date | None = None, tz: str | None = None
     ) -> dict[date, float]: ...
 
 

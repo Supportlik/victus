@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import func, select, text
 
+from victus.domain.services.calendar import day_of
 from victus.domain.values import Macros, TrainingType
 from victus.infrastructure.db import orm
 from victus.infrastructure.db.repositories._base import Repo
@@ -238,11 +239,23 @@ class WeightRepo(Repo):
         self.session.delete(entry)
         self.session.flush()
 
-    def daily_means(self, start: date | None = None, end: date | None = None) -> dict[date, float]:
-        """One value per day (mean of that day's measurements), computed in Python."""
+    def daily_means(
+        self, start: date | None = None, end: date | None = None, tz: str | None = None
+    ) -> dict[date, float]:
+        """One value per day (mean of that day's measurements), computed in Python.
+
+        A weigh-in just after midnight is the previous day in UTC, so the day is taken
+        in ``tz`` (R69). The range is widened by a day on both sides, because a local
+        day reaches into the neighbouring UTC ones.
+        """
+        widened_start = start - timedelta(days=1) if start else None
+        widened_end = end + timedelta(days=1) if end else None
         sums: dict[date, list[float]] = {}
-        for e in self.list(start, end):
-            sums.setdefault(e.measured_at.date(), []).append(e.kg)
+        for e in self.list(widened_start, widened_end):
+            day = day_of(e.measured_at, tz)
+            if (start and day < start) or (end and day > end):
+                continue
+            sums.setdefault(day, []).append(e.kg)
         return {d: sum(v) / len(v) for d, v in sorted(sums.items())}
 
 

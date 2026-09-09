@@ -34,7 +34,9 @@ from victus.application.use_cases import agent as agent_uc
 from victus.application.use_cases import captures as capture_uc
 from victus.application.use_cases import products as product_uc
 from victus.application.use_cases import rules as rules_uc
+from victus.application.use_cases.settings import Regional, regional_of
 from victus.config.server import ServerConfig
+from victus.domain.services.calendar import day_of, today_in
 from victus.domain.values import CaptureKind, CaptureStatus, MessageKind, Period, RunStatus
 from victus.infrastructure.db.uow import SqlAlchemyUnitOfWork
 from victus.infrastructure.reports.sqlalchemy_source import SqlAlchemyReportDataSource
@@ -165,6 +167,16 @@ def tenant_rules(tc: ToolContext, scope: str) -> str:
     except ApplicationError:
         return ""
     return rules_uc.rules_markdown(rows)
+
+
+def tenant_timezone(tc: ToolContext, cfg: ServerConfig) -> str:
+    """The tenant's zone, falling back to the server default (R69).
+
+    Which day a moment falls on is a local matter, so nothing derives a date from UTC.
+    """
+    fallback = Regional(cfg.regional.timezone, cfg.regional.locale)
+    with tc.uow_factory(tc.ctx) as uow:
+        return regional_of(uow, fallback).timezone
 
 
 def tenant_language(tc: ToolContext) -> str:
@@ -388,7 +400,10 @@ class DayDrafter:
 
     def run_product_capture(self, run_id: str, cap: dto.CaptureView) -> DayOutcome:
         """Read one product capture and propose corrected values (R52)."""
-        outcome = DayOutcome(date=cap.captured_at.date(), outcome="product_skipped")
+        outcome = DayOutcome(
+            date=day_of(cap.captured_at, tenant_timezone(self.tc, self.cfg)),
+            outcome="product_skipped",
+        )
         started = self._now()
         tools = anthropic_tool_definitions(tools_for(self.tc.ctx, WORKER_TOOLS))
         try:
@@ -516,7 +531,11 @@ class RunProcessor:
             except Exception as exc:
                 log.exception("run %s: product capture %s failed", run_id, cap.id)
                 product_outcomes.append(
-                    DayOutcome(date=cap.captured_at.date(), outcome="failed", error=str(exc))
+                    DayOutcome(
+                        date=day_of(cap.captured_at, tenant_timezone(self.tc, self.cfg)),
+                        outcome="failed",
+                        error=str(exc),
+                    )
                 )
         for day in start.locked_days:
             if budget.exceeded:
@@ -557,10 +576,11 @@ class RunProcessor:
     def _checkup(self) -> str | None:
         try:
             definition = ReportRegistry().get("checkup")
-            today = datetime.now(UTC).date()
+            tz = tenant_timezone(self.tc, self.cfg)
+            today = today_in(tz)
             period = Period(today - timedelta(days=13), today)
             with self.tc.uow_factory(self.tc.ctx) as uow:
-                source = SqlAlchemyReportDataSource(cast(SqlAlchemyUnitOfWork, uow))
+                source = SqlAlchemyReportDataSource(cast(SqlAlchemyUnitOfWork, uow), tz)
                 result = ReportEngine(source).render(definition, period, today=today)
             return to_markdown(result)
         except Exception as exc:

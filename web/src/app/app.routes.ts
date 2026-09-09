@@ -1,7 +1,6 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './core/auth/auth.guard';
-
-const today = (): string => new Date().toISOString().slice(0, 10);
+import { todayLocal } from './core/format.service';
 
 export const routes: Routes = [
   { path: 'login', loadComponent: () => import('./features/auth/login-page').then((m) => m.LoginPage) },
@@ -9,7 +8,7 @@ export const routes: Routes = [
     path: '',
     canActivate: [authGuard],
     children: [
-      { path: '', pathMatch: 'full', redirectTo: () => `/days/${today()}` },
+      { path: '', pathMatch: 'full', redirectTo: () => `/days/${todayLocal()}` },
       { path: 'days', loadComponent: () => import('./features/days/days-page').then((m) => m.DaysPage) },
       { path: 'days/:date', loadComponent: () => import('./features/days/day-view').then((m) => m.DayView) },
       { path: 'inbox', loadComponent: () => import('./features/inbox/inbox-page').then((m) => m.InboxPage) },

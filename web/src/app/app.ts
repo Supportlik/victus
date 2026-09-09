@@ -3,6 +3,7 @@ import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { ApiClient, Health } from './api';
 import { AuthService } from './core/auth/auth.service';
 import { BadgesService } from './core/badges.service';
+import { FormatService, todayLocal } from './core/format.service';
 import { PrefsService } from './core/prefs.service';
 import { ThemeService } from './core/theme.service';
 import { Icon } from './shared/icon';
@@ -37,6 +38,7 @@ export class App {
   protected readonly badges = inject(BadgesService);
   protected readonly theme = inject(ThemeService);
   protected readonly prefs = inject(PrefsService);
+  private readonly format = inject(FormatService);
 
   protected readonly title = signal('Victus');
   protected readonly health = signal<Health | null>(null);
@@ -65,7 +67,7 @@ export class App {
     this.secondaryNav.reduce((n, item) => n + this.badge(item), 0),
   );
 
-  protected readonly todayLink = computed(() => `/days/${new Date().toISOString().slice(0, 10)}`);
+  protected readonly todayLink = computed(() => `/days/${todayLocal(this.format.timezone())}`);
   protected readonly homeLink = computed(() => this.prefs.landingUrl());
   protected readonly showNudge = computed(
     () => this.auth.needsSecondPasskey() && !this.auth.isRecoverySession() && !this.nudgeDismissed(),
@@ -79,6 +81,17 @@ export class App {
     effect(() => {
       if (this.auth.isAuthenticated() && !this.auth.isRecoverySession()) this.badges.start();
       else this.badges.stop();
+    });
+    // the regional settings decide how numbers and days read; mirror them for the next load
+    effect(() => {
+      if (!this.auth.isAuthenticated() || this.auth.isRecoverySession()) return;
+      this.api.settings().subscribe({
+        next: (v) => {
+          const regional = (v.data['regional'] ?? {}) as { locale?: string; timezone?: string };
+          this.format.adopt(regional.locale, regional.timezone);
+        },
+        error: () => undefined,
+      });
     });
   }
 

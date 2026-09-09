@@ -64,6 +64,7 @@ The pyramid is deliberate: most cases are `T-DOM`/`T-SVC`; E2E covers the two fl
 | T-DOM-026 | Implied TDEE and required rate (status arithmetic) | window weights and kcal; goal | `tdee.implied_tdee`, `tdee.required_rate`, `tdee.eat_target` | `mean_kcal + (−Δkg × kcal_per_kg) / n_kcal`; rate = (goal − current)/days × 7; deficit = −slope × kcal_per_kg; eat = tdee_ref − deficit | inline | yes | 2 |
 | T-DOM-027 | Training type from free text | German/English training notes | `target_band.training_type_from_text` | "krafttraining (5x5)" → strength, "kickboxing" → martial_arts, "nein (Sauna)" → rest, unknown → `None` | inline | yes | 1 |
 | T-DOM-028 | Multiplication anywhere in a quantity | `2 Fl. à 0,5 l`, `2 Flaschen (2 × 0,33 l)` | `parse_quantity_details` | base amount = count × per-piece volume (1000 ml / 660 ml) | inline | yes | 1 |
+| T-DOM-080 | Domain | `services/calendar` | Moments either side of local midnight, winter and summer, naive timestamps, an unknown zone | The day follows the zone; bounds are UTC moments of the local day; an unknown zone falls back to the default | `test_calendar.py` | automated |
 
 ## Importer (`T-IMP`)
 
@@ -195,6 +196,7 @@ The pyramid is deliberate: most cases are `T-DOM`/`T-SVC`; E2E covers the two fl
 | T-WEB-035 | Web | Tenant settings form | Read and write `captures.processed_retention_days` | 30 round-trips; `0` is written as `0`; an empty field drops the whole `captures` object | `settings-form.spec.ts` | automated |
 | T-WEB-036 | Web | Inbox header | Load the page with runner `ready`, then with `no_key` | `ready` shows Process now; `no_key` shows Open Claude for Processing and lists only the unassessed frozen report | `inbox-page.spec.ts` | automated |
 | T-WEB-037 | Web | Phone navigation | Render the shell signed in, then press More | Six entries in the bar; the sheet lists the four remaining sections plus sign out; a recovery session shows no bar at all | `app.spec.ts` | automated |
+| T-WEB-038 | Web | Report tooltip | Adopt `de-DE`, then `en-GB` | The same values read 89,4 / 1.900 and 89.4 / 1,900 | `report-block.spec.ts` | automated |
 | T-WEB-033 | Day thread states | mocked messages with `processing_state` and agent kinds | render `DayThread` | user captures show "waiting for the agent" / "in draft"; agent messages tagged summary/question/note; composer enabled while a run is active | mock | partly (manual) | 3 |
 
 ## Agent (`T-AGT`)
@@ -243,6 +245,7 @@ The pyramid is deliberate: most cases are `T-DOM`/`T-SVC`; E2E covers the two fl
 | T-RPT-010 | Timeline block | seeded days and weights | render a definition with `timeline` | one row per period day, the rolling window as configured, corridor bounds present | reports | yes | 2 |
 | T-SVC-065 | One capture, several files | two photos and a voice note | `UploadCapture(files=…)` | one capture with three ordered attachments, kind audio, re-upload is a no-op, delete removes every orphan blob | service | yes | 3 |
 | T-SVC-066 | Service | Capture retention | Age a processed capture past the retention, then list captures | Capture and its blob are gone; with `processed_retention_days: 0` a 400-day-old capture stays | `test_proposals_and_capture_lifecycle.py` | automated |
+| T-SVC-067 | Service | Weigh-in day boundary | Add a reading at 23:30 UTC with the tenant on Europe/Berlin, then on UTC | It counts on the 6th in Berlin and on the 5th in UTC | `test_days_and_drafts.py` | automated |
 | T-SVC-063 | Rules | settings saved | upsert twice with the same `when`, list, filter by scope | replaced instead of duplicated, priority order, tenant isolation, each change a settings version | service | yes | 3 |
 | T-SVC-064 | Rule validation | blank `when`, unknown scope | `UpsertRule` | 422; `rules_markdown` renders the agent section | service | yes | 3 |
 | T-SVC-061 | Product usage | product logged on two days | `GetProductUsage` | newest day first, totals, foreign tenant 404 | service | yes | 1 |

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime
+from datetime import date, datetime
 from typing import Annotated, Any, Literal, cast
 
 from fastapi import APIRouter, HTTPException, Query, Response, status
@@ -10,6 +10,8 @@ from pydantic import BaseModel
 
 from victus.api.deps import Ctx, Uow
 from victus.application.use_cases import snapshots as snap_uc
+from victus.application.use_cases.settings import regional_of
+from victus.domain.services.calendar import today_in
 from victus.domain.values import Period
 from victus.infrastructure.db.uow import SqlAlchemyUnitOfWork
 from victus.infrastructure.reports.sqlalchemy_source import SqlAlchemyReportDataSource
@@ -108,10 +110,12 @@ def _render(
     as_of: date | None = None,
 ) -> Response | dict[str, Any]:
     definition = _definition(name)
-    today = as_of or datetime.now(UTC).date()
+    with uow_factory(ctx) as uow:
+        tz = regional_of(uow).timezone
+    today = as_of or today_in(tz)
     period = _period(definition, from_, to, today)
     with uow_factory(ctx) as uow:
-        source = SqlAlchemyReportDataSource(cast(SqlAlchemyUnitOfWork, uow))
+        source = SqlAlchemyReportDataSource(cast(SqlAlchemyUnitOfWork, uow), tz)
         result = ReportEngine(source).render(definition, period, today=today)
     if fmt == "markdown":
         return Response(content=to_markdown(result), media_type="text/markdown; charset=utf-8")
@@ -134,10 +138,12 @@ def _freeze(
 ) -> Any:
     """Render the report and store it as a snapshot (the numbers never change again)."""
     definition = _definition(name)
-    today = as_of or datetime.now(UTC).date()
+    with uow_factory(ctx) as uow:
+        tz = regional_of(uow).timezone
+    today = as_of or today_in(tz)
     period = _period(definition, from_, to, today)
     with uow_factory(ctx) as uow:
-        source = SqlAlchemyReportDataSource(cast(SqlAlchemyUnitOfWork, uow))
+        source = SqlAlchemyReportDataSource(cast(SqlAlchemyUnitOfWork, uow), tz)
         result = ReportEngine(source).render(definition, period, today=today)
     payload = to_dict(result)
     payload["from"] = period.start.isoformat()

@@ -20,6 +20,7 @@ from victus.application.use_cases._mappers import (
     weekday_name,
 )
 from victus.application.use_cases.captures import queue_follow_up_if_needed
+from victus.application.use_cases.settings import regional_of
 from victus.domain.model.checks import DayForCheck
 from victus.domain.services.nutrients import sum_macros
 from victus.domain.services.units import UNITS, base_factor
@@ -152,7 +153,7 @@ def build_day_view(uow: UnitOfWork, d: orm.DayLog) -> dto.DayView:
             item_sum=macros,
         )
     )
-    weights = uow.weights.daily_means(d.date, d.date)
+    weights = uow.weights.daily_means(d.date, d.date, regional_of(uow).timezone)
     return dto.DayView(
         date=d.date,
         status=d.status,
@@ -179,7 +180,7 @@ class ListDays(UseCase):
             raise ValidationFailed("to must not be before from")
         with self._uow() as uow:
             macros = uow.day_logs.macros_between(start, end)
-            weights = uow.weights.daily_means(start, end)
+            weights = uow.weights.daily_means(start, end, regional_of(uow).timezone)
             draft_days = {d.date for d in uow.day_logs.draft_days()}
             out = []
             for d in uow.day_logs.list(start, end, status):

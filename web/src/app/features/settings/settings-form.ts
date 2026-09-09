@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, effect, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { BandEditor, BandModel, bandFromJson, bandToJson, emptyBand } from './band-editor';
+import { SUPPORTED_LOCALES } from '../../core/format.service';
 
 type Json = Record<string, unknown>;
 
@@ -38,6 +39,8 @@ export interface SettingsFormModel {
   vocabulary: string;
   reportPeriod: string;
   captureRetentionDays: string;
+  timezone: string;
+  locale: string;
 }
 
 function str(v: unknown): string {
@@ -158,6 +161,27 @@ function obj(v: unknown): Json {
       </fieldset>
 
       <fieldset>
+        <legend>Region</legend>
+        <div class="v-form-row">
+          <label class="v-field">
+            <span>Time zone <span class="v-muted">(decides which day a reading counts on)</span></span>
+            <input name="tz" [(ngModel)]="m.timezone" placeholder="Europe/Berlin" list="tzlist" />
+            <datalist id="tzlist">
+              @for (z of zones; track z) { <option [value]="z"></option> }
+            </datalist>
+          </label>
+          <label class="v-field">
+            <span>Number and date format</span>
+            <select name="loc" [(ngModel)]="m.locale">
+              <option value="">Default (1.234,5)</option>
+              @for (l of locales; track l.tag) { <option [value]="l.tag">{{ l.label }}</option> }
+            </select>
+          </label>
+        </div>
+        <p class="v-small v-muted">Timestamps are always stored in UTC. The zone decides which calendar day they belong to, so a weigh-in just after midnight counts on the right day.</p>
+      </fieldset>
+
+      <fieldset>
         <legend>Housekeeping</legend>
         <div class="v-form-row">
           <label class="v-field">
@@ -196,6 +220,22 @@ export class TenantSettingsForm {
   readonly touched = signal(false);
   m: SettingsFormModel = TenantSettingsForm.empty();
 
+  /** A short list of suggestions; any IANA name may be typed. */
+  readonly zones = [
+    'Europe/Berlin',
+    'Europe/Vienna',
+    'Europe/Zurich',
+    'Europe/Warsaw',
+    'Europe/London',
+    'Europe/Lisbon',
+    'Europe/Nicosia',
+    'UTC',
+  ];
+  readonly locales = SUPPORTED_LOCALES.map((tag) => ({
+    tag,
+    label: tag === 'de-DE' ? 'German (1.234,5)' : tag === 'en-GB' ? 'British (1,234.5)' : 'American (1,234.5)',
+  }));
+
   constructor() {
     effect(() => {
       this.m = TenantSettingsForm.fromData(this.data());
@@ -225,7 +265,7 @@ export class TenantSettingsForm {
       goals: [], bands: [], kcalPerKg: '', movingAverageDays: '',
       trendWindows: '', tdeeWindows: '', tdeeReferenceWindow: '', corridorMin: '', corridorMax: '',
       corridorAsymmetric: true, birthDate: '', heightCm: '', sex: '', language: '', vocabulary: '', reportPeriod: '',
-      captureRetentionDays: '',
+      captureRetentionDays: '', timezone: '', locale: '',
     };
   }
 
@@ -236,6 +276,7 @@ export class TenantSettingsForm {
     const tr = obj(d['transcription']);
     const rd = obj(d['report_defaults']);
     const caps = obj(d['captures']);
+    const reg = obj(d['regional']);
     const rawGoals =
       Array.isArray(d['goals']) && (d['goals'] as Json[]).length
         ? (d['goals'] as Json[])
@@ -274,6 +315,8 @@ export class TenantSettingsForm {
       vocabulary: str(tr['vocabulary_prompt']),
       reportPeriod: str(rd['period']),
       captureRetentionDays: str(caps['processed_retention_days']),
+      timezone: str(reg['timezone']),
+      locale: str(reg['locale']),
     };
   }
 
@@ -345,6 +388,10 @@ export class TenantSettingsForm {
     const retention = m.captureRetentionDays.trim() === '' ? undefined : num(m.captureRetentionDays);
     setOrDelete(caps, 'processed_retention_days', retention);
     setOrDelete(d, 'captures', Object.keys(caps).length ? caps : undefined);
+    const reg: Json = { ...obj(d['regional']) };
+    setOrDelete(reg, 'timezone', m.timezone.trim() || undefined);
+    setOrDelete(reg, 'locale', m.locale.trim() || undefined);
+    setOrDelete(d, 'regional', Object.keys(reg).length ? reg : undefined);
     return d;
   }
 

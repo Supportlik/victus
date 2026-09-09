@@ -3,6 +3,7 @@
 import { TestBed } from '@angular/core/testing';
 import { provideEchartsCore } from 'ngx-echarts';
 import { ReportBlock } from '../../../api';
+import { FormatService } from '../../../core/format.service';
 import { ReportBlockView } from './report-block';
 
 const meta = (type: string, title: string) => ({ type, id: null, title });
@@ -101,7 +102,6 @@ describe('ReportBlockView', () => {
     expect(fromMacroPanel).toBe(fromWeightPanel);
     expect(fromWeightPanel.indexOf('Weight')).toBeLessThan(fromWeightPanel.indexOf('Intake'));
     expect(fromWeightPanel.indexOf('Intake')).toBeLessThan(fromWeightPanel.indexOf('TDEE'));
-    expect(fromWeightPanel).toContain('89.4');
     expect(fromWeightPanel).toContain('TDEE (14 d)');
     expect(fromWeightPanel).toContain('Protein 150 g');
 
@@ -110,6 +110,25 @@ describe('ReportBlockView', () => {
     expect(thin).toContain('not counted');
     expect(thin).not.toContain('Intake');
     expect(thin).toContain('TDEE');
+  });
+
+  // T-WEB-038: numbers follow the tenant's locale, so a European reader sees 1.234,5 (R69).
+  it('writes the tooltip numbers in the configured locale', async () => {
+    const timeline = blocks.find((b) => b.meta.type === 'timeline')!;
+    const format = TestBed.inject(FormatService);
+    const fixture = TestBed.createComponent(ReportBlockView);
+    fixture.componentRef.setInput('block', timeline);
+    await fixture.whenStable();
+
+    format.adopt('de-DE', 'Europe/Berlin');
+    const german = fixture.componentInstance.timelineTooltip([{ axisValue: '2026-01-05' }]);
+    expect(german).toContain('89,4');
+    expect(german).toContain('1.900');
+
+    format.adopt('en-GB', 'Europe/London');
+    const english = fixture.componentInstance.timelineTooltip([{ axisValue: '2026-01-05' }]);
+    expect(english).toContain('89.4');
+    expect(english).toContain('1,900');
   });
 
   it('shows a placeholder for unknown block types', async () => {

@@ -1,8 +1,9 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { ApiClient } from '../api';
+import { isoDayIn } from './format.service';
 
 function iso(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  return isoDayIn(d);
 }
 
 /**

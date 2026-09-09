@@ -296,3 +296,31 @@ def test_tenant_isolation_through_use_cases(
         uc.AddLineItem(factory, bob).execute(
             meal.id, uc.LineItemInput(consumable_id=skyr, amount=1, unit_code="g")
         )
+
+
+def test_t_svc_067_weigh_ins_land_on_the_local_day(
+    factory: UowFactory, alice: TenantContext
+) -> None:
+    """T-SVC-067: a weigh-in after local midnight belongs to the new day (R69).
+
+    Half past midnight in Berlin is 23:30 UTC the day before, so grouping by the UTC
+    date would put the reading on the wrong day and shift every average built on it.
+    """
+    from victus.application.schemas_loader import load_schema
+
+    data = dict(load_schema("tenant-settings")["examples"][0])
+    data["regional"] = {"timezone": "Europe/Berlin", "locale": "de-DE"}
+    settings_uc.PutSettings(factory, alice).execute(data)
+
+    weights_uc.AddManualWeight(factory, alice).execute(
+        datetime(2026, 1, 5, 23, 30, tzinfo=UTC), 84.0
+    )
+    means = weights_uc.DailyMeans(factory, alice).execute(date(2026, 1, 6), date(2026, 1, 6))
+    assert means == {date(2026, 1, 6): 84.0}
+
+    # with the tenant on UTC the same reading counts on the fifth
+    data["regional"] = {"timezone": "UTC", "locale": "en-GB"}
+    settings_uc.PutSettings(factory, alice).execute(data)
+    assert weights_uc.DailyMeans(factory, alice).execute(date(2026, 1, 5), date(2026, 1, 5)) == {
+        date(2026, 1, 5): 84.0
+    }
