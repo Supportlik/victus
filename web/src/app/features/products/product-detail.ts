@@ -3,7 +3,7 @@ import { DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { ApiClient, Capture, Portion, Product, ProductProposal, ProductUsage, Unit } from '../../api';
-import { todayLocal } from '../../core/format.service';
+import { FormatService, todayLocal } from '../../core/format.service';
 import { I18nService } from '../../core/i18n.service';
 import { describeError } from '../../core/problem';
 import { CaptureCard } from '../../shared/capture-card';
@@ -161,7 +161,7 @@ import { ProductForm } from './product-form';
                     <tr>
                       <td><a [routerLink]="['/days', e.date]">{{ e.date }}</a></td>
                       <td>{{ e.meal }}</td>
-                      <td class="num">{{ e.amount ?? e.base_amount }} {{ i18n.t(e.unit_code ?? e.base_unit) }}@if (e.estimated) { <span [title]="i18n.t('estimated')"> ⚠️</span> }</td>
+                      <td class="num">{{ amountText(e.amount ?? e.base_amount) }} {{ i18n.t(e.unit_code ?? e.base_unit) }}@if (e.estimated) { <span [title]="i18n.t('estimated')"> ⚠️</span> }</td>
                       <td class="num">{{ e.kcal | number: '1.0-0' }}</td>
                       <td>@if (e.is_draft) { <span class="v-tag draft">{{ i18n.t('draft') }}</span> }</td>
                     </tr>
@@ -183,7 +183,7 @@ import { ProductForm } from './product-form';
               <tbody>
                 @for (po of p.portions ?? []; track po.id) {
                   <tr>
-                    <td>{{ po.label }}</td><td>{{ i18n.t(po.unit_code) }}</td><td class="num">{{ po.amount }} {{ i18n.t(po.amount_unit) }}</td>
+                    <td>{{ po.label }}</td><td>{{ i18n.t(po.unit_code) }}</td><td class="num">{{ amountText(po.amount) }} {{ i18n.t(po.amount_unit) }}</td>
                     <td>{{ po.is_default ? i18n.t('yes') : '' }}</td><td>{{ po.weight_source === 'weighed' ? i18n.t('yes') : po.weight_source === 'estimated' ? i18n.t('estimated') : '' }}</td>
                     <td class="num"><button type="button" class="v-btn quiet small danger" (click)="deletePortion(po)">{{ i18n.t('remove') }}</button></td>
                   </tr>
@@ -249,6 +249,13 @@ import { ProductForm } from './product-form';
 export class ProductDetail {
   readonly api = inject(ApiClient);
   readonly i18n = inject(I18nService);
+  readonly format = inject(FormatService);
+
+  /** An amount as it is written here: a whole number stays whole, a fraction keeps one place. */
+  amountText(value: number | null | undefined): string {
+    if (value == null) return '–';
+    return this.format.number(value, Number.isInteger(value) ? 0 : 1);
+  }
   private readonly router = inject(Router);
   readonly id = input.required<string>();
   readonly product = signal<Product | null>(null);

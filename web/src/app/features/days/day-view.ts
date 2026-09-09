@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ApiClient, DayLog, LineItem, MACRO_KEYS, MACRO_LABEL, MACRO_UNIT, MacroKey, Meal, Product, TrainingType, Unit } from '../../api';
 import { HttpErrorResponse } from '@angular/common/http';
+import { FormatService } from '../../core/format.service';
 import { I18nService } from '../../core/i18n.service';
 import { describeError } from '../../core/problem';
 import { BandGauge } from '../../shared/band-gauge';
@@ -152,7 +153,7 @@ import { DayThread } from './day-thread';
                             </optgroup>
                             @if (pending()!.portions?.length) {
                               <optgroup [attr.label]="i18n.t('Portions of this product')">
-                                @for (p of pending()!.portions ?? []; track p.id) { <option [value]="'portion:' + p.id">{{ p.label }} ({{ p.amount }} {{ i18n.t(p.amount_unit) }})</option> }
+                                @for (p of pending()!.portions ?? []; track p.id) { <option [value]="'portion:' + p.id">{{ p.label }} ({{ amountText(p.amount) }} {{ i18n.t(p.amount_unit) }})</option> }
                               </optgroup>
                             }
                             <optgroup [attr.label]="i18n.t('Needs a size once')">
@@ -193,7 +194,7 @@ import { DayThread } from './day-thread';
                             @if (it.estimated || it.amount_estimated) { <span class="warn-mark" [title]="i18n.t('estimated')">⚠️</span> }
                             @if (it.consumable_kind === 'ad_hoc') { <span class="v-tag">{{ i18n.t('unmatched') }}</span> }
                           </td>
-                          <td class="num">{{ it.amount ?? it.base_amount }} {{ i18n.t(it.unit_code ?? it.base_unit) }}</td>
+                          <td class="num">{{ amountText(it.amount ?? it.base_amount) }} {{ i18n.t(it.unit_code ?? it.base_unit) }}</td>
                           <td class="num">{{ it.kcal | macro: 'kcal' }}</td>
                           <td class="num">{{ it.protein | macro: 'protein' }}</td>
                           <td class="num v-hide-m">{{ it.carbs | macro: 'carbs' }}</td>
@@ -320,6 +321,7 @@ import { DayThread } from './day-thread';
 export class DayView {
   private readonly api = inject(ApiClient);
   readonly i18n = inject(I18nService);
+  readonly format = inject(FormatService);
   readonly date = input.required<string>();
   readonly day = signal<DayLog | null>(null);
   readonly error = signal<string | null>(null);
@@ -354,6 +356,12 @@ export class DayView {
   readonly unitLabel = computed(() =>
     this.i18n.t(this.units().find((u) => u.code === this.unitCode())?.singular ?? this.unitCode()),
   );
+
+  /** An amount as it is written here: a whole number stays whole, a fraction keeps one place. */
+  amountText(value: number | null | undefined): string {
+    if (value == null) return '–';
+    return this.format.number(value, Number.isInteger(value) ? 0 : 1);
+  }
 
   readonly macroKeys = MACRO_KEYS;
   readonly label = MACRO_LABEL;
