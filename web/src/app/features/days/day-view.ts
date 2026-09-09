@@ -96,7 +96,9 @@ import { DayThread } from './day-thread';
 
         @if (d.findings.length) {
           <div class="v-notice">
-            @for (f of d.findings; track f.code + f.message) { <div>{{ f.message }}</div> }
+            @for (f of d.findings; track f.code + i18n.msg(f.message)) {
+                  <div>{{ i18n.msg(f.message) }}</div>
+                }
           </div>
         }
 

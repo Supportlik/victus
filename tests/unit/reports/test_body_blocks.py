@@ -54,15 +54,15 @@ def test_without_a_profile_nothing_is_invented(ref) -> None:  # type: ignore[no-
     result = _body(_ctx(_source(ref), ref))
     assert result.bmi is None
     assert result.weight_kg is not None, "the weight itself is known"
-    assert any("height" in m for m in result.missing)
+    assert any("height" in m.key for m in result.missing)
     # and the markdown says so rather than showing an empty section
     assert "Not shown" in _block(result)
 
     energy = _energy(_ctx(_source(ref), ref))
     assert energy.basal_kcal is None
-    assert any("height" in m for m in energy.missing)
-    assert any("birth date" in m for m in energy.missing)
-    assert any("sex" in m for m in energy.missing)
+    assert any("height" in m.key for m in energy.missing)
+    assert any("birth date" in m.key for m in energy.missing)
+    assert any("sex" in m.key for m in energy.missing)
 
 
 def test_with_a_profile_the_classes_and_thresholds_appear(ref) -> None:  # type: ignore[no-untyped-def]
@@ -125,11 +125,11 @@ def test_an_unknown_sex_stops_the_ratio_but_not_the_bmi(ref) -> None:  # type: i
     result = _body(_ctx(source, ref))
     assert result.bmi is not None, "the BMI needs no sex"
     assert result.waist_to_hip is None
-    assert any("'x'" in m for m in result.missing)
+    assert any(m.params.get("sex") == "x" for m in result.missing)
 
     energy = _energy(_ctx(source, ref))
     assert energy.basal_kcal is None
-    assert any("'x'" in m for m in energy.missing)
+    assert any(m.params.get("sex") == "x" for m in energy.missing)
 
 
 def test_no_circumference_is_left_out_of_the_change(ref) -> None:  # type: ignore[no-untyped-def]

@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from victus.application.use_cases.body import CIRCUMFERENCES
 from victus.domain.services import body as calc
+from victus.domain.values import Message
 from victus.reports.blocks._meta import meta_for
 from victus.reports.context import ReportContext
 from victus.reports.definition import BodyCompositionDef, EnergySplitDef
+from victus.reports.messages import basis_message
 from victus.reports.results import (
     BodyCompositionResult,
     EnergySplitResult,
@@ -73,13 +75,13 @@ def compute_body_composition(
     sessions = ctx.body_sessions
     latest = sessions[-1] if sessions else None
     previous = sessions[-2] if len(sessions) > 1 else None
-    missing: list[str] = []
+    missing: list[Message] = []
 
     weight = ctx.current_kg
     if weight is None:
-        missing.append("no weigh-in yet")
+        missing.append(Message("no weigh-in yet"))
     if profile.height_cm is None:
-        missing.append("height is not set in the settings")
+        missing.append(Message("height is not set in the settings"))
 
     bmi: RatedValue | None = None
     marks: list[ThresholdMark] = []
@@ -100,18 +102,23 @@ def compute_body_composition(
     if latest and latest.waist_cm and profile.height_cm:
         whtr = _rated(calc.waist_to_height(latest.waist_cm, profile.height_cm), "", 3)
     elif profile.height_cm and not (latest and latest.waist_cm):
-        missing.append("no waist measurement")
+        missing.append(Message("no waist measurement"))
 
     whr: RatedValue | None = None
     if latest and latest.waist_cm and latest.hip_cm and profile.sex:
         try:
             sex = calc.Sex(profile.sex)
         except ValueError:
-            missing.append(f"waist to hip has no scale for sex '{profile.sex}'")
+            missing.append(
+                Message(
+                    "waist to hip has no scale for sex “{sex}”",
+                    {"sex": str(profile.sex)},
+                )
+            )
         else:
             whr = _rated(calc.waist_to_hip(latest.waist_cm, latest.hip_cm, sex), "", 3)
     elif latest and latest.waist_cm and latest.hip_cm and not profile.sex:
-        missing.append("waist to hip needs the sex, which is not set")
+        missing.append(Message("waist to hip needs the sex, which is not set"))
 
     changes: dict[str, float] = {}
     if latest and previous:
@@ -150,30 +157,41 @@ def compute_energy_split(block: EnergySplitDef, ctx: ReportContext) -> EnergySpl
     profile = ctx.body_profile
     weight = ctx.current_kg
     reference, basis = ctx.reference_tdee
-    missing: list[str] = []
+    missing: list[Message] = []
     if reference is None:
-        missing.append("no expenditure yet: needs weigh-ins and logged days")
+        missing.append(Message("no expenditure yet: needs weigh-ins and logged days"))
     if weight is None:
-        missing.append("no weigh-in yet")
+        missing.append(Message("no weigh-in yet"))
     if profile.height_cm is None:
-        missing.append("height is not set in the settings")
+        missing.append(Message("height is not set in the settings"))
     if profile.birth_date is None:
-        missing.append("birth date is not set in the settings")
+        missing.append(Message("birth date is not set in the settings"))
     if not profile.sex:
-        missing.append("sex is not set in the settings")
+        missing.append(Message("sex is not set in the settings"))
 
     if reference is None or weight is None or profile.height_cm is None:
-        return EnergySplitResult(meta=meta_for(block), basis=basis, missing=missing)
+        return EnergySplitResult(meta=meta_for(block), basis=basis_message(basis), missing=missing)
     if profile.birth_date is None or not profile.sex:
         return EnergySplitResult(
-            meta=meta_for(block), tdee_kcal=float(reference), basis=basis, missing=missing
+            meta=meta_for(block),
+            tdee_kcal=float(reference),
+            basis=basis_message(basis),
+            missing=missing,
         )
     try:
         sex = calc.Sex(profile.sex)
     except ValueError:
-        missing.append(f"the resting rate has no equation for sex '{profile.sex}'")
+        missing.append(
+            Message(
+                "the resting rate has no equation for sex “{sex}”",
+                {"sex": str(profile.sex)},
+            )
+        )
         return EnergySplitResult(
-            meta=meta_for(block), tdee_kcal=float(reference), basis=basis, missing=missing
+            meta=meta_for(block),
+            tdee_kcal=float(reference),
+            basis=basis_message(basis),
+            missing=missing,
         )
 
     age = calc.age_years(profile.birth_date, ctx.today)
@@ -186,7 +204,7 @@ def compute_energy_split(block: EnergySplitDef, ctx: ReportContext) -> EnergySpl
         activity_kcal=split.activity_kcal,
         pal=split.pal,
         age_years=age,
-        basis=basis,
+        basis=basis_message(basis),
         caveat=split.caveat,
         missing=missing,
     )

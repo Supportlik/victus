@@ -215,10 +215,22 @@ export interface TargetBand {
   note?: string | null;
 }
 
+/**
+ * A sentence the server leaves to us: the English key and the values that belong in it.
+ *
+ * The server used to format these itself ("79 days left"), which no dictionary can reach.
+ * Frozen snapshots still hold the old plain strings, so anything reading one of these
+ * fields goes through `message()` in the report block rather than using it directly.
+ */
+export interface Message {
+  key: string;
+  params?: Record<string, string | number>;
+}
+
 export interface Finding {
   kind: number;
   code: string;
-  message: string;
+  message: Message | string;
 }
 
 export interface DaySummary {
@@ -520,7 +532,7 @@ export interface KpiTileBlock extends BlockBase {
   delta?: number | null;
   zone?: BandZone | null;
   quality?: Quality | null;
-  note?: string | null;
+  note?: Message | string | null;
 }
 
 export interface BandStat {
@@ -564,7 +576,7 @@ export interface TdeeWindowsBlock extends BlockBase {
   rows: TdeeWindowRow[];
   show_quality: boolean;
   reference_tdee: number | null;
-  reference_basis: string;
+  reference_basis: Message | string;
 }
 
 export interface TrendRow {
@@ -722,7 +734,7 @@ export interface BodyCompositionBlock extends BlockBase {
   changes: Record<string, number>;
   body_fat_pct?: number | null;
   /** Why a figure is absent, one entry per missing input. */
-  missing: string[];
+  missing: (Message | string)[];
 }
 
 export interface EnergySplitBlock extends BlockBase {
@@ -731,9 +743,9 @@ export interface EnergySplitBlock extends BlockBase {
   activity_kcal?: number | null;
   pal?: number | null;
   age_years?: number | null;
-  basis: string;
-  caveat?: string | null;
-  missing: string[];
+  basis: Message | string;
+  caveat?: Message | string | null;
+  missing: (Message | string)[];
 }
 
 export interface ErrorBlock extends BlockBase {

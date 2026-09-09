@@ -179,6 +179,14 @@ All notable changes to Victus are documented here. The format follows
   known. Circumferences are entered on the weight page and listed with their change against the
   previous session.
 
+- The server sends no finished sentences any more (R78). A day's findings, a report's
+  notes, the reason a figure is missing and the caveat on an implausible energy split all
+  travel as a key plus its parameters — `{"key": "{n} days left", "params": {"n": 79}}` —
+  so the interface says them in its own language and writes the numbers in its own
+  convention. Markdown and the CLI fill the same key in directly, so their English output
+  is unchanged, and frozen snapshots keep the sentence they were frozen with.
+  `scripts/check_translations.py` now reads both halves: the `i18n.t()` calls in the
+  templates and the `Message(...)` keys in the Python source.
 - Spanish and French join German and English (R78). The three dictionaries carry the same keys in
   the same order, `scripts/check_translations.py` checks every one of them, and the settings offer
   the language beside the number format, which stays a separate choice.

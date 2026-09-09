@@ -12,6 +12,7 @@ from victus.api.schemas.common import (
     LineItemOut,
     MacrosOut,
     MealOut,
+    MessageOut,
     TargetBandOut,
 )
 from victus.application import dto
@@ -65,6 +66,13 @@ def day_out(d: dto.DayView) -> DayOut:
         meals=[meal_out(m) for m in d.meals],
         target_band=target_band_out(d.target_band),
         zones={k: v.value for k, v in d.zones.items()},
-        findings=[FindingOut(kind=f.kind, code=f.code, message=f.message) for f in d.findings],
+        findings=[
+            FindingOut(
+                kind=f.kind,
+                code=f.code,
+                message=MessageOut(key=f.message.key, params=dict(f.message.params)),
+            )
+            for f in d.findings
+        ],
         notes=d.notes,
     )

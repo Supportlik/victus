@@ -5,9 +5,13 @@ The English string is its own key, so a missing translation silently shows Engli
 fallback is deliberate, because English is correct rather than broken, but it also means a
 gap leaves no trace. This script finds the gap.
 
-It scans the web templates for the strings passed to ``i18n.t(...)`` and compares them with
-every dictionary beside it (German, Spanish, French). Exit code 1 with ``--strict``, so CI
-can hold the line once the translation is complete; without it the script only reports.
+It scans the web templates for the strings passed to ``i18n.t(...)`` **and** the Python
+source for the keys handed over as ``Message(...)``, then compares both with every
+dictionary beside it (German, Spanish, French). Exit code 1 with ``--strict``, so CI can
+hold the line once the translation is complete; without it the script only reports.
+
+The server-side half matters as much as the templates: a sentence the server sends is one
+the interface has to translate, and nothing in a template mentions it.
 
     uv run python scripts/check_translations.py
     uv run python scripts/check_translations.py --strict
@@ -21,12 +25,14 @@ The direction that matters is the other one, a ``t()`` call with no translation.
 from __future__ import annotations
 
 import argparse
+import ast
 import re
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 WEB = ROOT / "web" / "src" / "app"
+PY_SRC = ROOT / "src" / "victus"
 #: One dictionary per language; English needs none, it is what the templates already say.
 DICTIONARIES = {
     "de": WEB / "core" / "i18n.de.ts",
@@ -54,6 +60,30 @@ def used_strings() -> dict[str, list[str]]:
     return found
 
 
+def server_strings() -> dict[str, list[str]]:
+    """Every string a ``Message(...)`` is built from, with the files it appears in.
+
+    Parsed rather than matched: a key written across two lines is one string to Python and
+    should be one string here too.
+    """
+    found: dict[str, list[str]] = {}
+    for path in sorted(PY_SRC.rglob("*.py")):
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except (SyntaxError, UnicodeDecodeError):
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            name = node.func.id if isinstance(node.func, ast.Name) else None
+            if name != "Message" or not node.args:
+                continue
+            first = node.args[0]
+            if isinstance(first, ast.Constant) and isinstance(first.value, str):
+                found.setdefault(first.value, []).append(str(path.relative_to(ROOT)))
+    return found
+
+
 def translated(dictionary: Path) -> set[str]:
     if not dictionary.exists():
         return set()
@@ -72,7 +102,10 @@ def main() -> int:
     args = parser.parse_args()
 
     used = used_strings()
-    print(f"strings in use: {len(used)}")
+    server = server_strings()
+    for key, where in server.items():
+        used.setdefault(key, []).extend(where)
+    print(f"strings in use: {len(used)} ({len(server)} of them sent by the server)")
     gaps = 0
     for code, path in DICTIONARIES.items():
         have = translated(path)

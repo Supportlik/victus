@@ -260,11 +260,33 @@ class MatchCandidate:
 
 
 @dataclass(frozen=True, slots=True)
+class Message:
+    """A sentence for a person: the key and the values that belong in it.
+
+    The server used to write these out itself — "79 days left" — which no dictionary can
+    reach, because the interface would have to take the sentence apart again to translate
+    it. The key is the English sentence with ``{name}`` placeholders, so a renderer that
+    writes text fills it in directly (:meth:`fill`) while the interface looks the key up
+    in its own language (R78).
+    """
+
+    key: str
+    params: dict[str, str | int | float] = field(default_factory=dict)
+
+    def fill(self) -> str:
+        """The English sentence, for Markdown, the CLI and the model prompts."""
+        text = self.key
+        for name, value in self.params.items():
+            text = text.replace("{" + name + "}", str(value))
+        return text
+
+
+@dataclass(frozen=True, slots=True)
 class Finding:
     """Result of a consistency check on a day (see ``domain/services/validation.py``)."""
 
     kind: int  # 0 flags missing, 1 frontmatter/table drift, 2 table/items mismatch, 3 gaps
     code: str
-    message: str
+    message: Message
     day: date | None = None
     details: dict[str, float | str] = field(default_factory=dict)

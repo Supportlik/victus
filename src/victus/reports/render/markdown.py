@@ -6,10 +6,10 @@ formatting (``2,610 kcal``, ``86.4 kg``).
 
 from __future__ import annotations
 
-import re
+from collections.abc import Sequence
 from datetime import date
 
-from victus.domain.values import BandZone, Quality
+from victus.domain.values import BandZone, Message, Quality
 from victus.reports.results import (
     BandDistributionResult,
     BlockError,
@@ -123,15 +123,9 @@ def _band_distribution(b: BandDistributionResult) -> str:
     )
 
 
-def _basis(basis: str) -> str:
-    """``rolling_14d`` reads like a column name; say it in words."""
-    rolling = re.fullmatch(r"rolling_(\d+)d", basis)
-    if rolling:
-        return f"from the rolling {rolling.group(1)}-day window"
-    weekly = re.fullmatch(r"weekly_mean_(\d+)w", basis)
-    if weekly:
-        return f"mean of the last {weekly.group(1)} weekly values"
-    return "no basis yet" if basis == "none" else basis
+def _words(messages: Sequence[Message]) -> str:
+    """Several sentences, filled in and joined."""
+    return "; ".join(m.fill() for m in messages)
 
 
 def _tdee(b: TdeeWindowsResult) -> str:
@@ -154,7 +148,7 @@ def _tdee(b: TdeeWindowsResult) -> str:
         if b.show_quality:
             row.append(f"{QUALITY_EMOJI[r.quality]} {r.quality.value}" if r.quality else "–")
         rows.append(row)
-    ref = f"\n\nReference TDEE: **{num(b.reference_tdee, 0, 'kcal')}**, {_basis(b.reference_basis)}"
+    ref = f"\n\nReference TDEE: **{num(b.reference_tdee, 0, 'kcal')}**, {b.reference_basis.fill()}"
     return _table(headers, rows) + ref
 
 
@@ -351,14 +345,14 @@ def _body(b: BodyCompositionResult) -> str:
         measured = f" (measured {_d(b.measured_at)})" if b.measured_at else ""
         parts.append(f"\n**Circumferences**{measured}\n\n" + _table(["", "now", "change"], rows))
     if b.missing:
-        parts.append("\n_Not shown: " + "; ".join(b.missing) + "._")
+        parts.append("\n_Not shown: " + _words(b.missing) + "._")
     return "\n".join(parts) if parts else "_Nothing measured yet._"
 
 
 def _energy_split(b: EnergySplitResult) -> str:
     if b.tdee_kcal is None:
-        return "_Not available: " + "; ".join(b.missing or ["no data"]) + "._"
-    lines = [f"- **Expenditure** {b.tdee_kcal:.0f} kcal/day ({_basis(b.basis)})"]
+        return "_Not available: " + (_words(b.missing) or "no data") + "._"
+    lines = [f"- **Expenditure** {b.tdee_kcal:.0f} kcal/day ({b.basis.fill()})"]
     if b.basal_kcal is not None:
         lines.append(f"- **At rest** {b.basal_kcal:.0f} kcal/day")
         lines.append(f"- **From moving** {b.activity_kcal:.0f} kcal/day")
@@ -366,9 +360,9 @@ def _energy_split(b: EnergySplitResult) -> str:
             lines.append(f"- **Activity level** {b.pal:.2f} times the resting rate")
     out = "\n".join(lines)
     if b.caveat:
-        out += f"\n\n⚠️ {b.caveat}"
+        out += f"\n\n⚠️ {b.caveat.fill()}"
     if b.missing:
-        out += "\n\n_Not shown: " + "; ".join(b.missing) + "._"
+        out += "\n\n_Not shown: " + _words(b.missing) + "._"
     return out
 
 

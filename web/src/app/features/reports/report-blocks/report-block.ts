@@ -13,6 +13,7 @@ import {
   ForecastBlock,
   KpiTileBlock,
   MacroKey,
+  Message,
   Quality,
   ReportBlock,
   TdeeWindowsBlock,
@@ -47,7 +48,7 @@ import { CHART_PALETTE } from './palette';
             <span class="t">{{ i18n.t(kpi().meta.title) }}</span>
             <span class="v">{{ kpiValue() }} <span class="u">{{ i18n.t(kpi().unit) }}</span></span>
             @if (kpi().delta != null) { <span class="d">{{ formatSigned(kpi().delta, kpi().decimals) }} {{ i18n.t('vs. previous period') }}</span> }
-            @if (kpi().note) { <span class="d">{{ kpi().note }}</span> }
+            @if (kpi().note) { <span class="d">{{ i18n.msg(kpi().note) }}</span> }
           </div>
         }
         @case ('band_distribution') {
@@ -75,7 +76,7 @@ import { CHART_PALETTE } from './palette';
         }
         @case ('tdee_windows') {
           <div class="v-panel">
-            <h3>{{ i18n.t(block().meta.title) }} @if (tdee().reference_tdee != null) { <span class="v-small v-muted">{{ i18n.t('reference') }} {{ formatMacro(tdee().reference_tdee, 'kcal') }} kcal, {{ basisLabel(tdee().reference_basis) }}</span> }</h3>
+            <h3>{{ i18n.t(block().meta.title) }} @if (tdee().reference_tdee != null) { <span class="v-small v-muted">{{ i18n.t('reference') }} {{ formatMacro(tdee().reference_tdee, 'kcal') }} kcal, {{ i18n.msg(tdee().reference_basis) }}</span> }</h3>
             <div class="v-scroll-x">
               <table class="v-table">
                 <thead><tr><th>{{ i18n.t('Window') }}</th><th class="num">Ø kcal</th><th class="num">Δ {{ i18n.t('weight') }}</th><th class="num">TDEE</th><th class="num">{{ i18n.t('Coverage') }}</th><th class="num">{{ i18n.t('in / above corridor') }}</th>@if (tdee().show_quality) { <th>{{ i18n.t('Grade') }}</th> }</tr></thead>
@@ -256,7 +257,7 @@ import { CHART_PALETTE } from './palette';
               </div>
             }
             @if (body().missing.length) {
-              <p class="v-small v-muted">{{ i18n.t('Not shown: {reasons}.', { reasons: body().missing.join('; ') }) }}</p>
+              <p class="v-small v-muted">{{ i18n.t('Not shown: {reasons}.', { reasons: reasons(body().missing) }) }}</p>
             }
           </div>
         }
@@ -264,10 +265,10 @@ import { CHART_PALETTE } from './palette';
           <div class="v-panel energy">
             <h3>{{ i18n.t(block().meta.title) }}</h3>
             @if (energy().tdee_kcal == null) {
-              <p class="v-muted">{{ i18n.t('Not available: {reasons}.', { reasons: energy().missing.join('; ') || i18n.t('no data') }) }}</p>
+              <p class="v-muted">{{ i18n.t('Not available: {reasons}.', { reasons: reasons(energy().missing) || i18n.t('no data') }) }}</p>
             } @else {
               <div class="rows">
-                <div><span>{{ i18n.t('Expenditure') }}</span><b>{{ format.number(energy().tdee_kcal!) }} kcal</b><span class="v-small v-muted">{{ basisLabel(energy().basis) }}</span></div>
+                <div><span>{{ i18n.t('Expenditure') }}</span><b>{{ format.number(energy().tdee_kcal!) }} kcal</b><span class="v-small v-muted">{{ i18n.msg(energy().basis) }}</span></div>
                 @if (energy().basal_kcal != null) {
                   <div>
                     <span>{{ i18n.t('At rest') }}</span>
@@ -289,8 +290,8 @@ import { CHART_PALETTE } from './palette';
                   <span class="move" [style.flex]="maxOf(energy().activity_kcal!, 1)">{{ i18n.t('moving') }} {{ format.number(sharePct(energy().activity_kcal!), 0) }} %</span>
                 </div>
               }
-              @if (energy().caveat) { <p class="v-small warn-text">{{ energy().caveat }}</p> }
-              @if (energy().missing.length) { <p class="v-small v-muted">{{ i18n.t('Not shown: {reasons}.', { reasons: energy().missing.join('; ') }) }}</p> }
+              @if (energy().caveat) { <p class="v-small warn-text">{{ i18n.msg(energy().caveat) }}</p> }
+              @if (energy().missing.length) { <p class="v-small v-muted">{{ i18n.t('Not shown: {reasons}.', { reasons: reasons(energy().missing) }) }}</p> }
             }
           </div>
         }
@@ -469,12 +470,9 @@ export class ReportBlockView {
   }
 
   /** "rolling_14d" reads like a database column; say it in words. */
-  basisLabel(basis: string): string {
-    const rolling = /^rolling_(\d+)d$/.exec(basis);
-    if (rolling) return this.i18n.t('from the rolling {n}-day window', { n: rolling[1] });
-    const weekly = /^weekly_mean_(\d+)w$/.exec(basis);
-    if (weekly) return this.i18n.t('mean of the last {n} weekly values', { n: weekly[1] });
-    return basis === 'none' ? this.i18n.t('no basis yet') : basis;
+  /** The reasons a figure is missing, each translated, as one sentence. */
+  reasons(messages: (Message | string)[]): string {
+    return messages.map((m) => this.i18n.msg(m)).join('; ');
   }
 
   timeline(): TimelineBlock {

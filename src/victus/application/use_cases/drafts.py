@@ -64,7 +64,7 @@ def draft_markdown(view: dto.DayView) -> str:
     if view.findings:
         lines.append("")
         for f in view.findings:
-            lines.append(f"- {f.code}: {f.message}")
+            lines.append(f"- {f.code}: {f.message.fill()}")
     lines.append("")
     lines.append(f'Approve? Reply "approve {view.date.isoformat()}" or give corrections.')
     return "\n".join(lines)

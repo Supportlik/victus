@@ -75,7 +75,7 @@ The tenant is always derived from the principal (session or token); it never app
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/days?from=&to=&status=` | List days with computed macros |
-| GET | `/days/{date}` | Day with meals, line items, computed macros, target band, findings |
+| GET | `/days/{date}` | Day with meals, line items, computed macros, target band, findings. A finding's `message` is `{key, params}`, not a sentence: the client translates it (R78) |
 | POST | `/days/{date}` | Create the day (`reliable` required, `training_type`, `notes`) |
 | PUT | `/days/{date}` | Flags (`reliable`, `training_type`), notes; 404 if the day does not exist |
 | POST | `/days/{date}/meals` | Add meal |

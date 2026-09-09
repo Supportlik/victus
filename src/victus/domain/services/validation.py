@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from victus.domain.model.checks import DayForCheck, Tolerances
 from victus.domain.services.nutrients import sum_macros
-from victus.domain.values import MACRO_KEYS, DayStatus, Finding, Macros
+from victus.domain.values import MACRO_KEYS, DayStatus, Finding, Macros, Message
 
 ERROR_KINDS = {0, 1, 2}
 INFO_CODES = {"not_assessable", "expected_gap"}
@@ -44,8 +44,15 @@ def check_day(day: DayForCheck, tol: Tolerances | None = None) -> list[Finding]:
     # 0 — control flags
     missing = [n for n, v in (("reliable", day.reliable), ("status", day.status)) if v is None]
     if missing:
+        flags = ", ".join(missing)
         findings.append(
-            Finding(0, "flags_missing", f"missing control flags: {', '.join(missing)}", day.day)
+            Finding(
+                0,
+                "flags_missing",
+                Message("missing control flags: {flags}", {"flags": flags}),
+                day.day,
+                {"flags": flags},
+            )
         )
 
     # 1 — source vs. balance drift (only where both declare the macro)
@@ -59,7 +66,10 @@ def check_day(day: DayForCheck, tol: Tolerances | None = None) -> list[Finding]:
                     Finding(
                         1,
                         "source_balance_drift",
-                        f"{key}: source {a} vs balance {b}",
+                        Message(
+                            "{macro}: {source} declared, {balance} in the balance",
+                            {"macro": key, "source": a, "balance": b},
+                        ),
                         day.day,
                         {"macro": key, "source": a, "balance": b},
                     )
@@ -70,16 +80,21 @@ def check_day(day: DayForCheck, tol: Tolerances | None = None) -> list[Finding]:
     if reference is not None and reference.kcal is not None:
         if day.meal_totals:
             if any(t is None for t in day.meal_totals):
+                details: dict[str, float | str] = {
+                    "meals": len(day.meal_totals),
+                    "with_total": sum(1 for t in day.meal_totals if t),
+                }
                 findings.append(
                     Finding(
                         2,
                         "not_assessable",
-                        "meal table without total row; balance cannot be assessed",
+                        Message(
+                            "{with_total} of {meals} meals have a total row, "
+                            "so the balance cannot be assessed",
+                            dict(details),
+                        ),
                         day.day,
-                        {
-                            "meals": len(day.meal_totals),
-                            "with_total": sum(1 for t in day.meal_totals if t),
-                        },
+                        details,
                     )
                 )
             else:
@@ -89,8 +104,13 @@ def check_day(day: DayForCheck, tol: Tolerances | None = None) -> list[Finding]:
                         Finding(
                             2,
                             "balance_mismatch",
-                            f"meal totals {total.kcal:.0f} kcal vs balance "
-                            f"{reference.kcal:.0f} kcal",
+                            Message(
+                                "the meals add up to {sum} kcal, the balance says {balance}",
+                                {
+                                    "sum": round(total.kcal),
+                                    "balance": round(reference.kcal),
+                                },
+                            ),
                             day.day,
                             {
                                 "meal_totals": total.kcal,
@@ -108,7 +128,13 @@ def check_day(day: DayForCheck, tol: Tolerances | None = None) -> list[Finding]:
                 Finding(
                     2,
                     "balance_mismatch",
-                    f"items {day.item_sum.kcal:.0f} kcal vs balance {reference.kcal:.0f} kcal",
+                    Message(
+                        "the items add up to {sum} kcal, the balance says {balance}",
+                        {
+                            "sum": round(day.item_sum.kcal),
+                            "balance": round(reference.kcal),
+                        },
+                    ),
                     day.day,
                     {
                         "items": day.item_sum.kcal,
@@ -126,12 +152,22 @@ def check_day(day: DayForCheck, tol: Tolerances | None = None) -> list[Finding]:
             day.salt_tracking_start is None or day.day < day.salt_tracking_start
         ):
             findings.append(
-                Finding(3, "expected_gap", "salt not tracked yet", day.day, {"macros": "salt"})
+                Finding(
+                    3,
+                    "expected_gap",
+                    Message("salt not tracked yet"),
+                    day.day,
+                    {"macros": "salt"},
+                )
             )
         elif gaps:
             findings.append(
                 Finding(
-                    3, "gap", f"missing: {', '.join(gaps)}", day.day, {"macros": ",".join(gaps)}
+                    3,
+                    "gap",
+                    Message("no value for {macros}", {"macros": ", ".join(gaps)}),
+                    day.day,
+                    {"macros": ",".join(gaps)},
                 )
             )
 

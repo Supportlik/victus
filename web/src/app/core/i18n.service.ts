@@ -1,4 +1,6 @@
 import { computed, Injectable, signal } from '@angular/core';
+import type { Message } from '../api/models';
+import { storedLocale } from './format.service';
 import { DE } from './i18n.de';
 import { ES } from './i18n.es';
 import { FR } from './i18n.fr';
@@ -59,6 +61,30 @@ export class I18nService {
    * An unknown string is returned as it came in, so a template that has not been
    * translated yet reads as English instead of breaking.
    */
+  /**
+   * A sentence the server left to us: its key and the values that belong in it.
+   *
+   * The server no longer writes these out — "79 days left" could only ever be English.
+   * Three details: a frozen snapshot still holds the old formatted sentence, which passes
+   * through as it is rather than showing as a missing key; a parameter that is one of our
+   * own words (a macro name, a unit) is translated too, so "protein: 102.5 declared" does
+   * not stay half English; and a number is written the way this tenant writes numbers,
+   * because the server has no business deciding between 1,560 and 1.560 (R69).
+   */
+  msg(message: Message | string | null | undefined): string {
+    if (!message) return '';
+    if (typeof message === 'string') return this.t(message);
+    const params = Object.fromEntries(
+      Object.entries(message.params ?? {}).map(([key, value]) => [
+        key,
+        typeof value === 'string'
+          ? this.t(value)
+          : value.toLocaleString(storedLocale(), { maximumFractionDigits: 2 }),
+      ]),
+    );
+    return this.t(message.key, params);
+  }
+
   t(text: string, params?: Record<string, string | number>): string {
     const dict = DICTS[this.language()];
     let out = dict?.[text] ?? text;

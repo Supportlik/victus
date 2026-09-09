@@ -85,9 +85,9 @@ def test_the_energy_split_flags_an_implausible_activity_level() -> None:
     # below bed rest: the intake is short or too few days count
     low = split_energy(1900.0, 1750.0)
     assert low.pal == 1.09
-    assert low.caveat is not None and "bed rest" in low.caveat
+    assert low.caveat is not None and "bed rest" in low.caveat.key
 
     # athlete territory
     high = split_energy(4400.0, 1750.0)
     assert high.pal == 2.51
-    assert high.caveat is not None and "athlete" in high.caveat
+    assert high.caveat is not None and "athlete" in high.caveat.key

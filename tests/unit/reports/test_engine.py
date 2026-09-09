@@ -55,7 +55,7 @@ def test_tdee_windows_match_reference(source: InMemoryReportDataSource, ref: Ref
         assert row.coverage_pct == exp["abdeckung"]
         assert (row.quality.value if row.quality else None) == exp["quality"]
     assert block.reference_tdee == ref.out["rolling"]["14"]["tdee"]
-    assert block.reference_basis == "rolling_14d"
+    assert block.reference_basis.params == {"n": 14}
 
 
 def test_trend_and_forecast_match_reference(
@@ -262,4 +262,5 @@ def test_default_period_and_dates_never_leak_future(ref: Reference) -> None:
     assert res.period.end == earlier and res.period.days == 14
     tile = res.blocks[0]
     assert isinstance(tile, KpiTileResult)
-    assert tile.note is not None and date.fromisoformat(tile.note) <= earlier
+    assert tile.note is not None
+    assert date.fromisoformat(str(tile.note.params["date"])) <= earlier

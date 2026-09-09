@@ -13,8 +13,9 @@ from datetime import timedelta
 
 from victus.domain.model.reporting import RequiredRate
 from victus.domain.services import band_rating, tdee
-from victus.domain.values import BandZone, Period, Quality
+from victus.domain.values import BandZone, Message, Period, Quality
 from victus.reports.context import ReportContext
+from victus.reports.messages import basis_message, tdee_from
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,7 +25,8 @@ class MetricValue:
     decimals: int
     zone: BandZone | None = None
     quality: Quality | None = None
-    note: str | None = None
+    #: The line under the figure, as a key the interface translates (R78).
+    note: Message | None = None
 
 
 Provider = Callable[[ReportContext], MetricValue]
@@ -32,11 +34,14 @@ Provider = Callable[[ReportContext], MetricValue]
 
 def _weight_latest(ctx: ReportContext) -> MetricValue:
     lw = ctx.latest_weight
-    return MetricValue(lw[1] if lw else None, "kg", 1, note=lw[0].isoformat() if lw else None)
+    note = Message("weighed on {date}", {"date": lw[0].isoformat()}) if lw else None
+    return MetricValue(lw[1] if lw else None, "kg", 1, note=note)
 
 
 def _weight_ma(ctx: ReportContext) -> MetricValue:
-    return MetricValue(ctx.current_kg, "kg", 1, note=f"MA{ctx.settings.moving_average_days}")
+    days = ctx.settings.moving_average_days
+    note = Message("{n}-day moving average", {"n": days})
+    return MetricValue(ctx.current_kg, "kg", 1, note=note)
 
 
 def _weight_delta_week(ctx: ReportContext) -> MetricValue:
@@ -44,7 +49,8 @@ def _weight_delta_week(ctx: ReportContext) -> MetricValue:
     prev = ctx.ma_at_or_before(ctx.today - timedelta(days=7))
     if cur is None or prev is None:
         return MetricValue(None, "kg", 2)
-    return MetricValue(round(cur - prev, 2), "kg", 2, note="MA change over 7 days")
+    note = Message("change of the moving average over {n} days", {"n": 7})
+    return MetricValue(round(cur - prev, 2), "kg", 2, note=note)
 
 
 def _rolling(window: int) -> Provider:
@@ -57,7 +63,10 @@ def _rolling(window: int) -> Provider:
             "kcal",
             0,
             quality=row.quality,
-            note=f"{window}-day window, coverage {row.coverage_pct} %",
+            note=Message(
+                "{n}-day window, {pct} % covered",
+                {"n": window, "pct": row.coverage_pct},
+            ),
         )
 
     return provider
@@ -65,7 +74,9 @@ def _rolling(window: int) -> Provider:
 
 def _tdee_reference(ctx: ReportContext) -> MetricValue:
     value, basis = ctx.reference_tdee
-    return MetricValue(float(value) if value is not None else None, "kcal", 0, note=basis)
+    return MetricValue(
+        float(value) if value is not None else None, "kcal", 0, note=basis_message(basis)
+    )
 
 
 def _required(ctx: ReportContext) -> RequiredRate | None:
@@ -79,7 +90,8 @@ def _goal_rate(ctx: ReportContext) -> MetricValue:
     req = _required(ctx)
     if req is None:
         return MetricValue(None, "kg/week", 2)
-    return MetricValue(round(req.kg_per_week, 2), "kg/week", 2, note=f"{req.days_left} days left")
+    note = Message("{n} days left", {"n": req.days_left})
+    return MetricValue(round(req.kg_per_week, 2), "kg/week", 2, note=note)
 
 
 def _goal_deficit(ctx: ReportContext) -> MetricValue:
@@ -96,7 +108,7 @@ def _goal_eat(ctx: ReportContext) -> MetricValue:
         return MetricValue(None, "kcal/day", 0)
     target = tdee.eat_target(ref, req)
     return MetricValue(
-        float(target) if target is not None else None, "kcal/day", 0, note=f"TDEE {basis}"
+        float(target) if target is not None else None, "kcal/day", 0, note=tdee_from(basis)
     )
 
 
@@ -109,7 +121,9 @@ def _average(macro: str, unit: str, decimals: int) -> Provider:
     def provider(ctx: ReportContext) -> MetricValue:
         series = ctx.macro_series(macro)
         if not series:
-            return MetricValue(None, unit, decimals, note="no countable days in period")
+            return MetricValue(
+                None, unit, decimals, note=Message("no countable days in this period")
+            )
         mean = statistics.mean(series.values())
         zone: BandZone | None = None
         if macro == "kcal":
@@ -120,7 +134,11 @@ def _average(macro: str, unit: str, decimals: int) -> Provider:
             b = band.band_for(macro) if band else None
             zone = b.zone(mean) if b else None
         return MetricValue(
-            round(mean, decimals), unit, decimals, zone=zone, note=f"{len(series)} countable days"
+            round(mean, decimals),
+            unit,
+            decimals,
+            zone=zone,
+            note=Message("{n} countable days", {"n": len(series)}),
         )
 
     return provider

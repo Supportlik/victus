@@ -20,6 +20,8 @@ import datetime as dt
 from dataclasses import dataclass
 from enum import StrEnum
 
+from victus.domain.values import Message
+
 
 class Sex(StrEnum):
     """Only what the equations distinguish, with the codes the settings schema uses.
@@ -173,7 +175,7 @@ class EnergySplit:
     #: Physical activity level: expenditure over resting. 1.4 sedentary, 1.8 active.
     pal: float
     #: Set when the numbers do not hang together; the report shows it beside the values.
-    caveat: str | None = None
+    caveat: Message | None = None
 
 
 def split_energy(tdee_kcal: float, basal_kcal: float) -> EnergySplit:
@@ -186,16 +188,18 @@ def split_energy(tdee_kcal: float, basal_kcal: float) -> EnergySplit:
     if basal_kcal <= 0:
         raise ValueError("basal rate must be positive")
     pal = round(tdee_kcal / basal_kcal, 2)
-    caveat: str | None = None
+    caveat: Message | None = None
     if pal < 1.2:
-        caveat = (
-            f"expenditure is only {pal:.2f} times the resting rate, below bed rest: "
-            "the intake is probably logged short, or too few days are countable"
+        caveat = Message(
+            "expenditure is only {pal} times the resting rate, below bed rest: the intake "
+            "is probably logged short, or too few days are countable",
+            {"pal": pal},
         )
     elif pal > 2.4:
-        caveat = (
-            f"expenditure is {pal:.2f} times the resting rate, which is athlete "
-            "territory: check the weigh-ins and the logged intake"
+        caveat = Message(
+            "expenditure is {pal} times the resting rate, which is athlete territory: "
+            "check the weigh-ins and the logged intake",
+            {"pal": pal},
         )
     return EnergySplit(
         tdee_kcal=round(tdee_kcal, 0),

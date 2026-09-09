@@ -17,7 +17,16 @@ from victus.domain.model.reporting import (
     TrendRow,
     WeekRow,
 )
-from victus.domain.values import Band, BandZone, DayStatus, Macros, Period, Quality, TrainingType
+from victus.domain.values import (
+    Band,
+    BandZone,
+    DayStatus,
+    Macros,
+    Message,
+    Period,
+    Quality,
+    TrainingType,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,7 +46,8 @@ class KpiTileResult:
     delta: float | None = None
     zone: BandZone | None = None
     quality: Quality | None = None
-    note: str | None = None
+    #: The line under the figure, as a key the interface translates (R78).
+    note: Message | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -101,8 +111,8 @@ class BodyCompositionResult:
     #: Change against the previous session, per circumference, in centimetres.
     changes: dict[str, float] = field(default_factory=dict)
     body_fat_pct: float | None = None
-    #: Why a figure is absent, in words, one entry per missing input.
-    missing: list[str] = field(default_factory=list)
+    #: Why a figure is absent, one entry per missing input.
+    missing: list[Message] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,10 +123,11 @@ class EnergySplitResult:
     activity_kcal: float | None = None
     pal: float | None = None
     age_years: int | None = None
-    basis: str = "none"
+    #: Where the expenditure comes from, in words rather than as ``rolling_14d``.
+    basis: Message = field(default_factory=lambda: Message("no basis yet"))
     #: Set when the split is physiologically implausible; shown beside the numbers.
-    caveat: str | None = None
-    missing: list[str] = field(default_factory=list)
+    caveat: Message | None = None
+    missing: list[Message] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,7 +136,7 @@ class TdeeWindowsResult:
     rows: list[RollingRow]
     show_quality: bool
     reference_tdee: int | None
-    reference_basis: str
+    reference_basis: Message
 
 
 @dataclass(frozen=True, slots=True)

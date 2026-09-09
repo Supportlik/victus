@@ -56,10 +56,22 @@ class TargetBandOut(Out):
     note: str | None
 
 
+class MessageOut(Out):
+    """A sentence for a person: the English key and the values that belong in it.
+
+    The server does not write the sentence out any more, because a formatted sentence
+    cannot be translated. The key is readable English, so a client without a dictionary
+    can substitute the parameters itself and be correct (R78).
+    """
+
+    key: str
+    params: dict[str, str | int | float] = Field(default_factory=dict)
+
+
 class FindingOut(Out):
     kind: int
     code: str
-    message: str
+    message: MessageOut
 
 
 class UnitOut(Out):
