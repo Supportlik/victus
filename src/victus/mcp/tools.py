@@ -150,10 +150,33 @@ class _In(BaseModel):
 class ProductSearchIn(_In):
     q: str = Field(description="Free text as the user said it, e.g. 'skyr' or 'rye bread'.")
     limit: int = Field(default=10, ge=1, le=50)
+    on: date | None = Field(
+        default=None,
+        description=(
+            "Day the food was eaten. A product whose values changed over time returns the "
+            "version that applied then, so an older day keeps its own numbers. Pass the day "
+            "you are drafting."
+        ),
+    )
 
 
 class ProductGetIn(_In):
     id: int = Field(description="Product (consumable) id.")
+
+
+class ProductVersionsIn(_In):
+    id: int = Field(description="Any version of the product; the whole history is returned.")
+
+
+class ProductVersionCreateIn(_In):
+    id: int = Field(description="The version to replace, usually the current one.")
+    valid_from: date = Field(description="First day the new values apply.")
+    changes: dict[str, Any] = Field(
+        description=(
+            "Only the fields that changed, e.g. {'kcal': 112, 'protein': 8.4}. Everything "
+            "else is copied from the version being replaced, portions included."
+        )
+    )
 
 
 class RecipeGetIn(_In):
@@ -536,12 +559,26 @@ def _locked_days(tc: ToolContext) -> set[date] | None:
 
 def _product_search(tc: ToolContext, inp: ProductSearchIn) -> ToolResult:
     matches = product_uc.MatchText(tc.uow_factory, tc.ctx).execute(inp.q, limit=inp.limit)
-    products = product_uc.SearchProducts(tc.uow_factory, tc.ctx).execute(inp.q, limit=inp.limit)
+    products = product_uc.SearchProducts(tc.uow_factory, tc.ctx).execute(
+        inp.q, limit=inp.limit, on=inp.on
+    )
     return {
         "query": inp.q,
         "matches": [jsonable(m) for m in matches],
         "products": [_compact_product(p) for p in products],
     }
+
+
+def _product_versions(tc: ToolContext, inp: ProductVersionsIn) -> ToolResult:
+    rows = product_uc.ProductVersions(tc.uow_factory, tc.ctx).execute(inp.id)
+    return {"product_id": inp.id, "versions": [jsonable(p) for p in rows]}
+
+
+def _product_version_create(tc: ToolContext, inp: ProductVersionCreateIn) -> ToolResult:
+    fresh = product_uc.NewProductVersion(tc.uow_factory, tc.ctx).execute(
+        inp.id, inp.valid_from, inp.changes
+    )
+    return cast(ToolResult, jsonable(fresh))
 
 
 def _product_get(tc: ToolContext, inp: ProductGetIn) -> ToolResult:
@@ -914,6 +951,25 @@ TOOLS: tuple[ToolSpec, ...] = (
         _product_get,
     ),
     _spec(
+        "product_versions",
+        "Every version of a product, oldest first, with the days each one covers. Use it when "
+        "the values of a food changed over time and you need to know which numbers held when.",
+        SCOPE_READ,
+        ProductVersionsIn,
+        _product_versions,
+    ),
+    _spec(
+        "product_version_create",
+        "Record that a product's values changed from a day on. The previous version keeps its "
+        "numbers and is closed the day before, so days already logged are untouched; the new "
+        "one starts open ended. Use this instead of product_update when the food itself "
+        "changed, for example a reformulated recipe or a different supplier.",
+        SCOPE_WRITE,
+        ProductVersionCreateIn,
+        _product_version_create,
+        read_only=False,
+    ),
+    _spec(
         "recipe_get",
         "A recipe with ingredients and cooked batches.",
         SCOPE_READ,
@@ -1204,6 +1260,7 @@ WORKER_TOOLS: frozenset[str] = frozenset(
     {
         "product_search",
         "product_get",
+        "product_versions",
         "recipe_get",
         "day_get",
         "days_list",

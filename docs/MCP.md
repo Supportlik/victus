@@ -27,12 +27,13 @@ HTTP responses: missing or invalid token → `401`; token lacks the tool's scope
 
 | Tool | Scope | Use case | Returns |
 |---|---|---|---|
-| `product_search(q, limit=10)` | `read` | `SearchProducts` | candidates `{id, name, kind, tier, score, kcal_per_100}` |
+| `product_search(q, limit=10, on?)` | `read` | `SearchProducts` | candidates `{id, name, kind, tier, score, kcal_per_100}`; `on` picks the version that applied on that day (R70) |
 | `product_get(id)` | `read` | `GetProduct` | product with portions and nutrients |
 | `rules_list(scope?)` | `read` | `ListRules` | the user's own instructions (when → then) |
 | `rule_upsert(when, then, name?, scope?, enabled?, priority?)` | `write` | `UpsertRule` | a rule the user just gave you, written down |
 | `rule_delete(name)` | `write` | `DeleteRule` | removed |
 | `product_usage(product_id, limit?)` | `read` | `GetProductUsage` | the days a product was logged on |
+| `product_versions(id)` | `read` | `ProductVersions` | every version with the days it covers |
 | `recipe_get(id)` | `read` | `GetRecipe` | recipe, ingredients, batches |
 | `day_get(date)` | `read` | `GetDay` | day with meals, line items, computed macros, target band, findings |
 | `days_list(from, to, status?)` | `read` | `ListDays` | compact list |
@@ -57,6 +58,7 @@ HTTP responses: missing or invalid token → `401`; token lacks the tool's scope
 | `meal_update(meal_id, name?, time?)`, `meal_delete(meal_id)` | `write` | `UpdateMeal` / `DeleteMeal` | meal; delete fails while items remain |
 | `product_propose(product_id, changes, capture_id?, source?, rationale?)` | `agent:write` | `ProposeProductChange` | proposal awaiting a person's approval; the way to act on a product capture |
 | `product_update(product_id, …, source)` | `write` | `UpdateProduct` | direct product change (people and `write`-scope clients only) |
+| `product_version_create(id, valid_from, changes)` | `write` | `NewProductVersion` | changed values from a day on; days already logged keep their numbers (R70) |
 | `line_item_create / line_item_update / line_item_delete` | `write` | `AddLineItem` / `UpdateLineItem` / `DeleteLineItem` | line item |
 | `product_create(...)`, `portion_create(...)` | `write` | `CreateProduct` / `AddPortion` | product / portion |
 | `weight_add(date, kg)` | `write` | `AddWeight` | weight row (`source=manual`) |

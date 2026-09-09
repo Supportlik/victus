@@ -48,6 +48,9 @@ def product_view(
         verified=bool(p.verified),
         ean=p.ean,
         note=p.note,
+        valid_from=p.valid_from,
+        valid_until=p.valid_until,
+        supersedes_id=p.supersedes_id,
         portions=[portion_view(x) for x in portions],
     )
 

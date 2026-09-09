@@ -133,7 +133,7 @@ import { DayThread } from './day-thread';
                 @if (adding() === meal.id) {
                   <div class="add">
                     @if (!pending()) {
-                      <v-product-search (picked)="pending.set($event)" />
+                      <v-product-search [on]="date()" (picked)="pending.set($event)" />
                     } @else {
                       <form class="v-form-row" (ngSubmit)="addItem(meal)">
                         <div class="picked">{{ pending()!.name }} <button type="button" class="v-btn quiet small" (click)="pending.set(null)">change</button></div>

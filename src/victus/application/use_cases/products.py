@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 from victus.application import dto
@@ -82,18 +82,65 @@ def _view(uow: Any, p: orm.Product, names: dict[int, str] | None = None) -> dto.
     )
 
 
+def valid_on(versions: list[orm.Product], day: date | None) -> orm.Product | None:
+    """The version of a chain that applied on ``day``; without a day, the current one.
+
+    "Current" is the row with no end date, or failing that the one that ended last, so a
+    product whose chain has a gap still resolves to something sensible (R70).
+    """
+    if not versions:
+        return None
+    if day is not None:
+        for p in versions:
+            starts_ok = p.valid_from is None or p.valid_from <= day
+            ends_ok = p.valid_until is None or p.valid_until >= day
+            if starts_ok and ends_ok:
+                return p
+        return None
+    open_ended = [p for p in versions if p.valid_until is None]
+    if open_ended:
+        return max(open_ended, key=lambda p: (p.valid_from or date.min, p.id))
+    return max(versions, key=lambda p: (p.valid_until or date.min, p.id))
+
+
+def _resolve_versions(uow: Any, rows: list[orm.Product], day: date | None) -> list[orm.Product]:
+    """Collapse each version chain to the one row that applied on ``day``.
+
+    Without this a search for a product with three versions would return three rows that
+    look identical apart from their numbers.
+    """
+    out: list[orm.Product] = []
+    handled: set[int] = set()
+    for p in rows:
+        if p.id in handled:
+            continue
+        chain = list(uow.products.versions_of(p.id))
+        handled.update(c.id for c in chain)
+        pick = valid_on(chain, day) if len(chain) > 1 else p
+        if pick is not None:
+            out.append(pick)
+        elif day is None:
+            out.append(p)
+    return out
+
+
 class SearchProducts(UseCase):
     """Substring search first; when it finds little, the fuzzy matcher adds candidates."""
 
     def execute(
-        self, query: str, *, category_id: int | None = None, limit: int = 20
+        self,
+        query: str,
+        *,
+        category_id: int | None = None,
+        limit: int = 20,
+        on: date | None = None,
     ) -> list[dto.ProductView]:
         self.ctx.require(SCOPE_READ)
         with self._uow() as uow:
             names = _category_names(uow)
             if not query.strip():
-                rows = list(uow.products.list(category_id=category_id))[:limit]
-                return [_view(uow, p, names) for p in rows]
+                rows = _resolve_versions(uow, list(uow.products.list(category_id=category_id)), on)
+                return [_view(uow, p, names) for p in rows[:limit]]
             rows = list(uow.products.search(query, limit=limit))
             if category_id is not None:
                 rows = [p for p in rows if p.category_id == category_id]
@@ -109,7 +156,97 @@ class SearchProducts(UseCase):
                     if p is not None and (category_id is None or p.category_id == category_id):
                         rows.append(p)
                         seen.add(p.id)
+            rows = _resolve_versions(uow, rows, on)
             return [_view(uow, p, names) for p in rows[:limit]]
+
+
+class ProductVersions(UseCase):
+    """Every version of a product, oldest first, so the history is visible (R70)."""
+
+    def execute(self, product_id: int) -> list[dto.ProductView]:
+        self.ctx.require(SCOPE_READ)
+        with self._uow() as uow:
+            if uow.products.get(product_id) is None:
+                raise NotFound(f"product {product_id} not found")
+            names = _category_names(uow)
+            return [_view(uow, p, names) for p in uow.products.versions_of(product_id)]
+
+
+class NewProductVersion(UseCase):
+    """Record that a product's values changed from a given day.
+
+    The previous version keeps its numbers and is closed the day before, so every day
+    already logged still shows what was eaten. The new row starts open ended, which is
+    what "still valid" means: nothing has to be maintained later (R70).
+    """
+
+    def execute(
+        self, product_id: int, valid_from: date, changes: dict[str, Any] | None = None
+    ) -> dto.ProductView:
+        self.ctx.require(SCOPE_WRITE)
+        with self._uow() as uow:
+            previous = uow.products.get(product_id)
+            if previous is None:
+                raise NotFound(f"product {product_id} not found")
+            if previous.valid_from is not None and valid_from <= previous.valid_from:
+                raise ValidationFailed(
+                    f"the new version must start after {previous.valid_from.isoformat()}, "
+                    "when the one it replaces began"
+                )
+            chain = list(uow.products.versions_of(product_id))
+            successor = next((p for p in chain if p.supersedes_id == previous.id), None)
+            if successor is not None:
+                # the history stays a line, not a tree: continue from the newest version
+                raise Conflict(
+                    f"product {previous.id} was already replaced by {successor.id}; "
+                    "create the new version from that one"
+                )
+
+            fields = {k: getattr(previous, k) for k in PRODUCT_FIELDS if k != "name"}
+            fields["category_id"] = previous.category_id
+            name = previous.name
+            for key, value in (changes or {}).items():
+                if key == "name":
+                    name = str(value).strip() or name
+                elif key == "category" and value:
+                    fields["category_id"] = _resolve_category(
+                        uow, ProductInput(name="x", category=str(value))
+                    )
+                elif key in PRODUCT_FIELDS:
+                    fields[key] = value
+            fields["valid_from"] = valid_from
+            fields["valid_until"] = None
+            fields["supersedes_id"] = previous.id
+            fresh = uow.products.add_product(name, **fields)
+
+            # close the old one the day before, unless it already ends earlier
+            end = valid_from - timedelta(days=1)
+            if previous.valid_until is None or previous.valid_until > end:
+                previous.valid_until = end
+
+            for portion in uow.products.portions_for(previous.id):
+                uow.products.add_portion(
+                    orm.Portion(
+                        product_id=fresh.id,
+                        unit_code=portion.unit_code,
+                        label=portion.label,
+                        amount=portion.amount,
+                        amount_unit=portion.amount_unit,
+                        description=portion.description,
+                        is_default=portion.is_default,
+                        weight_source=portion.weight_source,
+                    )
+                )
+            uow.audit.record(
+                "product.new_version",
+                "product",
+                str(fresh.id),
+                {"supersedes": previous.id, "valid_from": valid_from.isoformat()},
+            )
+            uow.flush()
+            view = _view(uow, fresh)
+            uow.commit()
+            return view
 
 
 class GetProduct(UseCase):
@@ -192,7 +329,10 @@ class CreateProduct(UseCase):
         _validate_product(data)
         with self._uow() as uow:
             if uow.products.by_name(data.name) is not None:
-                raise Conflict(f"product '{data.name}' already exists")
+                raise Conflict(
+                    f"product '{data.name}' already exists; to record changed values use "
+                    "a new version of it instead"
+                )
             fields = {k: getattr(data, k) for k in PRODUCT_FIELDS}
             fields["category_id"] = _resolve_category(uow, data)
             p = uow.products.add_product(data.name.strip(), **fields)

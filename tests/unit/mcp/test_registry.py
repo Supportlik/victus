@@ -27,6 +27,8 @@ EXPECTED = {
     "product_search",
     "product_get",
     "product_usage",
+    "product_versions",
+    "product_version_create",
     "rule_delete",
     "rule_upsert",
     "rules_list",
@@ -96,7 +98,8 @@ def test_anthropic_definitions_are_strict_where_possible() -> None:
     search = defs["product_search"]
     assert search["strict"] is True
     assert search["input_schema"]["additionalProperties"] is False
-    assert set(search["input_schema"]["required"]) == {"q", "limit"}
+    # Anthropic's strict mode requires every property to be listed, nullable ones included
+    assert set(search["input_schema"]["required"]) == {"q", "limit", "on"}
     assert "strict" not in defs["draft_create"]  # published schema carries $defs
     assert defs["draft_create"]["input_schema"]["required"] == [
         "run_id",

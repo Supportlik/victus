@@ -55,9 +55,11 @@ The tenant is always derived from the principal (session or token); it never app
 |---|---|---|
 | GET | `/units` | Global units |
 | GET / POST / PATCH | `/categories[/{id}]` | Product categories |
-| GET | `/products?q=&category=&limit=&cursor=` | Search (full-text + fuzzy score) |
+| GET | `/products?q=&category=&limit=&cursor=` | Search (full-text + fuzzy score)  `on=<day>` returns the version of each product that applied on that day |
 | POST | `/products` | Create product |
 | GET / PATCH / DELETE | `/products/{id}` | Product detail |
+| GET | `/products/{id}/versions` | Every version of the product, oldest first, with the days each one covers (R70) |
+| POST | `/products/{id}/versions` | Record changed values from a day on `{valid_from, changes}`; the previous version is closed the day before and keeps its numbers |
 | GET | `/products/{id}/usage?limit=` | The days this product was logged on, newest first, with amounts, kcal and draft flags (R60) |
 | GET / POST | `/products/{id}/portions` | Portions of a product |
 | PATCH / DELETE | `/portions/{id}` | Edit portion |

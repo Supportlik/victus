@@ -133,6 +133,10 @@ class ProductOut(MacrosOut):
     verified: bool
     ean: str | None = None
     note: str | None = None
+    #: When these values applied; `valid_until` null means the product is current (R70).
+    valid_from: date | None = None
+    valid_until: date | None = None
+    supersedes_id: int | None = None
     portions: list[PortionOut] = Field(default_factory=list)
 
 

@@ -108,10 +108,17 @@ export interface Product extends Macros {
   verified: boolean;
   ean?: string | null;
   note?: string | null;
+  /** When these values applied; a null `valid_until` means the product is current (R70). */
+  valid_from?: string | null;
+  valid_until?: string | null;
+  supersedes_id?: number | null;
   portions?: Portion[];
 }
 
-export type ProductInput = Omit<Product, 'id' | 'portions'>;
+export type ProductInput = Omit<
+  Product,
+  'id' | 'portions' | 'valid_from' | 'valid_until' | 'supersedes_id'
+>;
 
 export interface MatchCandidate {
   consumable_id: number;

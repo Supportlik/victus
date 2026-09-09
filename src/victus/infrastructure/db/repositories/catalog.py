@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import date
 
 from sqlalchemy import func, or_, select
 
@@ -95,6 +96,41 @@ class ProductRepo(Repo):
             )
         )
         return self.session.scalar(stmt)
+
+    def versions_of(self, product_id: int) -> Sequence[orm.Product]:
+        """Every version of a product, oldest first.
+
+        The chain is walked backwards through ``supersedes_id`` and forwards through the
+        rows that point at it, so any member of the chain returns the whole history (R70).
+        """
+        first = self.get(product_id)
+        if first is None:
+            return []
+        seen: dict[int, orm.Product] = {first.id: first}
+        node = first
+        while node.supersedes_id is not None and node.supersedes_id not in seen:
+            older = self.get(node.supersedes_id)
+            if older is None:
+                break
+            seen[older.id] = older
+            node = older
+        pending = [first.id]
+        while pending:
+            current = pending.pop()
+            stmt = (
+                select(orm.Product)
+                .join(orm.Consumable, orm.Consumable.id == orm.Product.id)
+                .where(
+                    orm.Product.supersedes_id == current,
+                    orm.Consumable.tenant_id == self.tenant_id,
+                )
+            )
+            for newer in self.session.scalars(stmt).all():
+                if newer.id in seen:
+                    continue
+                seen[newer.id] = newer
+                pending.append(newer.id)
+        return sorted(seen.values(), key=lambda p: (p.valid_from or date.min, p.id))
 
     def by_name(self, name: str) -> orm.Product | None:
         stmt = (

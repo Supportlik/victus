@@ -53,6 +53,14 @@ class ProductPatch(BaseModel):
     checked_at: date | None = None
 
 
+class ProductVersionIn(BaseModel):
+    """A new version of a product, valid from a day on (R70)."""
+
+    valid_from: date = Field(description="First day the new values apply.")
+    #: Only the fields that changed; everything else is copied from the version replaced.
+    changes: dict[str, object] | None = None
+
+
 class PortionIn(BaseModel):
     unit_code: str
     label: str = Field(min_length=1, max_length=100)

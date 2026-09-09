@@ -40,4 +40,19 @@ describe('ProductSearch', () => {
     expect(picked.length).toBe(1);
     http.verify();
   });
+
+  // T-WEB-039: logging an older day must offer the values of that day, not today's (R70).
+  it('asks for the version that applied on the given day', () => {
+    const fixture = TestBed.createComponent(ProductSearch);
+    fixture.componentRef.setInput('on', '2026-05-20');
+    const http = TestBed.inject(HttpTestingController);
+
+    fixture.componentInstance.query.setValue('skyr');
+    vi.advanceTimersByTime(300);
+
+    const req = http.expectOne((r) => r.url === '/api/v1/products');
+    expect(req.request.params.get('on')).toBe('2026-05-20');
+    req.flush([]);
+    http.verify();
+  });
 });

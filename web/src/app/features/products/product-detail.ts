@@ -3,6 +3,7 @@ import { DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { ApiClient, Capture, Portion, Product, ProductProposal, ProductUsage } from '../../api';
+import { todayLocal } from '../../core/format.service';
 import { describeError } from '../../core/problem';
 import { CaptureCard } from '../../shared/capture-card';
 import { CaptureInput } from '../../shared/capture-input';
@@ -22,9 +23,13 @@ import { ProductForm } from './product-form';
             <a routerLink="/products" class="v-small">← Products</a>
             <h2>{{ p.name }}</h2>
             <p class="sub">{{ p.brand }} @if (p.verified) { <span class="v-tag ok">values from the label</span> } @else { <span class="v-tag warn">estimate</span> } @if (p.ean) { <span class="v-muted v-small">EAN {{ p.ean }}</span> }</p>
+            @if (p.valid_from || p.valid_until) {
+              <p class="v-small v-muted">These values apply {{ validity(p) }}.</p>
+            }
           </div>
           <div class="v-actions">
             <button type="button" class="v-btn" (click)="editing.set(!editing())">{{ editing() ? 'Close editor' : 'Edit' }}</button>
+            <button type="button" class="v-btn" (click)="startVersion(p)">New values from a day</button>
             <button type="button" class="v-btn danger" (click)="remove()">Delete</button>
           </div>
         </header>
@@ -44,6 +49,51 @@ import { ProductForm } from './product-form';
             </dl>
             @if (p.source) { <p class="v-small v-muted">Source: {{ p.source }}</p> }
             @if (p.note) { <p class="v-small">{{ p.note }}</p> }
+          </section>
+        }
+
+        @if (versionForm()) {
+          <section class="v-panel newver">
+            <h3>New values from a day on</h3>
+            <p class="v-small v-muted">The values below start on that day. Everything before it keeps the numbers it has now, so days already logged do not change. Leave a field empty to carry it over.</p>
+            <div class="v-form-row">
+              <label class="v-field"><span>Valid from</span><input type="date" name="vf" [(ngModel)]="vf" /></label>
+              <label class="v-field"><span>kcal per 100 {{ p.reference_unit }}</span><input type="number" name="vkcal" step="0.1" [(ngModel)]="vkcal" [placeholder]="p.kcal ?? ''" /></label>
+              <label class="v-field"><span>Protein</span><input type="number" name="vprot" step="0.1" [(ngModel)]="vprotein" [placeholder]="p.protein ?? ''" /></label>
+              <label class="v-field"><span>Carbs</span><input type="number" name="vcarb" step="0.1" [(ngModel)]="vcarbs" [placeholder]="p.carbs ?? ''" /></label>
+              <label class="v-field"><span>Fat</span><input type="number" name="vfat" step="0.1" [(ngModel)]="vfat" [placeholder]="p.fat ?? ''" /></label>
+              <label class="v-field"><span>Fiber</span><input type="number" name="vfib" step="0.1" [(ngModel)]="vfiber" [placeholder]="p.fiber ?? ''" /></label>
+              <label class="v-field"><span>Salt</span><input type="number" name="vsalt" step="0.1" [(ngModel)]="vsalt" [placeholder]="p.salt ?? ''" /></label>
+              <label class="v-field wide"><span>Where the new values come from</span><input name="vsrc" [(ngModel)]="vsource" placeholder="new label, September 2026" /></label>
+            </div>
+            <div class="v-actions">
+              <button type="button" class="v-btn primary" (click)="saveVersion(p)" [disabled]="!vf || saving()">Save new version</button>
+              <button type="button" class="v-btn quiet" (click)="versionForm.set(false)">Cancel</button>
+            </div>
+          </section>
+        }
+
+        @if (versions().length > 1) {
+          <section class="v-panel history">
+            <h3>Values over time</h3>
+            <table class="v-table">
+              <thead><tr><th>Period</th><th class="num">kcal</th><th class="num">Protein</th><th class="num">Carbs</th><th class="num">Fat</th><th>Source</th></tr></thead>
+              <tbody>
+                @for (v of versions(); track v.id) {
+                  <tr [class.current]="v.id === p.id">
+                    <td>
+                      @if (v.id === p.id) { <b>{{ validity(v) }}</b> } @else { <a [routerLink]="['/products', v.id]">{{ validity(v) }}</a> }
+                    </td>
+                    <td class="num">{{ v.kcal | macro: 'kcal' }}</td>
+                    <td class="num">{{ v.protein | macro: 'protein' }}</td>
+                    <td class="num">{{ v.carbs | macro: 'carbs' }}</td>
+                    <td class="num">{{ v.fat | macro: 'fat' }}</td>
+                    <td class="v-small v-muted">{{ v.source }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+            <p class="v-small v-muted">A day keeps the version that applied when it was logged. Reports read each day with its own numbers.</p>
           </section>
         }
 
@@ -153,6 +203,9 @@ import { ProductForm } from './product-form';
     .portions { margin-top: 1.5rem; } .add { margin-top: 0.75rem; align-items: end; }
     .captures { margin-top: 1.5rem; display: grid; gap: 0.6rem; }
     .usage { margin-top: 1.5rem; display: grid; gap: 0.5rem; }
+    .newver, .history { margin-top: 1rem; display: grid; gap: 0.5rem; }
+    .newver .wide { grid-column: 1 / -1; }
+    .history tr.current { background: var(--v-primary-soft); }
     .cap-list { display: grid; gap: 0.5rem; }
     .proposals { margin-top: 1.5rem; display: grid; gap: 0.75rem; border-color: var(--v-agent); }
     .proposal { display: grid; gap: 0.4rem; padding-top: 0.5rem; border-top: 1px dashed var(--v-line); }
@@ -170,6 +223,17 @@ export class ProductDetail {
   readonly captures = signal<Capture[]>([]);
   readonly proposals = signal<ProductProposal[]>([]);
   readonly usage = signal<ProductUsage | null>(null);
+  readonly versions = signal<Product[]>([]);
+  readonly versionForm = signal(false);
+  readonly saving = signal(false);
+  vf = '';
+  vkcal: number | null = null;
+  vprotein: number | null = null;
+  vcarbs: number | null = null;
+  vfat: number | null = null;
+  vfiber: number | null = null;
+  vsalt: number | null = null;
+  vsource = '';
   readonly deciding = signal(false);
   readonly unselected = signal<Set<string>>(new Set());
   np: Omit<Portion, 'id' | 'product_id'> = { label: '', unit_code: 'piece', amount: 0, amount_unit: 'g', is_default: false, weight_source: 'weighed' };
@@ -182,7 +246,50 @@ export class ProductDetail {
     this.api.captures(undefined, undefined, id).subscribe({ next: (c) => this.captures.set(c), error: () => undefined });
     this.api.proposals({ product_id: id }).subscribe({ next: (p) => this.proposals.set(p), error: () => undefined });
     this.api.productUsage(id).subscribe({ next: (u) => this.usage.set(u), error: () => undefined });
+    this.api.productVersions(id).subscribe({ next: (v) => this.versions.set(v), error: () => this.versions.set([]) });
   }
+  /** How long a version's values apply, in words. */
+  validity(p: Product): string {
+    const from = p.valid_from ? `from ${p.valid_from}` : 'from the beginning';
+    return p.valid_until ? `${from} to ${p.valid_until}` : `${from} onwards`;
+  }
+
+  startVersion(p: Product): void {
+    this.vf = todayLocal();
+    this.vsource = '';
+    for (const k of ['vkcal', 'vprotein', 'vcarbs', 'vfat', 'vfiber', 'vsalt'] as const) this[k] = null;
+    this.versionForm.set(true);
+    void p;
+  }
+
+  saveVersion(p: Product): void {
+    if (!this.vf) return;
+    const changes: Record<string, unknown> = {};
+    const fields: [string, number | null][] = [
+      ['kcal', this.vkcal],
+      ['protein', this.vprotein],
+      ['carbs', this.vcarbs],
+      ['fat', this.vfat],
+      ['fiber', this.vfiber],
+      ['salt', this.vsalt],
+    ];
+    for (const [key, value] of fields) if (value !== null && value !== undefined) changes[key] = value;
+    if (this.vsource.trim()) changes['source'] = this.vsource.trim();
+    this.saving.set(true);
+    this.api.createProductVersion(p.id, this.vf, changes).subscribe({
+      next: (fresh) => {
+        this.saving.set(false);
+        this.versionForm.set(false);
+        // the new version is a row of its own, so the page moves to it
+        void this.router.navigate(['/products', fresh.id]);
+      },
+      error: (e: unknown) => {
+        this.saving.set(false);
+        this.error.set(describeError(e));
+      },
+    });
+  }
+
   onCapture(c: Capture): void {
     this.captures.update((list) => [c, ...list]);
   }

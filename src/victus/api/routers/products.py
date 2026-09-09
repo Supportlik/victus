@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Query, Response, status
@@ -14,7 +15,14 @@ from victus.api.schemas.common import (
     ProductOut,
     ProductUsageOut,
 )
-from victus.api.schemas.requests import MatchIn, PortionIn, PortionPatch, ProductIn, ProductPatch
+from victus.api.schemas.requests import (
+    MatchIn,
+    PortionIn,
+    PortionPatch,
+    ProductIn,
+    ProductPatch,
+    ProductVersionIn,
+)
 from victus.application.use_cases import products as uc
 
 router = APIRouter(tags=["products"])
@@ -33,8 +41,12 @@ def search_products(
     ] = "",
     category: int | None = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 20,
+    on: Annotated[
+        date | None,
+        Query(description="Return the version of each product that applied on this day (R70)."),
+    ] = None,
 ) -> list[ProductOut]:
-    rows = uc.SearchProducts(uow, ctx).execute(q, category_id=category, limit=limit)
+    rows = uc.SearchProducts(uow, ctx).execute(q, category_id=category, limit=limit, on=on)
     return [_out(p) for p in rows]
 
 
@@ -61,6 +73,24 @@ def match_products(body: MatchIn, ctx: Ctx, uow: Uow) -> list[MatchCandidateOut]
 @router.get("/products/{product_id}", response_model=ProductOut)
 def get_product(product_id: int, ctx: Ctx, uow: Uow) -> ProductOut:
     return _out(uc.GetProduct(uow, ctx).execute(product_id))
+
+
+@router.get("/products/{product_id}/versions", response_model=list[ProductOut])
+def product_versions(product_id: int, ctx: Ctx, uow: Uow) -> list[ProductOut]:
+    """Every version of this product, oldest first."""
+    return [_out(p) for p in uc.ProductVersions(uow, ctx).execute(product_id)]
+
+
+@router.post(
+    "/products/{product_id}/versions",
+    response_model=ProductOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def new_product_version(product_id: int, body: ProductVersionIn, ctx: Ctx, uow: Uow) -> ProductOut:
+    """Record changed values from a day on; the old version keeps the days before it."""
+    return _out(
+        uc.NewProductVersion(uow, ctx).execute(product_id, body.valid_from, body.changes or {})
+    )
 
 
 @router.get("/products/{product_id}/usage", response_model=ProductUsageOut)

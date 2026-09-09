@@ -63,6 +63,11 @@ class ProductView:
     verified: bool
     ean: str | None
     note: str | None
+    #: Validity of these values; ``valid_until`` None means the product is current (R70).
+    valid_from: date | None = None
+    valid_until: date | None = None
+    #: The version this one replaced, if any.
+    supersedes_id: int | None = None
     portions: list[PortionView] = field(default_factory=list)
 
 

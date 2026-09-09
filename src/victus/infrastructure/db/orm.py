@@ -253,6 +253,12 @@ class Product(Base):
     ean: Mapped[str | None] = mapped_column(String(14))
     checked_at: Mapped[date | None] = mapped_column(Date)
     external_ref: Mapped[str | None] = mapped_column(String(200), index=True)
+    #: First day these values applied. NULL reaches as far back as the data goes.
+    valid_from: Mapped[date | None] = mapped_column(Date)
+    #: Last day they applied. NULL means the product is simply current (R70).
+    valid_until: Mapped[date | None] = mapped_column(Date)
+    #: The version this one replaces, so the history reads in both directions.
+    supersedes_id: Mapped[int | None] = mapped_column(Integer, index=True)
     created_at: Mapped[datetime] = mapped_column(TS, nullable=False, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         TS, nullable=False, default=utcnow, onupdate=utcnow

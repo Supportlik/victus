@@ -250,3 +250,42 @@ def test_settings_roundtrip_over_http(client: TestClient, alice_token: dict[str,
     assert rest["salt"]["opt_max"] == 8
     bad = client.put("/api/v1/settings", json={"data": {"kcal_per_kg": "x"}}, headers=alice_token)
     assert bad.status_code == 422 and bad.json()["errors"]
+
+
+def test_product_versions_over_http(client: TestClient, alice_token: dict[str, str]) -> None:
+    """T-API-071: a product's values may change from a day on, over HTTP (R70)."""
+    ids = _seed_alice(client, alice_token)
+    old = ids["product"]
+
+    created = client.post(
+        f"/api/v1/products/{old}/versions",
+        json={"valid_from": "2026-06-01", "changes": {"kcal": 66, "source": "new label"}},
+        headers=alice_token,
+    )
+    assert created.status_code == 201, created.text
+    fresh = created.json()
+    assert fresh["id"] != old
+    assert fresh["kcal"] == 66 and fresh["valid_until"] is None
+    assert fresh["supersedes_id"] == old
+    # the portion came along, so a "tub" still means 400 g
+    assert [p["amount"] for p in fresh["portions"]] == [400]
+
+    previous = client.get(f"/api/v1/products/{old}", headers=alice_token).json()
+    assert previous["kcal"] == 63 and previous["valid_until"] == "2026-05-31"
+
+    history = client.get(f"/api/v1/products/{old}/versions", headers=alice_token).json()
+    assert [p["id"] for p in history] == [old, fresh["id"]]
+
+    # searching for a day returns the version that applied then, and only that one
+    before = client.get(
+        "/api/v1/products", params={"q": "skyr", "on": "2026-05-20"}, headers=alice_token
+    ).json()
+    assert [(p["id"], p["kcal"]) for p in before] == [(old, 63)]
+    after = client.get(
+        "/api/v1/products", params={"q": "skyr", "on": "2026-06-02"}, headers=alice_token
+    ).json()
+    assert [(p["id"], p["kcal"]) for p in after] == [(fresh["id"], 66)]
+    assert [
+        p["id"]
+        for p in client.get("/api/v1/products", params={"q": "skyr"}, headers=alice_token).json()
+    ] == [fresh["id"]]

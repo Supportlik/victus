@@ -113,7 +113,7 @@ export class ApiClient {
   categories(): Observable<Category[]> {
     return this.http.get<Category[]>(`${API_BASE}/categories`);
   }
-  products(q: string, opts: { category?: number; limit?: number } = {}): Observable<Product[]> {
+  products(q: string, opts: { category?: number; limit?: number; on?: string | null } = {}): Observable<Product[]> {
     return this.http.get<Product[]>(`${API_BASE}/products`, { params: params({ q, ...opts }) });
   }
   product(id: number): Observable<Product> {
@@ -310,6 +310,14 @@ export class ApiClient {
   /** URL of an attachment (image, audio); served inline, session cookie authenticates. */
   attachmentUrl(id: string): string {
     return `${API_BASE}/attachments/${id}`;
+  }
+  /** Every version of a product, oldest first (R70). */
+  productVersions(id: number): Observable<Product[]> {
+    return this.http.get<Product[]>(`${API_BASE}/products/${id}/versions`);
+  }
+  /** Record changed values from a day on; the old version keeps the days before it. */
+  createProductVersion(id: number, validFrom: string, changes: Record<string, unknown>): Observable<Product> {
+    return this.http.post<Product>(`${API_BASE}/products/${id}/versions`, { valid_from: validFrom, changes });
   }
   /** Whether a queued run would be picked up: ready, no_key or disabled. */
   agentStatus(): Observable<AgentStatus> {

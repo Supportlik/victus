@@ -120,6 +120,12 @@ All notable changes to Victus are documented here. The format follows
   `regional.locale`, default `de-DE`, so 1.234,5 rather than 1,234.5. Both are per tenant with the
   server configuration as fallback, and editable under Region in the settings.
 
+- A product's values may change over time (R70, migration 0007). A new version copies the product with
+  its portions, starts open ended and closes the previous one the day before, so every day already
+  logged keeps the numbers that were true then. The product page shows the values over time and can
+  start a new version; the day view offers the version that applied on the day being logged. Two MCP
+  tools, `product_versions` and `product_version_create`, do the same from a chat.
+
 ### Changed
 - No importer in the product (ADR 0011): existing data enters through the backup archive format, REST or MCP.
 - One model session per day (ADR 0009) and a resumable per-day thread (ADR 0010); lock TTL 5 minutes;

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, input, output, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { catchError, debounceTime, distinctUntilChanged, filter, of, switchMap } from 'rxjs';
@@ -8,6 +8,9 @@ import { MacroLine } from './macro-line';
 /**
  * Debounced product search (300 ms, one request per pause). Emits the chosen product.
  * Used by the day view (add item), the review list (re-assign) and the product page.
+ *
+ * With `on` set, a product whose values changed over time is offered in the version that
+ * applied on that day, so logging an older day does not pick up today's numbers (R70).
  */
 @Component({
   selector: 'v-product-search',
@@ -49,6 +52,8 @@ export class ProductSearch {
   readonly label = 'Search products';
   readonly placeholder = 'Name or brand';
   readonly minLength = 2;
+  /** Day the food was eaten; decides which version of a product is offered. */
+  readonly on = input<string | null>(null);
   readonly picked = output<Product>();
   readonly query = new FormControl('', { nonNullable: true });
   readonly busy = signal(false);
@@ -61,7 +66,9 @@ export class ProductSearch {
       switchMap((q) => {
         if (!q.trim()) return of([] as Product[]);
         this.busy.set(true);
-        return this.api.products(q.trim(), { limit: 15 }).pipe(catchError(() => of([] as Product[])));
+        return this.api
+          .products(q.trim(), { limit: 15, on: this.on() })
+          .pipe(catchError(() => of([] as Product[])));
       }),
     ),
     { initialValue: [] as Product[] },

@@ -197,6 +197,7 @@ The pyramid is deliberate: most cases are `T-DOM`/`T-SVC`; E2E covers the two fl
 | T-WEB-036 | Web | Inbox header | Load the page with runner `ready`, then with `no_key` | `ready` shows Process now; `no_key` shows Open Claude for Processing and lists only the unassessed frozen report | `inbox-page.spec.ts` | automated |
 | T-WEB-037 | Web | Phone navigation | Render the shell signed in, then press More | Six entries in the bar; the sheet lists the four remaining sections plus sign out; a recovery session shows no bar at all | `app.spec.ts` | automated |
 | T-WEB-038 | Web | Report tooltip | Adopt `de-DE`, then `en-GB` | The same values read 89,4 / 1.900 and 89.4 / 1,900 | `report-block.spec.ts` | automated |
+| T-WEB-039 | Web | Product search | Set `on` and type a query | The request carries `on`, so an older day is offered the values of its time | `product-search.spec.ts` | automated |
 | T-WEB-033 | Day thread states | mocked messages with `processing_state` and agent kinds | render `DayThread` | user captures show "waiting for the agent" / "in draft"; agent messages tagged summary/question/note; composer enabled while a run is active | mock | partly (manual) | 3 |
 
 ## Agent (`T-AGT`)
@@ -240,12 +241,16 @@ The pyramid is deliberate: most cases are `T-DOM`/`T-SVC`; E2E covers the two fl
 | T-API-026 | Proposal endpoints | product + product capture | list, approve with correction | 200 with diff, product verified, capture processed, re-decide 409 | api | yes | 3 |
 | T-API-027 | Proposal isolation | Alice's proposal | Bob lists / unknown id | empty list / 404 | api | yes | 3 |
 | T-API-070 | API | `GET /agent/status` | Toggle `agent.enabled` and the model key | Reports `disabled`, `no_key` and `ready`; the model name appears only when ready, never a key | `test_agent_api.py` | automated |
+| T-API-071 | API | Product versions over HTTP | POST a version, read the history, search with and without `on` | 201 with the new row, the old one closed, one hit per day | `test_routers.py` | automated |
 | T-SVC-055 | Accept one item | day with two drafted items | `ApproveLineItem` with a correction | item accepted, day stays draft, capture still assigned; second call 409 | service | yes | 3 |
 | T-SVC-056 | Last item accepted | one drafted item left | `ApproveLineItem` | day leaves draft, becomes reliable, capture processed | service | yes | 3 |
 | T-RPT-010 | Timeline block | seeded days and weights | render a definition with `timeline` | one row per period day, the rolling window as configured, corridor bounds present | reports | yes | 2 |
 | T-SVC-065 | One capture, several files | two photos and a voice note | `UploadCapture(files=…)` | one capture with three ordered attachments, kind audio, re-upload is a no-op, delete removes every orphan blob | service | yes | 3 |
 | T-SVC-066 | Service | Capture retention | Age a processed capture past the retention, then list captures | Capture and its blob are gone; with `processed_retention_days: 0` a 400-day-old capture stays | `test_proposals_and_capture_lifecycle.py` | automated |
 | T-SVC-067 | Service | Weigh-in day boundary | Add a reading at 23:30 UTC with the tenant on Europe/Berlin, then on UTC | It counts on the 6th in Berlin and on the 5th in UTC | `test_days_and_drafts.py` | automated |
+| T-SVC-068 | Service | New product version | Create a version from 2026-06-01 with a new kcal | The new row is open ended, copies portions and untouched values, and closes the old one on 2026-05-31 | `test_product_versions.py` | automated |
+| T-SVC-069 | Service | Version resolution | Search with `on` before and after the change, and without | Each day resolves to exactly one version; without a day the current one | `test_product_versions.py` | automated |
+| T-SVC-070 | Service | Version guards | Chain a third version, then try to start one before its predecessor and from a superseded row | The chain reads oldest first; the two attempts fail with a validation error and a conflict | `test_product_versions.py` | automated |
 | T-SVC-063 | Rules | settings saved | upsert twice with the same `when`, list, filter by scope | replaced instead of duplicated, priority order, tenant isolation, each change a settings version | service | yes | 3 |
 | T-SVC-064 | Rule validation | blank `when`, unknown scope | `UpsertRule` | 422; `rules_markdown` renders the agent section | service | yes | 3 |
 | T-SVC-061 | Product usage | product logged on two days | `GetProductUsage` | newest day first, totals, foreign tenant 404 | service | yes | 1 |
