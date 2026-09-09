@@ -10,6 +10,7 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -94,10 +95,15 @@ def kind_for_mime(mime: str) -> CaptureKind:
 def capture_view(
     cap: orm.Capture,
     transcript: orm.Transcript | None,
+    attachments: Sequence[orm.Attachment],
     *,
     created: bool = True,
-    attachments: list[orm.Attachment] | None = None,
 ) -> dto.CaptureView:
+    """One capture as the interface sees it, files included.
+
+    ``attachments`` is required rather than optional: a view built without them tells the
+    interface the capture has no photos, and it dutifully removed them from the card.
+    """
     return dto.CaptureView(
         id=cap.id,
         kind=cap.kind,
@@ -114,14 +120,10 @@ def capture_view(
         product_id=cap.product_id,
         attachments=[
             dto.AttachmentRef(id=a.id, mime=a.mime, size=a.size, original_name=a.original_name)
-            for a in (attachments if attachments is not None else _fallback_attachments(cap))
+            for a in attachments
         ],
         created=created,
     )
-
-
-def _fallback_attachments(cap: orm.Capture) -> list[orm.Attachment]:
-    return [cap.attachment] if cap.attachment is not None else []
 
 
 def queue_follow_up_if_needed(
@@ -239,8 +241,8 @@ class UploadCapture(UseCase):
                 return capture_view(
                     existing,
                     uow.captures.transcript_for(existing.id),
+                    uow.captures.attachments_of(existing.id),
                     created=False,
-                    attachments=list(uow.captures.attachments_of(existing.id)),
                 )
             cap = uow.captures.add(
                 orm.Capture(
@@ -273,7 +275,7 @@ class UploadCapture(UseCase):
                     "files": len(attachments),
                 },
             )
-            view = capture_view(cap, None, attachments=attachments)
+            view = capture_view(cap, None, attachments)
             uow.commit()
             return view
 
@@ -388,7 +390,7 @@ class ListCaptures(UseCase):
                 capture_view(
                     c,
                     uow.captures.transcript_for(c.id),
-                    attachments=list(uow.captures.attachments_of(c.id)),
+                    uow.captures.attachments_of(c.id),
                 )
                 for c in rows
             ]
@@ -404,7 +406,7 @@ class GetCapture(UseCase):
             return capture_view(
                 cap,
                 uow.captures.transcript_for(cap.id),
-                attachments=list(uow.captures.attachments_of(cap.id)),
+                uow.captures.attachments_of(cap.id),
             )
 
 
@@ -440,7 +442,9 @@ class UpdateCapture(UseCase):
                     queue_follow_up_if_needed(uow, self.ctx, new_day, [cap.id], now())
             uow.audit.record("capture.update", "capture", cap.id, diff)
             uow.flush()
-            view = capture_view(cap, uow.captures.transcript_for(cap.id))
+            view = capture_view(
+                cap, uow.captures.transcript_for(cap.id), uow.captures.attachments_of(cap.id)
+            )
             uow.commit()
             return view
 
@@ -543,7 +547,7 @@ class TranscribeCapture(UseCase):
                 raise ValidationFailed("only audio captures can be transcribed")
             existing = uow.captures.transcript_for(cap.id)
             if existing is not None and not force:
-                return capture_view(cap, existing)
+                return capture_view(cap, existing, uow.captures.attachments_of(cap.id))
             if self.transcription is None:
                 raise ExternalServiceError(
                     "transcription is not configured (providers.openai_api_key missing)"
@@ -602,6 +606,6 @@ class TranscribeCapture(UseCase):
                     "cost_usd": result.cost_usd,
                 },
             )
-            view = capture_view(cap, transcript)
+            view = capture_view(cap, transcript, uow.captures.attachments_of(cap.id))
             uow.commit()
             return view

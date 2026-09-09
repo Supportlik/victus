@@ -478,7 +478,9 @@ class GetDayContext(UseCase):
                 }
             )
             caps = [
-                capture_view(c, uow.captures.transcript_for(c.id))
+                capture_view(
+                    c, uow.captures.transcript_for(c.id), uow.captures.attachments_of(c.id)
+                )
                 for c in uow.captures.list(target_date=day)
                 if c.product_id is None and (wanted is None or c.status in wanted)
             ]

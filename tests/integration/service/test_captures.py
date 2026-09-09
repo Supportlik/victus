@@ -176,6 +176,11 @@ def test_the_voice_note_is_transcribed_not_the_photo_beside_it(
     view = uc.TranscribeCapture(factory, alice, blobs, fake).execute(cap.id)
     assert view.transcript == "frosta bag, five hundred grams"
     assert fake.calls[0]["mime"] == "audio/webm"
+    # every answer lists the files: a view without them told the card the photos were gone
+    assert len(view.attachments) == 3
+    assert len(uc.TranscribeCapture(factory, alice, blobs, fake).execute(cap.id).attachments) == 3
+    moved = uc.UpdateCapture(factory, alice).execute(cap.id, {"target_date": DAY})
+    assert len(moved.attachments) == 3
 
     # a capture that is only photos says so instead of failing in the converter
     photos = _upload(
