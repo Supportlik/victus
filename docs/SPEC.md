@@ -192,7 +192,7 @@ tree is marked **planned**.
 | D16 | **No personal data in the repository.** | Victus is public. Examples, fixtures and docs use placeholders; real data lives only on the operator's server and in backups. |
 | D17 | **One model session per day.** | A long context that carries yesterday's guesses into today produces confident-looking errors and grows cost with every day. Fresh sessions keep each draft small, reproducible and independently auditable; shared knowledge is fetched through tools from the database instead (ADR 0009). |
 | D18 | **A conversation thread per day.** | Logging is incremental — a note at breakfast, a photo at lunch, a correction at night. Seeding each per-day session with the day's thread gives continuity without breaking day isolation (ADR 0010). |
-| D19 | **Source available, not open source.** | The software is meant to be free for anyone running it for themselves, while selling it and hosting it for money stay with the author. PolyForm Noncommercial says exactly that; MIT permitted the opposite and AGPL would still permit paid hosting. The Open Source Definition forbids restricting commercial use, so this is deliberately not an open-source licence (ADR 0012). |
+| D19 | **Source available, not open source.** | Anyone may run Victus for themselves or their household; selling it and hosting it for money stay with the copyright holder. PolyForm Noncommercial states exactly that, indefinitely. Permissive licences allow closed forks and paid hosting by anyone, and AGPL still allows charging for hosting. The Open Source Definition forbids restricting commercial use, so this is deliberately not an open-source licence (ADR 0012). |
 
 ## Data model (overview)
 
