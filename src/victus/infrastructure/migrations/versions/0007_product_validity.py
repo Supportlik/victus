@@ -22,6 +22,9 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 COLUMNS = ("valid_from", "valid_until", "supersedes_id")
+#: The name SQLAlchemy gives the column index, so a schema built from the models and one
+#: built by migrations carry the same index and the downgrade finds it.
+INDEX = "ix_product_supersedes_id"
 
 
 def _present() -> set[str]:
@@ -40,13 +43,14 @@ def upgrade() -> None:
         if "supersedes_id" not in have:
             batch.add_column(sa.Column("supersedes_id", sa.Integer(), nullable=True))
     if "supersedes_id" not in have:
-        op.create_index("ix_product_supersedes", "product", ["supersedes_id"])
+        op.create_index(INDEX, "product", ["supersedes_id"])
 
 
 def downgrade() -> None:
     have = _present()
-    if "supersedes_id" in have:
-        op.drop_index("ix_product_supersedes", table_name="product")
+    inspector = sa.inspect(op.get_bind())
+    if any(i["name"] == INDEX for i in inspector.get_indexes("product")):
+        op.drop_index(INDEX, table_name="product")
     with op.batch_alter_table("product") as batch:
         for name in COLUMNS:
             if name in have:
