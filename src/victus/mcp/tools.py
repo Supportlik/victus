@@ -38,6 +38,7 @@ from victus.application.tenant_context import (
     TenantContext,
 )
 from victus.application.use_cases import agent as agent_uc
+from victus.application.use_cases import body as body_uc
 from victus.application.use_cases import captures as capture_uc
 from victus.application.use_cases import day_logs as day_uc
 from victus.application.use_cases import drafts as draft_uc
@@ -164,6 +165,27 @@ class ProductSearchIn(_In):
 
 class ProductGetIn(_In):
     id: int = Field(description="Product (consumable) id.")
+
+
+class BodyMeasurementsIn(_In):
+    limit: int = Field(default=5, ge=1, le=100, description="Newest sessions to return.")
+
+
+class BodyAddIn(_In):
+    """One tape-measure session, in centimetres. Give only what was actually measured."""
+
+    measured_at: datetime = Field(
+        description="When it was measured. Use the capture's time when it came from one."
+    )
+    waist_cm: float | None = Field(default=None, gt=0, le=250, description="Centimetres.")
+    belly_cm: float | None = Field(default=None, gt=0, le=250, description="Centimetres.")
+    hip_cm: float | None = Field(default=None, gt=0, le=250, description="Centimetres.")
+    chest_cm: float | None = Field(default=None, gt=0, le=250, description="Centimetres.")
+    neck_cm: float | None = Field(default=None, gt=0, le=250, description="Centimetres.")
+    thigh_cm: float | None = Field(default=None, gt=0, le=250, description="Centimetres.")
+    arm_cm: float | None = Field(default=None, gt=0, le=250, description="Centimetres.")
+    body_fat_pct: float | None = Field(default=None, ge=3, le=70)
+    note: str | None = Field(default=None, description="One sentence, e.g. where it came from.")
 
 
 class ProductVersionsIn(_In):
@@ -572,6 +594,18 @@ def _product_search(tc: ToolContext, inp: ProductSearchIn) -> ToolResult:
     }
 
 
+def _body_measurements(tc: ToolContext, inp: BodyMeasurementsIn) -> ToolResult:
+    rows = body_uc.ListBodyMeasurements(tc.uow_factory, tc.ctx).execute(limit=inp.limit)
+    return {"measurements": [jsonable(r) for r in rows]}
+
+
+def _body_add(tc: ToolContext, inp: BodyAddIn) -> ToolResult:
+    view = body_uc.AddBodyMeasurement(tc.uow_factory, tc.ctx).execute(
+        body_uc.BodyInput(**inp.model_dump())
+    )
+    return cast(ToolResult, jsonable(view))
+
+
 def _product_versions(tc: ToolContext, inp: ProductVersionsIn) -> ToolResult:
     rows = product_uc.ProductVersions(tc.uow_factory, tc.ctx).execute(inp.id)
     return {"product_id": inp.id, "versions": [jsonable(p) for p in rows]}
@@ -954,6 +988,25 @@ TOOLS: tuple[ToolSpec, ...] = (
         _product_get,
     ),
     _spec(
+        "body_measurements",
+        "Recent tape-measure sessions with waist, hip, belly and the rest, newest first. "
+        "Read this before adding one, so an existing session is corrected rather than doubled.",
+        SCOPE_READ,
+        BodyMeasurementsIn,
+        _body_measurements,
+    ),
+    _spec(
+        "body_add",
+        "Record a tape-measure session from a note, a photo of a tape or a spoken list, e.g. "
+        '"waist 126, hip 118". Centimetres, and only the values actually given: a missing '
+        "circumference must stay empty rather than be guessed, because the ratios built on it "
+        "would then be wrong. Weight does not belong here, use weight_add.",
+        SCOPE_WRITE,
+        BodyAddIn,
+        _body_add,
+        read_only=False,
+    ),
+    _spec(
         "product_versions",
         "Every version of a product, oldest first, with the days each one covers. Use it when "
         "the values of a food changed over time and you need to know which numbers held when.",
@@ -1264,6 +1317,9 @@ WORKER_TOOLS: frozenset[str] = frozenset(
         "product_search",
         "product_get",
         "product_versions",
+        "body_measurements",
+        "body_add",
+        "weight_add",
         "recipe_get",
         "day_get",
         "days_list",

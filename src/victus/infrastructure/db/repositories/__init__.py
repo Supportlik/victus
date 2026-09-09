@@ -3,6 +3,7 @@ and filters on ``tenant_id`` automatically (directly or via the parent row)."""
 
 from victus.infrastructure.db.repositories.catalog import ProductRepo, RecipeRepo
 from victus.infrastructure.db.repositories.diary import (
+    BodyMeasurementRepo,
     DayLogRepo,
     SettingsRepo,
     TargetBandRepo,
@@ -18,6 +19,7 @@ __all__ = [
     "AgentRepo",
     "AuditRepo",
     "BackupJobRepo",
+    "BodyMeasurementRepo",
     "CaptureRepo",
     "DayLogRepo",
     "DayMessageRepo",

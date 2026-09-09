@@ -248,6 +248,24 @@ class WeightEntryView:
 
 
 @dataclass(frozen=True, slots=True)
+class BodyMeasurementView:
+    """One tape-measure session; every circumference is optional (R76)."""
+
+    id: int
+    measured_at: datetime
+    waist_cm: float | None = None
+    belly_cm: float | None = None
+    hip_cm: float | None = None
+    chest_cm: float | None = None
+    neck_cm: float | None = None
+    thigh_cm: float | None = None
+    arm_cm: float | None = None
+    body_fat_pct: float | None = None
+    note: str | None = None
+    source: str = "manual"
+
+
+@dataclass(frozen=True, slots=True)
 class SettingsVersionView:
     version: int
     valid_from: date

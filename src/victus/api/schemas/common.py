@@ -225,5 +225,22 @@ class WeightEntryOut(Out):
     source: str
 
 
+class BodyMeasurementOut(Out):
+    """One tape-measure session; the values a person did not measure stay null (R76)."""
+
+    id: int
+    measured_at: datetime
+    waist_cm: float | None = None
+    belly_cm: float | None = None
+    hip_cm: float | None = None
+    chest_cm: float | None = None
+    neck_cm: float | None = None
+    thigh_cm: float | None = None
+    arm_cm: float | None = None
+    body_fat_pct: float | None = None
+    note: str | None = None
+    source: str = "manual"
+
+
 def macros_dict(m: Macros | None) -> dict[str, float | None]:
     return m.as_dict() if m is not None else {}

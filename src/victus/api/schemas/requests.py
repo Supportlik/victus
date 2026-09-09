@@ -197,6 +197,21 @@ class WeightIn(BaseModel):
     kg: float = Field(gt=0)
 
 
+class BodyMeasurementIn(BaseModel):
+    """One tape-measure session. At least one value is required (R76)."""
+
+    measured_at: datetime
+    waist_cm: float | None = Field(default=None, gt=0, le=250, description="Centimetres.")
+    belly_cm: float | None = Field(default=None, gt=0, le=250, description="Centimetres.")
+    hip_cm: float | None = Field(default=None, gt=0, le=250, description="Centimetres.")
+    chest_cm: float | None = Field(default=None, gt=0, le=250, description="Centimetres.")
+    neck_cm: float | None = Field(default=None, gt=0, le=250, description="Centimetres.")
+    thigh_cm: float | None = Field(default=None, gt=0, le=250, description="Centimetres.")
+    arm_cm: float | None = Field(default=None, gt=0, le=250, description="Centimetres.")
+    body_fat_pct: float | None = Field(default=None, ge=3, le=70)
+    note: str | None = None
+
+
 class RuleIn(BaseModel):
     """One of the user's own instructions for the agent."""
 

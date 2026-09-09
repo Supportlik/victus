@@ -631,6 +631,38 @@ class WeightEntry(Base):
     created_at: Mapped[datetime] = mapped_column(TS, nullable=False, default=utcnow)
 
 
+class BodyMeasurement(Base):
+    """Tape-measure readings, one row per session (R76).
+
+    The scale says how heavy, these say where it sits. Losing fat while keeping muscle
+    shows up here as a shrinking waist next to unchanged limbs, which the weight alone
+    cannot tell apart. Every circumference is optional: people measure what they measure.
+    """
+
+    __tablename__ = "body_measurement"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "measured_at"),
+        CheckConstraint("source IN ('manual','import')", name="ck_body_source"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str] = mapped_column(ID, ForeignKey("tenant.id"), nullable=False, index=True)
+    measured_at: Mapped[datetime] = mapped_column(TS, nullable=False)
+    #: All circumferences in centimetres.
+    waist_cm: Mapped[float | None] = mapped_column(Float)
+    belly_cm: Mapped[float | None] = mapped_column(Float)
+    hip_cm: Mapped[float | None] = mapped_column(Float)
+    chest_cm: Mapped[float | None] = mapped_column(Float)
+    neck_cm: Mapped[float | None] = mapped_column(Float)
+    thigh_cm: Mapped[float | None] = mapped_column(Float)
+    arm_cm: Mapped[float | None] = mapped_column(Float)
+    #: Optional body composition, if a scale or a caliper provided it.
+    body_fat_pct: Mapped[float | None] = mapped_column(Float)
+    note: Mapped[str | None] = mapped_column(Text)
+    source: Mapped[str] = mapped_column(String(16), nullable=False, default="manual")
+    created_at: Mapped[datetime] = mapped_column(TS, nullable=False, default=utcnow)
+
+
 # ── Captures, attachments, transcripts ──────────────────────────────────────
 
 

@@ -12,6 +12,7 @@ from victus.infrastructure.db.repositories import (
     AgentRepo,
     AuditRepo,
     BackupJobRepo,
+    BodyMeasurementRepo,
     CaptureRepo,
     DayLogRepo,
     DayMessageRepo,
@@ -51,6 +52,7 @@ class SqlAlchemyUnitOfWork:
         self.recipes = RecipeRepo(s, c)
         self.day_logs = DayLogRepo(s, c)
         self.weights = WeightRepo(s, c)
+        self.body = BodyMeasurementRepo(s, c)
         self.target_bands = TargetBandRepo(s, c)
         self.settings = SettingsRepo(s, c)
         self.captures = CaptureRepo(s, c)

@@ -27,6 +27,8 @@ EXPECTED = {
     "product_search",
     "product_get",
     "product_usage",
+    "body_measurements",
+    "body_add",
     "product_versions",
     "product_version_create",
     "rule_delete",

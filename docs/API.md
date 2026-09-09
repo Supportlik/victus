@@ -104,6 +104,8 @@ The tenant is always derived from the principal (session or token); it never app
 |---|---|---|
 | GET | `/weight?from=&to=` | Weigh-ins |
 | POST | `/weight` | Manual entry (`source` is forced to `manual`) |
+| GET / POST | `/body-measurements?from=&to=&limit=` | Tape-measure sessions, oldest first; POST records one, every circumference optional and at least one required (R76) |
+| DELETE | `/body-measurements/{id}` | Remove a session |
 | DELETE | `/weight/{id}` | Only `manual` rows |
 | POST | `/weight/import/scale` | Trigger scale cloud sync |
 | POST | `/weight/import/csv` | Upload `timestamp;weight_kg` CSV |

@@ -65,6 +65,10 @@ The pyramid is deliberate: most cases are `T-DOM`/`T-SVC`; E2E covers the two fl
 | T-DOM-027 | Training type from free text | German/English training notes | `target_band.training_type_from_text` | "krafttraining (5x5)" → strength, "kickboxing" → martial_arts, "nein (Sauna)" → rest, unknown → `None` | inline | yes | 1 |
 | T-DOM-028 | Multiplication anywhere in a quantity | `2 Fl. à 0,5 l`, `2 Flaschen (2 × 0,33 l)` | `parse_quantity_details` | base amount = count × per-piece volume (1000 ml / 660 ml) | inline | yes | 1 |
 | T-DOM-080 | Domain | `services/calendar` | Moments either side of local midnight, winter and summer, naive timestamps, an unknown zone | The day follows the zone; bounds are UTC moments of the local day; an unknown zone falls back to the default | `test_calendar.py` | automated |
+| T-DOM-081 | Domain | `services/body` BMI | Values either side of every class boundary, and classes as kilograms at 170 cm | Boundaries are inclusive below and exclusive above; the distance to the next better class is in BMI points | `test_body.py` | automated |
+| T-DOM-082 | Domain | Waist ratios | Waist to height and waist to hip for both sexes | Each uses its own scale, and the waist-to-hip thresholds differ by sex | `test_body.py` | automated |
+| T-DOM-083 | Domain | Resting rate | Mifflin-St Jeor for both sexes, and the age boundary on a birthday | Matches the published equation; the birthday itself counts | `test_body.py` | automated |
+| T-DOM-084 | Domain | Energy split | Expenditure at 1.09, 1.6 and 2.51 times resting | The middle one splits cleanly; the outer two carry a caveat naming bed rest or athletes | `test_body.py` | automated |
 
 ## Importer (`T-IMP`)
 
@@ -255,6 +259,8 @@ The pyramid is deliberate: most cases are `T-DOM`/`T-SVC`; E2E covers the two fl
 | T-SVC-068 | Service | New product version | Create a version from 2026-06-01 with a new kcal | The new row is open ended, copies portions and untouched values, and closes the old one on 2026-05-31 | `test_product_versions.py` | automated |
 | T-SVC-069 | Service | Version resolution | Search with `on` before and after the change, and without | Each day resolves to exactly one version; without a day the current one | `test_product_versions.py` | automated |
 | T-SVC-070 | Service | Version guards | Chain a third version, then try to start one before its predecessor and from a superseded row | The chain reads oldest first; the two attempts fail with a validation error and a conflict | `test_product_versions.py` | automated |
+| T-SVC-071 | Service | Body measurement | Record waist and hip only, then repeat the timestamp, then send nothing and a typo | Unmeasured values stay null; a repeated timestamp conflicts; an empty session and 1264 cm are refused | `test_body_measurements.py` | automated |
+| T-SVC-072 | Service | Body profile | Read the profile with no settings, with all three fields, and with height only | Returns what is there and None for the rest, never raising | `test_body_measurements.py` | automated |
 | T-SVC-063 | Rules | settings saved | upsert twice with the same `when`, list, filter by scope | replaced instead of duplicated, priority order, tenant isolation, each change a settings version | service | yes | 3 |
 | T-SVC-064 | Rule validation | blank `when`, unknown scope | `UpsertRule` | 422; `rules_markdown` renders the agent section | service | yes | 3 |
 | T-SVC-061 | Product usage | product logged on two days | `GetProductUsage` | newest day first, totals, foreign tenant 404 | service | yes | 1 |

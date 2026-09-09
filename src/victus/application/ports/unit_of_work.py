@@ -9,6 +9,7 @@ from victus.application.ports.repositories import (
     AgentRepository,
     AuditRepository,
     BackupJobRepository,
+    BodyMeasurementRepository,
     CaptureRepository,
     DayLogRepository,
     DayMessageRepository,
@@ -45,6 +46,9 @@ class UnitOfWork(Protocol):
 
     @property
     def weights(self) -> WeightRepository: ...
+
+    @property
+    def body(self) -> BodyMeasurementRepository: ...
 
     @property
     def target_bands(self) -> TargetBandRepository: ...

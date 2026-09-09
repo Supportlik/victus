@@ -150,6 +150,14 @@ All notable changes to Victus are documented here. The format follows
   list, the size reads "one bag of this is …", the name is optional, and the form says what "use by
   default" decides. The button that records changed values reads "Values changed…".
 
+- Body measures beside the weight (R76, migration 0009): tape-measure sessions with waist, belly, hip,
+  chest, neck, thigh and arm, every value optional. From them come BMI with the WHO classes,
+  waist-to-height, waist-to-hip against the sex-specific thresholds, and a split of the measured
+  expenditure into resting rate and activity that flags an implausible activity level instead of
+  presenting it. Height, sex and birth date come from the settings and may be missing; a figure that
+  needs them says which one is absent. Sessions arrive through the API, the MCP (`body_add`) or a
+  capture, because a spoken "waist 126, hip 118" is a capture like any other.
+
 ### Changed
 - No importer in the product (ADR 0011): existing data enters through the backup archive format, REST or MCP.
 - One model session per day (ADR 0009) and a resumable per-day thread (ADR 0010); lock TTL 5 minutes;

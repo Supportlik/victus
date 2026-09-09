@@ -34,6 +34,8 @@ HTTP responses: missing or invalid token → `401`; token lacks the tool's scope
 | `rule_delete(name)` | `write` | `DeleteRule` | removed |
 | `product_usage(product_id, limit?)` | `read` | `GetProductUsage` | the days a product was logged on |
 | `product_versions(id)` | `read` | `ProductVersions` | every version with the days it covers |
+| `body_measurements(limit?)` | `read` | `ListBodyMeasurements` | recent tape-measure sessions |
+| `body_add(measured_at, waist_cm?, …)` | `write` | `AddBodyMeasurement` | one session from a note, a photo of a tape or a spoken list (R76) |
 | `recipe_get(id)` | `read` | `GetRecipe` | recipe, ingredients, batches |
 | `day_get(date)` | `read` | `GetDay` | day with meals, line items, computed macros, target band, findings |
 | `days_list(from, to, status?)` | `read` | `ListDays` | compact list |

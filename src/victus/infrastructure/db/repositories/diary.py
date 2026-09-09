@@ -204,6 +204,58 @@ def _as_date(value: Any) -> date:
     return date.fromisoformat(str(value)[:10])
 
 
+class BodyMeasurementRepo(Repo):
+    """Tape-measure sessions, newest last."""
+
+    def add(self, row: orm.BodyMeasurement) -> orm.BodyMeasurement:
+        self.guard(row)
+        self.session.add(row)
+        self.session.flush()
+        return row
+
+    def get(self, row_id: int) -> orm.BodyMeasurement | None:
+        return self.session.scalar(
+            self.scoped(
+                select(orm.BodyMeasurement).where(orm.BodyMeasurement.id == row_id),
+                orm.BodyMeasurement,
+            )
+        )
+
+    def list(
+        self, start: date | None = None, end: date | None = None, limit: int | None = None
+    ) -> Sequence[orm.BodyMeasurement]:
+        stmt = self.scoped(select(orm.BodyMeasurement), orm.BodyMeasurement)
+        if start:
+            stmt = stmt.where(func.date(orm.BodyMeasurement.measured_at) >= start)
+        if end:
+            stmt = stmt.where(func.date(orm.BodyMeasurement.measured_at) <= end)
+        stmt = stmt.order_by(orm.BodyMeasurement.measured_at)
+        if limit is not None:
+            stmt = stmt.order_by(None).order_by(orm.BodyMeasurement.measured_at.desc()).limit(limit)
+        rows = list(self.session.scalars(stmt).all())
+        return sorted(rows, key=lambda r: r.measured_at)
+
+    def latest(self, on_or_before: date | None = None) -> orm.BodyMeasurement | None:
+        """The most recent session, optionally as of a day; reports anchor on a date."""
+        stmt = self.scoped(select(orm.BodyMeasurement), orm.BodyMeasurement)
+        if on_or_before:
+            stmt = stmt.where(func.date(orm.BodyMeasurement.measured_at) <= on_or_before)
+        return self.session.scalar(stmt.order_by(orm.BodyMeasurement.measured_at.desc()).limit(1))
+
+    def by_measured_at(self, measured_at: datetime) -> orm.BodyMeasurement | None:
+        return self.session.scalar(
+            self.scoped(
+                select(orm.BodyMeasurement).where(orm.BodyMeasurement.measured_at == measured_at),
+                orm.BodyMeasurement,
+            )
+        )
+
+    def delete(self, row: orm.BodyMeasurement) -> None:
+        self.guard(row)
+        self.session.delete(row)
+        self.session.flush()
+
+
 class WeightRepo(Repo):
     def add(self, entry: orm.WeightEntry) -> orm.WeightEntry:
         self.guard(entry)
