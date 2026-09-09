@@ -1,3 +1,5 @@
+import { beforeEach } from 'vitest';
+
 // Vitest setup: jsdom lacks ResizeObserver, which ECharts needs to mount a chart host.
 class ResizeObserverStub {
   observe(): void {}
@@ -74,3 +76,17 @@ for (const name of ['localStorage', 'sessionStorage'] as const) {
     (globalThis as Record<string, unknown>)[name] = value;
   }
 }
+
+// One spec's browser state is not another's. The in-memory Storage above lives in the
+// worker, not in the document, so a language or locale a spec pins would otherwise still
+// be set when the next file renders a component — which is how a suite that asserts
+// English text started failing after an unrelated spec switched to German.
+beforeEach(() => {
+  for (const name of ['localStorage', 'sessionStorage'] as const) {
+    try {
+      ((globalThis as unknown as Record<string, Storage>)[name]).clear();
+    } catch {
+      /* nothing to clear */
+    }
+  }
+});
