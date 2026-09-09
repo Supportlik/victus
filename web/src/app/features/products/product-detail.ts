@@ -1,8 +1,8 @@
-import { ChangeDetectionStrategy, Component, effect, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { ApiClient, Capture, Portion, Product, ProductProposal, ProductUsage } from '../../api';
+import { ApiClient, Capture, Portion, Product, ProductProposal, ProductUsage, Unit } from '../../api';
 import { todayLocal } from '../../core/format.service';
 import { describeError } from '../../core/problem';
 import { CaptureCard } from '../../shared/capture-card';
@@ -29,7 +29,7 @@ import { ProductForm } from './product-form';
           </div>
           <div class="v-actions">
             <button type="button" class="v-btn" (click)="editing.set(!editing())">{{ editing() ? 'Close editor' : 'Edit' }}</button>
-            <button type="button" class="v-btn" (click)="startVersion(p)">New values from a day</button>
+            <button type="button" class="v-btn" (click)="startVersion(p)">Values changed…</button>
             <button type="button" class="v-btn danger" (click)="remove()">Delete</button>
           </div>
         </header>
@@ -54,8 +54,8 @@ import { ProductForm } from './product-form';
 
         @if (versionForm()) {
           <section class="v-panel newver">
-            <h3>New values from a day on</h3>
-            <p class="v-small v-muted">The values below start on that day. Everything before it keeps the numbers it has now, so days already logged do not change. Leave a field empty to carry it over.</p>
+            <h3>Since when do the new values apply?</h3>
+            <p class="v-small v-muted">Use this when the product itself changed: a reformulated recipe, a different supplier, a new label. From that day on the values below count; every day before it keeps the numbers it has now, so nothing you already logged moves. Leave a field empty to carry the current value over.</p>
             <div class="v-form-row">
               <label class="v-field"><span>Valid from</span><input type="date" name="vf" [(ngModel)]="vf" /></label>
               <label class="v-field"><span>kcal per 100 {{ p.reference_unit }}</span><input type="number" name="vkcal" step="0.1" [(ngModel)]="vkcal" [placeholder]="p.kcal ?? ''" /></label>
@@ -185,13 +185,32 @@ import { ProductForm } from './product-form';
             </tbody>
           </table>
           <form class="v-form-row add" (ngSubmit)="addPortion()">
-            <label class="v-field"><span>Label</span><input name="label" [(ngModel)]="np.label" placeholder="tub, slice, piece" required /></label>
-            <label class="v-field"><span>Unit code</span><input name="unit" [(ngModel)]="np.unit_code" placeholder="piece" required /></label>
-            <label class="v-field"><span>Weight</span><input name="amount" type="number" step="any" min="0" [(ngModel)]="np.amount" required /></label>
-            <label class="v-field"><span>Weight unit</span><select name="au" [(ngModel)]="np.amount_unit"><option value="g">g</option><option value="ml">ml</option></select></label>
-            <label class="v-field check"><span>Default</span><input name="def" type="checkbox" [(ngModel)]="np.is_default" /></label>
-            <label class="v-field"><span>How measured</span><select name="ws" [(ngModel)]="np.weight_source"><option value="weighed">weighed</option><option value="estimated">estimated</option></select></label>
-            <button type="submit" class="v-btn" [disabled]="!np.label || !np.unit_code || !np.amount">Add portion</button>
+            <label class="v-field">
+              <span>Sold or eaten as</span>
+              <select name="unit" [(ngModel)]="np.unit_code" (ngModelChange)="onPortionUnit($event)">
+                @for (u of countUnits(); track u.code) { <option [value]="u.code">{{ u.singular }}</option> }
+              </select>
+            </label>
+            <label class="v-field">
+              <span>One {{ portionUnitLabel() }} of this is</span>
+              <span class="pair">
+                <input name="amount" type="number" step="any" min="0" [(ngModel)]="np.amount" required />
+                <select name="au" [(ngModel)]="np.amount_unit"><option value="g">g</option><option value="ml">ml</option></select>
+              </span>
+            </label>
+            <label class="v-field">
+              <span>Name <span class="v-muted">(optional)</span></span>
+              <input name="label" [(ngModel)]="np.label" [placeholder]="portionUnitLabel()" />
+            </label>
+            <label class="v-field"><span>Weight is</span><select name="ws" [(ngModel)]="np.weight_source"><option value="weighed">weighed</option><option value="estimated">estimated</option></select></label>
+            <label class="v-field check"><span>Use by default</span><input name="def" type="checkbox" [(ngModel)]="np.is_default" /></label>
+            <p class="v-small v-muted hint">
+              A portion says what one {{ portionUnitLabel() }} of this product weighs, so “2 {{ portionUnitLabel() }}” can be
+              logged without weighing anything. <b>Use by default</b> decides which one counts when a
+              day just says {{ portionUnitLabel() }} and this product has several of that unit, for
+              instance a small and a large one.
+            </p>
+            <button type="submit" class="v-btn" [disabled]="!np.unit_code || !np.amount">Add portion</button>
           </form>
         </section>
       }
@@ -211,6 +230,9 @@ import { ProductForm } from './product-form';
     .proposal { display: grid; gap: 0.4rem; padding-top: 0.5rem; border-top: 1px dashed var(--v-line); }
     .diff { max-width: 28rem; }
     .check { grid-template-columns: 1fr auto; align-items: center; }
+    .pair { display: flex; gap: 0.3rem; }
+    .pair input { min-width: 5rem; }
+    .add .hint { grid-column: 1 / -1; margin: 0; }
   `,
 })
 export class ProductDetail {
@@ -224,6 +246,12 @@ export class ProductDetail {
   readonly proposals = signal<ProductProposal[]>([]);
   readonly usage = signal<ProductUsage | null>(null);
   readonly versions = signal<Product[]>([]);
+  readonly units = signal<Unit[]>([]);
+  /** Portions only make sense for count units; grams need no portion. */
+  readonly countUnits = computed(() => this.units().filter((u) => u.unit_type === 'count'));
+  readonly portionUnitLabel = computed(
+    () => this.units().find((u) => u.code === this.np.unit_code)?.singular ?? this.np.unit_code,
+  );
   readonly versionForm = signal(false);
   readonly saving = signal(false);
   vf = '';
@@ -247,6 +275,9 @@ export class ProductDetail {
     this.api.proposals({ product_id: id }).subscribe({ next: (p) => this.proposals.set(p), error: () => undefined });
     this.api.productUsage(id).subscribe({ next: (u) => this.usage.set(u), error: () => undefined });
     this.api.productVersions(id).subscribe({ next: (v) => this.versions.set(v), error: () => this.versions.set([]) });
+    if (!this.units().length) {
+      this.api.units().subscribe({ next: (u) => this.units.set(u), error: () => undefined });
+    }
   }
   /** How long a version's values apply, in words. */
   validity(p: Product): string {
@@ -288,6 +319,13 @@ export class ProductDetail {
         this.error.set(describeError(e));
       },
     });
+  }
+
+  /** The name follows the unit unless it was typed by hand. */
+  onPortionUnit(code: string): void {
+    const previous = this.units().find((u) => u.code !== code && u.singular === this.np.label);
+    if (!this.np.label || previous) this.np.label = '';
+    void code;
   }
 
   onCapture(c: Capture): void {
@@ -342,7 +380,9 @@ export class ProductDetail {
   addPortion(): void {
     const p = this.product();
     if (!p) return;
-    this.api.createPortion(p.id, this.np).subscribe({
+    // an empty name takes the unit's own word, which is what the placeholder showed
+    const body = { ...this.np, label: this.np.label.trim() || this.portionUnitLabel() };
+    this.api.createPortion(p.id, body).subscribe({
       next: () => {
         this.np = { label: '', unit_code: 'piece', amount: 0, amount_unit: 'g', is_default: false, weight_source: 'weighed' };
         this.load(p.id);

@@ -146,6 +146,10 @@ All notable changes to Victus are documented here. The format follows
   what one of them holds and stores the answer with the product, instead of accepting the item and
   rejecting it on save with "no portion for unit".
 
+- The portion form on a product asks in words instead of field names (R74): the unit is picked from a
+  list, the size reads "one bag of this is …", the name is optional, and the form says what "use by
+  default" decides. The button that records changed values reads "Values changed…".
+
 ### Changed
 - No importer in the product (ADR 0011): existing data enters through the backup archive format, REST or MCP.
 - One model session per day (ADR 0009) and a resumable per-day thread (ADR 0010); lock TTL 5 minutes;
