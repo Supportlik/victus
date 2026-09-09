@@ -38,8 +38,9 @@ const blocks: ReportBlock[] = [
         { name: 'obesity class III', lower: 40, upper: null, tone: 'bad' },
       ] },
     bmi_weight_bands: [
-      { name: 'normal weight', lower: 59.9, upper: 81.0, tone: 'ok' },
-      { name: 'obesity class I', lower: 97.2, upper: 113.4, tone: 'warn' },
+      { name: 'normal weight', lower: 18.5, upper: 25, tone: 'ok', lower_kg: 59.9, upper_kg: 81.0, to_reach_kg: -19.0 },
+      { name: 'overweight', lower: 25, upper: 30, tone: 'watch', lower_kg: 81.0, upper_kg: 97.2, to_reach_kg: -2.8 },
+      { name: 'obesity class I', lower: 30, upper: 35, tone: 'warn', lower_kg: 97.2, upper_kg: 113.4, to_reach_kg: null },
     ],
     waist_to_height: null, waist_to_hip: null, measured_at: '2026-01-05',
     circumferences: { waist_cm: 96, hip_cm: 108 }, changes: { waist_cm: -4 },
@@ -180,8 +181,17 @@ describe('ReportBlockView', () => {
     expect(left).toBeGreaterThan(0);
     expect(left).toBeLessThan(100);
 
-    // the classes as kilograms, with the one the weight falls in highlighted
+    // the classes as kilograms, with the one the weight falls in highlighted. The row is
+    // found by weight against the kilogram edges: comparing 100 kg to a BMI of 18.5 put
+    // every reader in whichever class has no upper bound.
+    expect(el.querySelectorAll('.marks tr.here').length).toBe(1);
     expect(el.querySelector('.marks tr.here')?.textContent).toContain('obesity class I');
+    // both scales are readable as themselves, and the distance is in kilograms
+    const here = el.querySelector('.marks tr.here')!;
+    expect(here.textContent).toContain('30.0–35.0');
+    expect(here.textContent).toContain('97.2–113.4');
+    expect(here.textContent).toContain('you are here');
+    expect([...el.querySelectorAll('.marks tbody tr')][1].textContent).toContain('2.8 kg');
     // a shrinking waist reads as an improvement
     expect(el.querySelector('.circ .down')?.textContent).toContain('4');
     expect(el.textContent).toContain('Not shown: no waist measurement');

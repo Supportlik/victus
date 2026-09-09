@@ -830,12 +830,16 @@ export class ReportBlockView {
     return tone === 'ok' ? 'ok' : tone === 'bad' ? 'bad' : 'warn';
   }
 
-  /** Whether the current weight falls in this class, for the kilogram table. */
+  /** Whether the current weight falls in this class, for the kilogram table.
+   *
+   * Compared against the kilogram boundaries, not the BMI ones: no weight is below 18.5,
+   * so every class answered "not here" except the open-ended top one, which then marked
+   * itself whatever the reader weighs. */
   inBand(mark: ThresholdMark): boolean {
     const kg = this.body().weight_kg;
     if (kg == null) return false;
-    if (mark.lower != null && kg < mark.lower) return false;
-    return !(mark.upper != null && kg >= mark.upper);
+    if (mark.lower_kg != null && kg < mark.lower_kg) return false;
+    return !(mark.upper_kg != null && kg >= mark.upper_kg);
   }
 
   weeklyChart(): EChartsOption {

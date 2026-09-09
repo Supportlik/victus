@@ -24,6 +24,7 @@ from victus.reports.results import (
     ReportResult,
     TdeeWindowsResult,
     TextFindingResult,
+    ThresholdMark,
     TimelineResult,
     TrendResult,
     WeeklyChartResult,
@@ -301,6 +302,32 @@ def _rated_line(name: str, r: RatedValue, decimals: int) -> str:
     return line
 
 
+def _span(lower: float | None, upper: float | None, decimals: int) -> str:
+    """A class boundary as a range, open at whichever end has no limit."""
+    if lower is None and upper is None:
+        return "–"
+    if lower is None:
+        return f"< {upper:.{decimals}f}"
+    if upper is None:
+        return f"≥ {lower:.{decimals}f}"
+    return f"{lower:.{decimals}f}–{upper:.{decimals}f}"
+
+
+def _in_band(mark: ThresholdMark, weight_kg: float) -> bool:
+    """Whether a weight falls in this class, compared in kilograms, not in BMI points."""
+    if mark.lower_kg is not None and weight_kg < mark.lower_kg:
+        return False
+    return not (mark.upper_kg is not None and weight_kg >= mark.upper_kg)
+
+
+def _still_needed(mark: ThresholdMark, weight_kg: float) -> str:
+    if _in_band(mark, weight_kg):
+        return "you are here"
+    if mark.to_reach_kg is None:
+        return "–"
+    return signed(mark.to_reach_kg, 1, "kg")
+
+
 def _body(b: BodyCompositionResult) -> str:
     parts: list[str] = []
     if b.weight_kg is not None:
@@ -323,12 +350,13 @@ def _body(b: BodyCompositionResult) -> str:
         rows = [
             [
                 m.name,
-                f"{m.lower:.1f} kg" if m.lower else "–",
-                f"{m.upper:.1f} kg" if m.upper else "–",
+                _span(m.lower, m.upper, 1),
+                _span(m.lower_kg, m.upper_kg, 1),
+                _still_needed(m, b.weight_kg),
             ]
             for m in b.bmi_weight_bands
         ]
-        parts.append("\n" + _table(["BMI class", "from", "to"], rows))
+        parts.append("\n" + _table(["BMI class", "BMI", "kg", "still needed"], rows))
     if b.circumferences:
         rows = []
         for key, label in CIRCUMFERENCE_LABELS.items():

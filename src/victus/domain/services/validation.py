@@ -6,8 +6,9 @@ Four finding kinds:
 1. drift between the declared source macros and the balance table
 2. balance versus the sum of the meal totals — only assessable when *every* meal has
    a total row; otherwise a ``not_assessable`` info finding, never an error
-3. gaps: macros missing on a countable day; salt-only gaps before the salt tracking
-   start are ``expected_gap``
+3. gaps: macros no source in the day knows on a countable day - the declared source
+   first, else the balance table, else the sum of the items; salt-only gaps before the
+   salt tracking start are ``expected_gap``
 
 A check must distinguish "error found" from "cannot judge" — otherwise people
 learn to ignore it.
@@ -146,8 +147,11 @@ def check_day(day: DayForCheck, tol: Tolerances | None = None) -> list[Finding]:
 
     # 3 — gaps on countable days
     if is_countable(day):
-        declared: Macros = day.source or day.balance or Macros()
-        gaps = [k for k in MACRO_KEYS if getattr(declared, k) is None]
+        # A day logged here has no declared source and no balance table - its items are the
+        # only statement of what was eaten, and they are a statement. Asking the source
+        # alone reported every macro of every native day as missing.
+        known: Macros = day.source or day.balance or day.item_sum or Macros()
+        gaps = [k for k in MACRO_KEYS if getattr(known, k) is None]
         if gaps == ["salt"] and (
             day.salt_tracking_start is None or day.day < day.salt_tracking_start
         ):

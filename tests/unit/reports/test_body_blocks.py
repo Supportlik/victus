@@ -97,6 +97,13 @@ def test_with_a_profile_the_classes_and_thresholds_appear(ref) -> None:  # type:
     text = _block(result)
     assert "BMI" in text and "Waist to height" in text and "Circumferences" in text
 
+    # the class table used to print the BMI boundary with the kg suffix of its weight
+    # equivalent ("18.5 kg"), so neither number was readable as what it is (R82)
+    assert "| BMI class | BMI | kg | still needed |" in text
+    assert "| normal weight | 18.5–25.0 | 59.9–81.0 |" in text
+    assert "18.5 kg" not in text
+    assert text.count("you are here") == 1, "the reader stands in exactly one class"
+
 
 def test_the_energy_split_carries_its_caveat(ref) -> None:  # type: ignore[no-untyped-def]
     """T-REP-032: an impossible activity level is stated, not smoothed over."""

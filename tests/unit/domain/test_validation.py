@@ -91,6 +91,23 @@ def test_kind3_gaps_and_expected_salt_gap() -> None:
     assert _codes(f) == ["gap"]
 
 
+def test_a_day_without_a_declared_source_is_judged_by_its_items() -> None:
+    """A day logged here has no frontmatter and no balance table, only line items.
+
+    The check asked the source, then the balance, then gave up - so every closed native
+    day reported "no value for kcal, protein, carbs, fat, fiber, salt" while its items
+    added up perfectly. What the items say is what the day knows.
+    """
+    native = DayForCheck(D, True, DayStatus.CLOSED, item_sum=FULL)
+    assert check_day(native) == []
+
+    # a macro none of the items carries is still a gap
+    without_fiber = Macros(kcal=2000, protein=150, carbs=200, fat=60, salt=7)
+    no_fiber = DayForCheck(D, True, DayStatus.CLOSED, item_sum=without_fiber)
+    f = check_day(no_fiber)
+    assert _codes(f) == ["gap"] and f[0].details["macros"] == "fiber"
+
+
 def test_gaps_only_checked_on_countable_days() -> None:
     no_fiber = Macros(kcal=2000)
     assert check_day(DayForCheck(D, False, DayStatus.CLOSED, source=no_fiber)) == []
