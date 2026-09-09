@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, effect, inject, input, signal } fro
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { ApiClient, ApproveRequest, DraftCorrection, DraftSummary, LineItem } from '../../api';
+import { I18nService } from '../../core/i18n.service';
 import { describeError } from '../../core/problem';
 import { DayNamePipe, MacroPipe } from '../../shared/format';
 import { MarkdownPipe } from '../../shared/markdown.pipe';
@@ -24,8 +25,8 @@ interface Row {
   template: `
     <div class="v-page">
       <header class="v-page-head">
-        <div><h2>Draft for {{ date() | dayName }}</h2><p class="sub">Review each item, then approve. Estimates stay marked as estimates.</p></div>
-        <a class="v-btn" [routerLink]="['/days', date()]">Open the day</a>
+        <div><h2>{{ i18n.t('Draft for') }} {{ date() | dayName }}</h2><p class="sub">{{ i18n.t('Review each item, then approve. Estimates stay marked as estimates.') }}</p></div>
+        <a class="v-btn" [routerLink]="['/days', date()]">{{ i18n.t('Open the day') }}</a>
       </header>
       @if (error(); as e) { <div class="v-error">{{ e }}</div> }
 
@@ -33,7 +34,7 @@ interface Row {
         <div class="grid">
           <form (ngSubmit)="approve()" class="items">
             <table class="v-table">
-              <thead><tr><th>Meal</th><th>Item</th><th class="num">Amount</th><th class="num">kcal</th><th>Confidence</th><th>Reasoning</th><th>Keep</th></tr></thead>
+              <thead><tr><th>{{ i18n.t('Meal') }}</th><th>{{ i18n.t('Item') }}</th><th class="num">{{ i18n.t('Amount') }}</th><th class="num">kcal</th><th>{{ i18n.t('Confidence') }}</th><th>{{ i18n.t('Reasoning') }}</th><th>{{ i18n.t('Keep') }}</th></tr></thead>
               <tbody>
                 @for (r of rows(); track r.item.id) {
                   <tr [class.removed]="r.remove">
@@ -47,7 +48,7 @@ interface Row {
                           }
                         </select>
                       } @else { {{ r.item.consumable_name }} }
-                      @if (r.item.estimated || r.item.amount_estimated) { <span title="estimated">⚠️</span> }
+                      @if (r.item.estimated || r.item.amount_estimated) { <span [title]="i18n.t('estimated')">⚠️</span> }
                     </td>
                     <td class="num"><input [name]="'a' + r.item.id" type="number" step="any" min="0" [(ngModel)]="r.amount" class="amount" /> {{ r.item.unit_code ?? r.item.base_unit }}</td>
                     <td class="num">{{ r.item.kcal | macro: 'kcal' }}</td>
@@ -59,13 +60,13 @@ interface Row {
               </tbody>
             </table>
             <div class="v-actions foot">
-              <label class="v-field check"><input name="close" type="checkbox" [(ngModel)]="close" /> <span>Close the day after approving</span></label>
-              <button type="submit" class="v-btn primary" [disabled]="busy()">Approve</button>
-              <button type="button" class="v-btn danger" (click)="discard()" [disabled]="busy()">Discard draft</button>
+              <label class="v-field check"><input name="close" type="checkbox" [(ngModel)]="close" /> <span>{{ i18n.t('Close the day after approving') }}</span></label>
+              <button type="submit" class="v-btn primary" [disabled]="busy()">{{ i18n.t('Approve') }}</button>
+              <button type="button" class="v-btn danger" (click)="discard()" [disabled]="busy()">{{ i18n.t('Discard draft') }}</button>
             </div>
           </form>
           <aside class="summary v-panel">
-            <h3>Agent summary</h3>
+            <h3>{{ i18n.t('Agent summary') }}</h3>
             <div class="v-md" [innerHTML]="s.markdown | markdown"></div>
           </aside>
         </div>
@@ -84,6 +85,7 @@ interface Row {
 })
 export class DraftApproval {
   private readonly api = inject(ApiClient);
+  readonly i18n = inject(I18nService);
   private readonly router = inject(Router);
   readonly date = input.required<string>();
   readonly summary = signal<DraftSummary | null>(null);
@@ -143,7 +145,7 @@ export class DraftApproval {
   }
 
   discard(): void {
-    if (!window.confirm('Discard all draft items of this day?')) return;
+    if (!window.confirm(this.i18n.t('Discard all draft items of this day?'))) return;
     this.busy.set(true);
     this.api.discardDraft(this.date()).subscribe({
       next: () => void this.router.navigate(['/drafts']),

@@ -29,6 +29,38 @@ def _rated(rated: calc.Rated, unit: str, decimals: int) -> RatedValue:
     )
 
 
+def _bmi_marks(height_cm: float, weight_kg: float | None) -> list[ThresholdMark]:
+    """The BMI classes with both scales and the distance to each (R81).
+
+    A class index means nothing to a person standing on a scale. The same boundary as a
+    weight does, and so does "still 14.4 kg away", which is why both travel with the band
+    rather than being paired up later by position.
+    """
+    marks: list[ThresholdMark] = []
+    for band in calc.BMI_BANDS:
+        lower_kg = calc.weight_for_bmi(band.lower, height_cm) if band.lower else None
+        upper_kg = calc.weight_for_bmi(band.upper, height_cm) if band.upper else None
+        to_reach: float | None = None
+        if weight_kg is not None:
+            if upper_kg is not None and weight_kg >= upper_kg:
+                # the class lies below: reaching it means losing down to its upper edge
+                to_reach = round(upper_kg - weight_kg, 1)
+            elif lower_kg is not None and weight_kg < lower_kg:
+                to_reach = round(lower_kg - weight_kg, 1)
+        marks.append(
+            ThresholdMark(
+                name=band.name,
+                lower=band.lower,
+                upper=band.upper,
+                tone=band.tone,
+                lower_kg=lower_kg,
+                upper_kg=upper_kg,
+                to_reach_kg=to_reach,
+            )
+        )
+    return marks
+
+
 def compute_body_composition(
     block: BodyCompositionDef, ctx: ReportContext
 ) -> BodyCompositionResult:
@@ -53,17 +85,16 @@ def compute_body_composition(
     marks: list[ThresholdMark] = []
     if weight is not None and profile.height_cm is not None:
         rated = calc.rate_bmi(weight, profile.height_cm)
-        bmi = _rated(rated, "", 2)
-        # the same classes as weights, which is the form a reader can act on
-        marks = [
-            ThresholdMark(
-                name=b.name,
-                lower=calc.weight_for_bmi(b.lower, profile.height_cm) if b.lower else None,
-                upper=calc.weight_for_bmi(b.upper, profile.height_cm) if b.upper else None,
-                tone=b.tone,
-            )
-            for b in calc.BMI_BANDS
-        ]
+        marks = _bmi_marks(profile.height_cm, weight)
+        # the value carries the same enriched scale, so its segments can show both units
+        bmi = RatedValue(
+            value=round(rated.value, 2),
+            unit="",
+            band=rated.band.name,
+            tone=rated.band.tone,
+            to_next=rated.to_next,
+            bands=marks,
+        )
 
     whtr: RatedValue | None = None
     if latest and latest.waist_cm and profile.height_cm:

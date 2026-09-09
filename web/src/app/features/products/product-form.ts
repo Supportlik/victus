@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, inject, input, output, signal } fro
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiClient, Category, Product, ProductInput } from '../../api';
+import { I18nService } from '../../core/i18n.service';
 import { describeError } from '../../core/problem';
 import { FoodIcon } from '../../shared/food-icon';
 
@@ -15,51 +16,51 @@ const ICON_CHOICES = ['🍽', '🥩', '🍗', '🐟', '🧀', '🥛', '🥚', '�
   imports: [FormsModule, FoodIcon],
   template: `
     <form (ngSubmit)="save()" class="form">
-      <h3>{{ product() ? 'Edit product' : 'New product' }}</h3>
+      <h3>{{ product() ? i18n.t('Edit product') : i18n.t('New product') }}</h3>
       @if (error(); as e) { <div class="v-error">{{ e }}</div> }
       <div class="v-form-row identity">
-        <label class="v-field icon"><span>Icon</span>
+        <label class="v-field icon"><span>{{ i18n.t('Icon') }}</span>
           <span class="picker">
-            <input name="icon" [(ngModel)]="model.icon" maxlength="4" placeholder="auto" aria-label="Icon" />
+            <input name="icon" [(ngModel)]="model.icon" maxlength="4" [placeholder]="i18n.t('auto')" [attr.aria-label]="i18n.t('Icon')" />
             <span class="preview"><v-food-icon [name]="model.name" [category]="categoryName()" kind="product" [icon]="model.icon" /></span>
           </span>
         </label>
-        <label class="v-field"><span>Name</span><input name="name" [(ngModel)]="model.name" required /></label>
-        <label class="v-field"><span>Brand</span><input name="brand" [(ngModel)]="model.brand" /></label>
-        <label class="v-field"><span>Category</span>
+        <label class="v-field"><span>{{ i18n.t('Name') }}</span><input name="name" [(ngModel)]="model.name" required /></label>
+        <label class="v-field"><span>{{ i18n.t('Brand') }}</span><input name="brand" [(ngModel)]="model.brand" /></label>
+        <label class="v-field"><span>{{ i18n.t('Category') }}</span>
           <select name="category" [(ngModel)]="model.category_id">
-            <option [ngValue]="null">none</option>
+            <option [ngValue]="null">{{ i18n.t('none') }}</option>
             @for (c of categories(); track c.id) { <option [ngValue]="c.id">{{ c.name }}</option> }
           </select>
         </label>
-        <label class="v-field"><span>Reference</span>
-          <select name="ref" [(ngModel)]="model.reference_unit"><option value="g">per 100 g</option><option value="ml">per 100 ml</option></select>
+        <label class="v-field"><span>{{ i18n.t('Reference') }}</span>
+          <select name="ref" [(ngModel)]="model.reference_unit"><option value="g">{{ i18n.t('per 100 g') }}</option><option value="ml">{{ i18n.t('per 100 ml') }}</option></select>
         </label>
       </div>
       <div class="v-form-row">
         <label class="v-field"><span>kcal</span><input name="kcal" type="number" step="any" min="0" [(ngModel)]="model.kcal" required /></label>
-        <label class="v-field"><span>Protein g</span><input name="protein" type="number" step="any" min="0" [(ngModel)]="model.protein" /></label>
-        <label class="v-field"><span>Carbs g</span><input name="carbs" type="number" step="any" min="0" [(ngModel)]="model.carbs" /></label>
-        <label class="v-field"><span>Fat g</span><input name="fat" type="number" step="any" min="0" [(ngModel)]="model.fat" /></label>
-        <label class="v-field"><span>Fiber g</span><input name="fiber" type="number" step="any" min="0" [(ngModel)]="model.fiber" /></label>
-        <label class="v-field"><span>Salt g</span><input name="salt" type="number" step="any" min="0" [(ngModel)]="model.salt" /></label>
+        <label class="v-field"><span>{{ i18n.t('Protein g') }}</span><input name="protein" type="number" step="any" min="0" [(ngModel)]="model.protein" /></label>
+        <label class="v-field"><span>{{ i18n.t('Carbs g') }}</span><input name="carbs" type="number" step="any" min="0" [(ngModel)]="model.carbs" /></label>
+        <label class="v-field"><span>{{ i18n.t('Fat g') }}</span><input name="fat" type="number" step="any" min="0" [(ngModel)]="model.fat" /></label>
+        <label class="v-field"><span>{{ i18n.t('Fiber g') }}</span><input name="fiber" type="number" step="any" min="0" [(ngModel)]="model.fiber" /></label>
+        <label class="v-field"><span>{{ i18n.t('Salt g') }}</span><input name="salt" type="number" step="any" min="0" [(ngModel)]="model.salt" /></label>
       </div>
       <div class="v-form-row">
-        <label class="v-field"><span>Source</span><input name="source" [(ngModel)]="model.source" placeholder="label, manufacturer site, database" /></label>
+        <label class="v-field"><span>{{ i18n.t('Source') }}</span><input name="source" [(ngModel)]="model.source" [placeholder]="i18n.t('label, manufacturer site, database')" /></label>
         <label class="v-field"><span>EAN</span><input name="ean" [(ngModel)]="model.ean" inputmode="numeric" /></label>
-        <label class="v-field check"><span>Values from the label</span><input name="verified" type="checkbox" [(ngModel)]="model.verified" /></label>
+        <label class="v-field check"><span>{{ i18n.t('Values from the label') }}</span><input name="verified" type="checkbox" [(ngModel)]="model.verified" /></label>
       </div>
       <div class="suggest">
-        <span class="v-small v-muted">Pick an icon</span>
+        <span class="v-small v-muted">{{ i18n.t('Pick an icon') }}</span>
         @for (g of ICON_CHOICES; track g) {
-          <button type="button" class="glyph" [class.active]="model.icon === g" (click)="model.icon = model.icon === g ? null : g" [attr.aria-label]="'icon ' + g">{{ g }}</button>
+          <button type="button" class="glyph" [class.active]="model.icon === g" (click)="model.icon = model.icon === g ? null : g" [attr.aria-label]="i18n.t('icon {glyph}', { glyph: g })">{{ g }}</button>
         }
-        <button type="button" class="glyph auto" [class.active]="!model.icon" (click)="model.icon = null">auto</button>
+        <button type="button" class="glyph auto" [class.active]="!model.icon" (click)="model.icon = null">{{ i18n.t('auto') }}</button>
       </div>
-      <label class="v-field"><span>Note</span><textarea name="note" [(ngModel)]="model.note"></textarea></label>
+      <label class="v-field"><span>{{ i18n.t('Note') }}</span><textarea name="note" [(ngModel)]="model.note"></textarea></label>
       <div class="v-actions">
-        <button type="submit" class="v-btn primary" [disabled]="busy() || !model.name || model.kcal == null">{{ product() ? 'Save changes' : 'Create product' }}</button>
-        @if (product()) { <button type="button" class="v-btn quiet" (click)="cancelled.emit()">Cancel</button> }
+        <button type="submit" class="v-btn primary" [disabled]="busy() || !model.name || model.kcal == null">{{ product() ? i18n.t('Save changes') : i18n.t('Create product') }}</button>
+        @if (product()) { <button type="button" class="v-btn quiet" (click)="cancelled.emit()">{{ i18n.t('Cancel') }}</button> }
       </div>
     </form>
   `,
@@ -82,6 +83,7 @@ const ICON_CHOICES = ['🍽', '🥩', '🍗', '🐟', '🧀', '🥛', '🥚', '�
 })
 export class ProductForm {
   private readonly api = inject(ApiClient);
+  readonly i18n = inject(I18nService);
   private readonly router = inject(Router);
   readonly product = input<Product | null>(null);
   readonly saved = output<Product>();

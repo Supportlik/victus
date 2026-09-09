@@ -1,7 +1,8 @@
-import { ChangeDetectionStrategy, Component, effect, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, effect, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { BandEditor, BandModel, bandFromJson, bandToJson, emptyBand } from './band-editor';
 import { SUPPORTED_LOCALES } from '../../core/format.service';
+import { I18nService } from '../../core/i18n.service';
 
 type Json = Record<string, unknown>;
 
@@ -77,133 +78,133 @@ function obj(v: unknown): Json {
   template: `
     <form class="grid" (ngSubmit)="submit()">
       <fieldset>
-        <legend>Goals</legend>
-        <p class="v-small v-muted">Keep as many goals as you like; the active one drives every report.</p>
+        <legend>{{ i18n.t('Goals') }}</legend>
+        <p class="v-small v-muted">{{ i18n.t('Keep as many goals as you like; the active one drives every report.') }}</p>
         @for (g of m.goals; track $index; let gi = $index) {
           <div class="goal" [class.active]="g.active">
             <div class="v-form-row head">
-              <label class="v-field"><span>Name</span><input name="gn{{ gi }}" [(ngModel)]="g.name" placeholder="main goal" /></label>
-              <label class="v-field"><span>Target weight (kg)</span><input name="gw{{ gi }}" type="number" step="0.1" min="1" [(ngModel)]="g.weight" /></label>
-              <label class="v-field"><span>Target date</span><input name="gd{{ gi }}" type="date" [(ngModel)]="g.date" /></label>
-              <label class="check"><input type="radio" name="activeGoal" [value]="gi" [checked]="g.active" (change)="setActive(gi)" /> active</label>
-              <button type="button" class="v-btn quiet small danger" (click)="removeGoal(gi)">remove</button>
+              <label class="v-field"><span>{{ i18n.t('Name') }}</span><input name="gn{{ gi }}" [(ngModel)]="g.name" [placeholder]="i18n.t('main goal')" /></label>
+              <label class="v-field"><span>{{ i18n.t('Target weight (kg)') }}</span><input name="gw{{ gi }}" type="number" step="0.1" min="1" [(ngModel)]="g.weight" /></label>
+              <label class="v-field"><span>{{ i18n.t('Target date') }}</span><input name="gd{{ gi }}" type="date" [(ngModel)]="g.date" /></label>
+              <label class="check"><input type="radio" name="activeGoal" [value]="gi" [checked]="g.active" (change)="setActive(gi)" /> {{ i18n.t('active') }}</label>
+              <button type="button" class="v-btn quiet small danger" (click)="removeGoal(gi)">{{ i18n.t('remove') }}</button>
             </div>
-            <label class="v-field"><span>Note</span><input name="gnote{{ gi }}" [(ngModel)]="g.note" /></label>
+            <label class="v-field"><span>{{ i18n.t('Note') }}</span><input name="gnote{{ gi }}" [(ngModel)]="g.note" /></label>
             <div class="stages">
-              <span class="v-small v-muted">Stages of this goal</span>
+              <span class="v-small v-muted">{{ i18n.t('Stages of this goal') }}</span>
               @for (s of g.stages; track $index; let i = $index) {
                 <div class="v-form-row stage">
-                  <input name="sn{{ gi }}_{{ i }}" [(ngModel)]="s.name" placeholder="Name, e.g. plan / stretch" aria-label="Stage name" />
-                  <input name="sd{{ gi }}_{{ i }}" type="date" [(ngModel)]="s.date" aria-label="Stage date" />
-                  <input name="so{{ gi }}_{{ i }}" [(ngModel)]="s.note" placeholder="Note" aria-label="Stage note" />
-                  <button type="button" class="v-btn quiet small danger" (click)="g.stages.splice(i, 1)">remove</button>
+                  <input name="sn{{ gi }}_{{ i }}" [(ngModel)]="s.name" [placeholder]="i18n.t('Name, e.g. plan / stretch')" [attr.aria-label]="i18n.t('Stage name')" />
+                  <input name="sd{{ gi }}_{{ i }}" type="date" [(ngModel)]="s.date" [attr.aria-label]="i18n.t('Stage date')" />
+                  <input name="so{{ gi }}_{{ i }}" [(ngModel)]="s.note" [placeholder]="i18n.t('Note')" [attr.aria-label]="i18n.t('Stage note')" />
+                  <button type="button" class="v-btn quiet small danger" (click)="g.stages.splice(i, 1)">{{ i18n.t('remove') }}</button>
                 </div>
               }
-              <button type="button" class="v-btn small" (click)="g.stages.push({ name: '', date: '', note: '' })">Add stage</button>
+              <button type="button" class="v-btn small" (click)="g.stages.push({ name: '', date: '', note: '' })">{{ i18n.t('Add stage') }}</button>
             </div>
           </div>
         }
-        <button type="button" class="v-btn" (click)="addGoal()">Add goal</button>
+        <button type="button" class="v-btn" (click)="addGoal()">{{ i18n.t('Add goal') }}</button>
       </fieldset>
 
       <fieldset>
-        <legend>Target bands</legend>
-        <p class="v-small v-muted">One profile per training type; a day picks the profile valid on its date. Salt has no other source than this table.</p>
+        <legend>{{ i18n.t('Target bands') }}</legend>
+        <p class="v-small v-muted">{{ i18n.t('One profile per training type; a day picks the profile valid on its date. Salt has no other source than this table.') }}</p>
         @for (b of m.bands; track $index; let i = $index) {
           <div class="band-wrap">
             <v-band-editor [(band)]="m.bands[i]" [idx]="i" />
-            <button type="button" class="v-btn quiet small danger" (click)="m.bands.splice(i, 1)">remove profile</button>
+            <button type="button" class="v-btn quiet small danger" (click)="m.bands.splice(i, 1)">{{ i18n.t('remove profile') }}</button>
           </div>
         }
-        <button type="button" class="v-btn" (click)="addBand()">Add profile</button>
+        <button type="button" class="v-btn" (click)="addBand()">{{ i18n.t('Add profile') }}</button>
       </fieldset>
 
       <fieldset>
-        <legend>Calculation</legend>
+        <legend>{{ i18n.t('Calculation') }}</legend>
         <div class="v-form-row">
-          <label class="v-field"><span>kcal per kg body mass</span><input name="kk" type="number" step="0.01" [(ngModel)]="m.kcalPerKg" /></label>
-          <label class="v-field"><span>Moving average (days)</span><input name="ma" type="number" min="1" [(ngModel)]="m.movingAverageDays" /></label>
-          <label class="v-field"><span>TDEE reference window (days)</span><input name="rw" type="number" min="2" [(ngModel)]="m.tdeeReferenceWindow" /></label>
+          <label class="v-field"><span>{{ i18n.t('kcal per kg body mass') }}</span><input name="kk" type="number" step="0.01" [(ngModel)]="m.kcalPerKg" /></label>
+          <label class="v-field"><span>{{ i18n.t('Moving average (days)') }}</span><input name="ma" type="number" min="1" [(ngModel)]="m.movingAverageDays" /></label>
+          <label class="v-field"><span>{{ i18n.t('TDEE reference window (days)') }}</span><input name="rw" type="number" min="2" [(ngModel)]="m.tdeeReferenceWindow" /></label>
         </div>
         <div class="v-form-row">
-          <label class="v-field"><span>Trend windows <span class="v-muted">(days, comma-separated)</span></span><input name="tw" [(ngModel)]="m.trendWindows" /></label>
-          <label class="v-field"><span>TDEE windows</span><input name="dw" [(ngModel)]="m.tdeeWindows" /></label>
-        </div>
-      </fieldset>
-
-      <fieldset>
-        <legend>Calorie corridor</legend>
-        <div class="v-form-row">
-          <label class="v-field"><span>Minimum kcal/day</span><input name="cmin" type="number" min="0" [(ngModel)]="m.corridorMin" /></label>
-          <label class="v-field"><span>Maximum kcal/day</span><input name="cmax" type="number" min="0" [(ngModel)]="m.corridorMax" /></label>
-          <label class="check"><input name="casym" type="checkbox" [(ngModel)]="m.corridorAsymmetric" /> Only exceeding the maximum counts as red</label>
+          <label class="v-field"><span>{{ i18n.t('Trend windows') }} <span class="v-muted">{{ i18n.t('(days, comma-separated)') }}</span></span><input name="tw" [(ngModel)]="m.trendWindows" /></label>
+          <label class="v-field"><span>{{ i18n.t('TDEE windows') }}</span><input name="dw" [(ngModel)]="m.tdeeWindows" /></label>
         </div>
       </fieldset>
 
       <fieldset>
-        <legend>Body</legend>
+        <legend>{{ i18n.t('Calorie corridor') }}</legend>
         <div class="v-form-row">
-          <label class="v-field"><span>Birth date</span><input name="bd" type="date" [(ngModel)]="m.birthDate" /></label>
-          <label class="v-field"><span>Height (cm)</span><input name="hc" type="number" min="1" [(ngModel)]="m.heightCm" /></label>
-          <label class="v-field"><span>Sex</span>
+          <label class="v-field"><span>{{ i18n.t('Minimum kcal/day') }}</span><input name="cmin" type="number" min="0" [(ngModel)]="m.corridorMin" /></label>
+          <label class="v-field"><span>{{ i18n.t('Maximum kcal/day') }}</span><input name="cmax" type="number" min="0" [(ngModel)]="m.corridorMax" /></label>
+          <label class="check"><input name="casym" type="checkbox" [(ngModel)]="m.corridorAsymmetric" /> {{ i18n.t('Only exceeding the maximum counts as red') }}</label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>{{ i18n.t('Body') }}</legend>
+        <div class="v-form-row">
+          <label class="v-field"><span>{{ i18n.t('Birth date') }}</span><input name="bd" type="date" [(ngModel)]="m.birthDate" /></label>
+          <label class="v-field"><span>{{ i18n.t('Height (cm)') }}</span><input name="hc" type="number" min="1" [(ngModel)]="m.heightCm" /></label>
+          <label class="v-field"><span>{{ i18n.t('Sex') }}</span>
             <select name="sx" [(ngModel)]="m.sex"><option value="">–</option><option value="m">m</option><option value="f">f</option><option value="x">x</option></select>
           </label>
         </div>
       </fieldset>
 
       <fieldset>
-        <legend>Transcription &amp; reports</legend>
+        <legend>{{ i18n.t('Transcription & reports') }}</legend>
         <div class="v-form-row">
-          <label class="v-field"><span>Language</span><input name="lang" [(ngModel)]="m.language" placeholder="de" maxlength="5" /></label>
-          <label class="v-field"><span>Default report period</span><input name="rp" [(ngModel)]="m.reportPeriod" placeholder="14d" pattern="^[0-9]+d$" /></label>
+          <label class="v-field"><span>{{ i18n.t('Language') }}</span><input name="lang" [(ngModel)]="m.language" placeholder="de" maxlength="5" /></label>
+          <label class="v-field"><span>{{ i18n.t('Default report period') }}</span><input name="rp" [(ngModel)]="m.reportPeriod" placeholder="14d" pattern="^[0-9]+d$" /></label>
         </div>
-        <label class="v-field"><span>Vocabulary for the transcription model <span class="v-muted">(product names, brands, exercises)</span></span>
+        <label class="v-field"><span>{{ i18n.t('Vocabulary for the transcription model') }} <span class="v-muted">{{ i18n.t('(product names, brands, exercises)') }}</span></span>
           <textarea name="voc" rows="4" [(ngModel)]="m.vocabulary"></textarea></label>
       </fieldset>
 
       <fieldset>
-        <legend>Region</legend>
+        <legend>{{ i18n.t('Region') }}</legend>
         <div class="v-form-row">
           <label class="v-field">
-            <span>Time zone <span class="v-muted">(decides which day a reading counts on)</span></span>
+            <span>{{ i18n.t('Time zone') }} <span class="v-muted">{{ i18n.t('(decides which day a reading counts on)') }}</span></span>
             <input name="tz" [(ngModel)]="m.timezone" placeholder="Europe/Berlin" list="tzlist" />
             <datalist id="tzlist">
               @for (z of zones; track z) { <option [value]="z"></option> }
             </datalist>
           </label>
           <label class="v-field">
-            <span>Interface language</span>
+            <span>{{ i18n.t('Interface language') }}</span>
             <select name="uilang" [(ngModel)]="m.uiLanguage">
-              <option value="">Default (English)</option>
-              <option value="en">English</option>
+              <option value="">{{ i18n.t('Default (English)') }}</option>
+              <option value="en">{{ i18n.t('English') }}</option>
               <option value="de">Deutsch</option>
             </select>
           </label>
           <label class="v-field">
-            <span>Number and date format</span>
+            <span>{{ i18n.t('Number and date format') }}</span>
             <select name="loc" [(ngModel)]="m.locale">
-              <option value="">Default (1.234,5)</option>
-              @for (l of locales; track l.tag) { <option [value]="l.tag">{{ l.label }}</option> }
+              <option value="">{{ i18n.t('Default (1.234,5)') }}</option>
+              @for (l of locales; track l) { <option [value]="l">{{ localeLabel(l) }}</option> }
             </select>
           </label>
         </div>
-        <p class="v-small v-muted">The language changes the interface only; the number format is separate, so German numbers with an English interface is a valid choice. Timestamps are always stored in UTC. The zone decides which calendar day they belong to, so a weigh-in just after midnight counts on the right day.</p>
+        <p class="v-small v-muted">{{ i18n.t('The language changes the interface only; the number format is separate, so German numbers with an English interface is a valid choice. Timestamps are always stored in UTC. The zone decides which calendar day they belong to, so a weigh-in just after midnight counts on the right day.') }}</p>
       </fieldset>
 
       <fieldset>
-        <legend>Housekeeping</legend>
+        <legend>{{ i18n.t('Housekeeping') }}</legend>
         <div class="v-form-row">
           <label class="v-field">
-            <span>Keep processed captures for <span class="v-muted">(days, 0 keeps them for ever)</span></span>
+            <span>{{ i18n.t('Keep processed captures for') }} <span class="v-muted">{{ i18n.t('(days, 0 keeps them for ever)') }}</span></span>
             <input name="cret" type="number" min="0" max="3650" step="1" [(ngModel)]="m.captureRetentionDays" placeholder="10" />
           </label>
         </div>
-        <p class="v-small v-muted">A processed capture has already become line items. After this many days it is deleted together with its photos and recordings, so the store does not grow for ever.</p>
+        <p class="v-small v-muted">{{ i18n.t('A processed capture has already become line items. After this many days it is deleted together with its photos and recordings, so the store does not grow for ever.') }}</p>
       </fieldset>
 
       <div class="v-actions">
-        <button type="submit" class="v-btn primary">Save as new version</button>
-        <span class="v-small v-muted">Keys not shown here are kept as they are.</span>
+        <button type="submit" class="v-btn primary">{{ i18n.t('Save as new version') }}</button>
+        <span class="v-small v-muted">{{ i18n.t('Keys not shown here are kept as they are.') }}</span>
       </div>
     </form>
   `,
@@ -223,6 +224,7 @@ function obj(v: unknown): Json {
   `,
 })
 export class TenantSettingsForm {
+  readonly i18n = inject(I18nService);
   /** Current settings document; the form is rebuilt whenever it changes. */
   readonly data = input.required<Json>();
   readonly save = output<Json>();
@@ -240,10 +242,14 @@ export class TenantSettingsForm {
     'Europe/Nicosia',
     'UTC',
   ];
-  readonly locales = SUPPORTED_LOCALES.map((tag) => ({
-    tag,
-    label: tag === 'de-DE' ? 'German (1.234,5)' : tag === 'en-GB' ? 'British (1,234.5)' : 'American (1,234.5)',
-  }));
+  readonly locales = SUPPORTED_LOCALES;
+
+  /** Named after what the reader sees, with a sample so the separators are unmistakable. */
+  localeLabel(tag: string): string {
+    if (tag === 'de-DE') return this.i18n.t('German (1.234,5)');
+    if (tag === 'en-GB') return this.i18n.t('British (1,234.5)');
+    return this.i18n.t('American (1,234.5)');
+  }
 
   constructor() {
     effect(() => {

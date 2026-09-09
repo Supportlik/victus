@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiClient, ReportBlock, ReportDefinition, ReportResult } from '../../api';
+import { I18nService } from '../../core/i18n.service';
 import { describeError } from '../../core/problem';
 import { isoDate, shiftDate } from '../../shared/format';
 import { ReportBlockView } from './report-blocks/report-block';
@@ -14,36 +15,36 @@ import { SnapshotList } from './snapshot-list';
   template: `
     <div class="v-page">
       <header class="v-page-head">
-        <div><h2>{{ current()?.title ?? 'Reports' }}</h2>@if (current()?.description) { <p class="sub">{{ current()!.description }}</p> }</div>
+        <div><h2>{{ current()?.title ?? i18n.t('Reports') }}</h2>@if (current()?.description) { <p class="sub">{{ current()!.description }}</p> }</div>
         <div class="v-actions controls">
-          <label class="v-field"><span>Report</span>
+          <label class="v-field"><span>{{ i18n.t('Report') }}</span>
             <select [ngModel]="name()" (ngModelChange)="name.set($event); render()">
-              @for (r of definitions(); track r.name) { <option [value]="r.name">{{ r.title }}@if (!r.builtin) { (custom) }</option> }
+              @for (r of definitions(); track r.name) { <option [value]="r.name">{{ r.title }}@if (!r.builtin) { {{ i18n.t('(custom)') }} }</option> }
             </select>
           </label>
-          <label class="v-field"><span>As of</span><input type="date" [ngModel]="asOf()" (ngModelChange)="setAsOf($event)" name="asof" /></label>
-          <label class="v-field"><span>Period</span>
+          <label class="v-field"><span>{{ i18n.t('As of') }}</span><input type="date" [ngModel]="asOf()" (ngModelChange)="setAsOf($event)" name="asof" /></label>
+          <label class="v-field"><span>{{ i18n.t('Period') }}</span>
             <select [ngModel]="period()" (ngModelChange)="setPeriod($event)">
-              @for (p of current()?.period?.options ?? ['7d', '14d', '30d', '90d', 'custom']; track p) { <option [value]="p">{{ p === 'custom' ? 'custom range' : 'last ' + p.replace('d', ' days') }}</option> }
+              @for (p of current()?.period?.options ?? ['7d', '14d', '30d', '90d', 'custom']; track p) { <option [value]="p">{{ p === 'custom' ? i18n.t('Custom range') : i18n.t('last {n} days', { n: p.replace('d', '') }) }}</option> }
             </select>
           </label>
         </div>
       </header>
       <!-- Own row, so choosing "custom range" never reflows the controls above. -->
       <div class="range" [class.shown]="period() === 'custom'">
-        <label class="v-field"><span>From</span><input type="date" [ngModel]="from()" (ngModelChange)="from.set($event); render()" /></label>
-        <label class="v-field"><span>To</span><input type="date" [ngModel]="to()" (ngModelChange)="to.set($event); render()" /></label>
+        <label class="v-field"><span>{{ i18n.t('From') }}</span><input type="date" [ngModel]="from()" (ngModelChange)="from.set($event); render()" /></label>
+        <label class="v-field"><span>{{ i18n.t('To') }}</span><input type="date" [ngModel]="to()" (ngModelChange)="to.set($event); render()" /></label>
       </div>
       @if (error(); as e) { <div class="v-error">{{ e }}</div> }
       @if (result(); as r) {
-        <p class="v-small v-muted">{{ r.period.start }} to {{ r.period.end }} ({{ r.period.days }} days) · generated {{ r.generated_at.replace('T', ' ').slice(0, 16) }}@if (errorCount(); as n) { · <span class="v-tag bad">{{ n }} block(s) failed</span> }</p>
+        <p class="v-small v-muted">{{ r.period.start }} {{ i18n.t('to') }} {{ r.period.end }} ({{ i18n.t('{n} days', { n: r.period.days }) }}) · {{ i18n.t('generated') }} {{ r.generated_at.replace('T', ' ').slice(0, 16) }}@if (errorCount(); as n) { · <span class="v-tag bad">{{ i18n.t('{n} block(s) failed', { n }) }}</span> }</p>
         @if (tiles().length) {
           <section class="tiles">@for (b of tiles(); track $index) { <v-report-block [block]="b" /> }</section>
         }
         <section class="blocks">@for (b of others(); track $index) { <v-report-block [block]="b" /> }</section>
         <v-snapshot-list [report]="name()" [from]="from()" [to]="to()" [asOf]="asOf()" />
       } @else if (!error()) {
-        <p class="v-muted">Rendering…</p>
+        <p class="v-muted">{{ i18n.t('Rendering…') }}</p>
       }
     </div>
   `,
@@ -59,6 +60,7 @@ import { SnapshotList } from './snapshot-list';
 })
 export class ReportsPage {
   private readonly api = inject(ApiClient);
+  readonly i18n = inject(I18nService);
   readonly definitions = signal<ReportDefinition[]>([]);
   readonly name = signal('checkup');
   readonly period = signal('14d');

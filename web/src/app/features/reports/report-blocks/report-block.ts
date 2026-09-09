@@ -22,6 +22,7 @@ import {
   WeeklyChartBlock,
 } from '../../../api';
 import { FormatService } from '../../../core/format.service';
+import { I18nService } from '../../../core/i18n.service';
 import { formatKg, formatMacro, formatSigned, toneOf } from '../../../shared/format';
 import { MarkdownPipe } from '../../../shared/markdown.pipe';
 import { StatusTag } from '../../../shared/status-tag';
@@ -38,14 +39,14 @@ import { CHART_PALETTE } from './palette';
   imports: [NgxEchartsDirective, MarkdownPipe, StatusTag],
   template: `
     @if (block().error) {
-      <div class="v-panel failed"><h3>{{ block().meta.title }}</h3><p class="v-small">Could not compute this block: {{ failed().message }}</p></div>
+      <div class="v-panel failed"><h3>{{ block().meta.title }}</h3><p class="v-small">{{ i18n.t('Could not compute this block:') }} {{ failed().message }}</p></div>
     } @else {
       @switch (block().meta.type) {
         @case ('kpi_tile') {
           <div class="tile" [class]="'tile ' + toneOf(kpi().zone ?? kpi().quality)">
             <span class="t">{{ kpi().meta.title }}</span>
             <span class="v">{{ kpiValue() }} <span class="u">{{ kpi().unit }}</span></span>
-            @if (kpi().delta != null) { <span class="d">{{ formatSigned(kpi().delta, kpi().decimals) }} vs. previous period</span> }
+            @if (kpi().delta != null) { <span class="d">{{ formatSigned(kpi().delta, kpi().decimals) }} {{ i18n.t('vs. previous period') }}</span> }
             @if (kpi().note) { <span class="d">{{ kpi().note }}</span> }
           </div>
         }
@@ -53,7 +54,7 @@ import { CHART_PALETTE } from './palette';
           <div class="v-panel">
             <h3>{{ block().meta.title }}</h3>
             <table class="v-table">
-              <thead><tr><th>Nutrient</th><th>Distribution</th><th class="num">below min</th><th class="num">below opt.</th><th class="num">optimal</th><th class="num">above opt.</th><th class="num">above max</th><th class="num">Ø</th><th class="num">days</th></tr></thead>
+              <thead><tr><th>{{ i18n.t('Nutrient') }}</th><th>{{ i18n.t('Distribution') }}</th><th class="num">{{ i18n.t('below min') }}</th><th class="num">{{ i18n.t('below opt.') }}</th><th class="num">{{ i18n.t('optimal') }}</th><th class="num">{{ i18n.t('above opt.') }}</th><th class="num">{{ i18n.t('above max') }}</th><th class="num">Ø</th><th class="num">{{ i18n.t('days') }}</th></tr></thead>
               <tbody>
                 @for (r of dist().rows; track r.macro) {
                   <tr>
@@ -72,17 +73,17 @@ import { CHART_PALETTE } from './palette';
         }
         @case ('tdee_windows') {
           <div class="v-panel">
-            <h3>{{ block().meta.title }} @if (tdee().reference_tdee != null) { <span class="v-small v-muted">reference {{ formatMacro(tdee().reference_tdee, 'kcal') }} kcal, {{ basisLabel(tdee().reference_basis) }}</span> }</h3>
+            <h3>{{ block().meta.title }} @if (tdee().reference_tdee != null) { <span class="v-small v-muted">{{ i18n.t('reference') }} {{ formatMacro(tdee().reference_tdee, 'kcal') }} kcal, {{ basisLabel(tdee().reference_basis) }}</span> }</h3>
             <table class="v-table">
-              <thead><tr><th>Window</th><th class="num">Ø kcal</th><th class="num">Δ weight</th><th class="num">TDEE</th><th class="num">Coverage</th><th class="num">in / above corridor</th>@if (tdee().show_quality) { <th>Grade</th> }</tr></thead>
+              <thead><tr><th>{{ i18n.t('Window') }}</th><th class="num">Ø kcal</th><th class="num">Δ {{ i18n.t('weight') }}</th><th class="num">TDEE</th><th class="num">{{ i18n.t('Coverage') }}</th><th class="num">{{ i18n.t('in / above corridor') }}</th>@if (tdee().show_quality) { <th>{{ i18n.t('Grade') }}</th> }</tr></thead>
               <tbody>
                 @for (r of tdee().rows; track r.window_days) {
                   <tr>
-                    <td>{{ r.window_days }} days</td><td class="num">{{ formatMacro(r.mean_kcal, 'kcal') }}</td>
+                    <td>{{ i18n.t('{n} days', { n: r.window_days }) }}</td><td class="num">{{ formatMacro(r.mean_kcal, 'kcal') }}</td>
                     <td class="num">{{ formatSigned(r.delta_ma_kg, 2, 'kg') }}</td>
-                    <td class="num">{{ formatMacro(r.tdee, 'kcal') }}@if (r.tdee == null && r.rejected_tdee != null) { <span class="v-small v-muted" title="rejected as implausible">({{ formatMacro(r.rejected_tdee, 'kcal') }})</span> }</td>
+                    <td class="num">{{ formatMacro(r.tdee, 'kcal') }}@if (r.tdee == null && r.rejected_tdee != null) { <span class="v-small v-muted" [title]="i18n.t('rejected as implausible')">({{ formatMacro(r.rejected_tdee, 'kcal') }})</span> }</td>
                     <td class="num">{{ r.coverage_pct }} %</td><td class="num">{{ r.in_corridor }} / {{ r.above_corridor }}</td>
-                    @if (tdee().show_quality) { <td><span class="v-tag" [class]="'v-tag ' + toneOf(r.quality)">{{ gradeLabel(r.quality) }}</span>@if (r.days_without_macros) { <span class="v-small v-muted"> {{ r.days_without_macros }} days without macros</span> }</td> }
+                    @if (tdee().show_quality) { <td><span class="v-tag" [class]="'v-tag ' + toneOf(r.quality)">{{ gradeLabel(r.quality) }}</span>@if (r.days_without_macros) { <span class="v-small v-muted"> {{ i18n.t('{n} days without macros', { n: r.days_without_macros }) }}</span> }</td> }
                   </tr>
                 }
               </tbody>
@@ -93,34 +94,34 @@ import { CHART_PALETTE } from './palette';
           <div class="v-panel">
             <h3>{{ block().meta.title }}</h3>
             <table class="v-table">
-              <thead><tr><th>Window</th><th class="num">kg / day</th><th class="num">kg / week</th><th class="num">actual change</th><th class="num">weigh-ins</th></tr></thead>
+              <thead><tr><th>{{ i18n.t('Window') }}</th><th class="num">{{ i18n.t('kg / day') }}</th><th class="num">{{ i18n.t('kg / week') }}</th><th class="num">{{ i18n.t('actual change') }}</th><th class="num">{{ i18n.t('weigh-ins') }}</th></tr></thead>
               <tbody>@for (r of trend().rows; track r.window) {
-                <tr><td>{{ r.window }} days</td><td class="num">{{ formatSigned(r.slope_per_day, 3) }}</td><td class="num">{{ formatSigned(r.kg_per_week, 2) }}</td><td class="num">{{ formatSigned(r.actual_delta, 1, 'kg') }}</td><td class="num">{{ r.measured_days }}</td></tr>
+                <tr><td>{{ i18n.t('{n} days', { n: r.window }) }}</td><td class="num">{{ formatSigned(r.slope_per_day, 3) }}</td><td class="num">{{ formatSigned(r.kg_per_week, 2) }}</td><td class="num">{{ formatSigned(r.actual_delta, 1, 'kg') }}</td><td class="num">{{ r.measured_days }}</td></tr>
               }</tbody>
             </table>
           </div>
         }
         @case ('forecast') {
           <div class="v-panel">
-            <h3>{{ block().meta.title }} <span class="v-small v-muted">goal {{ formatKg(forecast().goal_kg) }} kg by {{ forecast().goal_date }}@if (forecast().current_kg != null) { · now {{ formatKg(forecast().current_kg) }} kg }</span></h3>
+            <h3>{{ block().meta.title }} <span class="v-small v-muted">{{ i18n.t('goal {kg} by {date}', { kg: formatKg(forecast().goal_kg) + ' kg', date: forecast().goal_date }) }}@if (forecast().current_kg != null) { · {{ i18n.t('now') }} {{ formatKg(forecast().current_kg) }} kg }</span></h3>
             <table class="v-table">
-              <thead><tr><th>Based on</th><th class="num">kg / week</th><th class="num">in 1 month</th><th class="num">3 months</th><th class="num">6 months</th><th class="num">at goal date</th>@if (forecast().with_eta) { <th>goal reached</th> }</tr></thead>
+              <thead><tr><th>{{ i18n.t('Based on') }}</th><th class="num">{{ i18n.t('kg / week') }}</th><th class="num">{{ i18n.t('in 1 month') }}</th><th class="num">{{ i18n.t('3 months') }}</th><th class="num">{{ i18n.t('6 months') }}</th><th class="num">{{ i18n.t('at goal date') }}</th>@if (forecast().with_eta) { <th>{{ i18n.t('goal reached') }}</th> }</tr></thead>
               <tbody>@for (r of forecast().rows; track r.window) {
-                <tr><td>{{ r.window }}-day trend</td><td class="num">{{ formatSigned(r.kg_per_week, 2) }}</td><td class="num">{{ formatKg(r.m1) }}</td><td class="num">{{ formatKg(r.m3) }}</td><td class="num">{{ formatKg(r.m6) }}</td><td class="num">{{ formatKg(r.at_goal_date) }}</td>@if (forecast().with_eta) { <td>{{ r.eta ?? 'not on this trend' }}</td> }</tr>
+                <tr><td>{{ i18n.t('{n}-day trend', { n: r.window }) }}</td><td class="num">{{ formatSigned(r.kg_per_week, 2) }}</td><td class="num">{{ formatKg(r.m1) }}</td><td class="num">{{ formatKg(r.m3) }}</td><td class="num">{{ formatKg(r.m6) }}</td><td class="num">{{ formatKg(r.at_goal_date) }}</td>@if (forecast().with_eta) { <td>{{ r.eta ?? i18n.t('not on this trend') }}</td> }</tr>
               }</tbody>
             </table>
           </div>
         }
         @case ('burndown') {
           <div class="v-panel">
-            <h3>{{ block().meta.title }} <span class="v-small v-muted">{{ formatSigned(burndown().result.gap, 1, 'kg') }} vs. plan · actual {{ formatSigned(burndown().result.actual_rate_per_week, 2, 'kg/week') }} · required {{ formatSigned(burndown().result.required_rate_per_week, 2, 'kg/week') }}</span></h3>
-            <div echarts [options]="burndownChart()" class="echart" aria-label="Planned versus actual weight"></div>
+            <h3>{{ block().meta.title }} <span class="v-small v-muted">{{ formatSigned(burndown().result.gap, 1, 'kg') }} {{ i18n.t('vs. plan') }} · {{ i18n.t('actual') }} {{ formatSigned(burndown().result.actual_rate_per_week, 2, 'kg/week') }} · {{ i18n.t('required') }} {{ formatSigned(burndown().result.required_rate_per_week, 2, 'kg/week') }}</span></h3>
+            <div echarts [options]="burndownChart()" class="echart" [attr.aria-label]="i18n.t('Planned versus actual weight')"></div>
             @if (burndown().result.stages.length) {
-              <p class="v-small v-muted">Below the goal line means ahead of plan. Each dotted line is one of your stages.</p>
+              <p class="v-small v-muted">{{ i18n.t('Below the goal line means ahead of plan. Each dotted line is one of your stages.') }}</p>
               <table class="v-table stages">
-                <thead><tr><th>Stage</th><th>Date</th><th class="num">gap</th><th class="num">required kg / week</th><th class="num">eat kcal / day</th><th>feasible</th></tr></thead>
+                <thead><tr><th>{{ i18n.t('Stage') }}</th><th>{{ i18n.t('Date') }}</th><th class="num">{{ i18n.t('gap') }}</th><th class="num">{{ i18n.t('required kg / week') }}</th><th class="num">{{ i18n.t('eat kcal / day') }}</th><th>{{ i18n.t('feasible') }}</th></tr></thead>
                 <tbody>@for (st of burndown().result.stages; track st.name) {
-                  <tr><td>{{ st.name }}</td><td>{{ st.date }}</td><td class="num">{{ formatSigned(st.gap, 1, 'kg') }}</td><td class="num">{{ formatSigned(st.required_kg_per_week, 2) }}</td><td class="num">{{ st.eat_kcal_per_day == null ? '–' : formatMacro(st.eat_kcal_per_day, 'kcal') }}</td><td>{{ st.feasible ? 'yes' : 'no' }}</td></tr>
+                  <tr><td>{{ st.name }}</td><td>{{ st.date }}</td><td class="num">{{ formatSigned(st.gap, 1, 'kg') }}</td><td class="num">{{ formatSigned(st.required_kg_per_week, 2) }}</td><td class="num">{{ st.eat_kcal_per_day == null ? '–' : formatMacro(st.eat_kcal_per_day, 'kcal') }}</td><td>{{ st.feasible ? i18n.t('yes') : i18n.t('no') }}</td></tr>
                 }</tbody>
               </table>
             }
@@ -129,27 +130,27 @@ import { CHART_PALETTE } from './palette';
         @case ('weekly_chart') {
           <div class="v-panel">
             <h3>{{ block().meta.title }}</h3>
-            <div echarts [options]="weeklyChart()" class="echart" aria-label="Weekly intake and expenditure"></div>
+            <div echarts [options]="weeklyChart()" class="echart" [attr.aria-label]="i18n.t('Weekly intake and expenditure')"></div>
           </div>
         }
         @case ('timeline') {
           <div class="v-panel">
-            <h3>{{ block().meta.title }} <span class="v-small v-muted">weight, intake, rolling {{ timeline().tdee_window }}-day TDEE and macros on one axis</span></h3>
-            <div echarts [options]="timelineChart()" class="echart tall" aria-label="Weight, intake, TDEE and macros over time"></div>
+            <h3>{{ block().meta.title }} <span class="v-small v-muted">{{ i18n.t('weight, intake, rolling {n}-day TDEE and macros on one axis', { n: timeline().tdee_window }) }}</span></h3>
+            <div echarts [options]="timelineChart()" class="echart tall" [attr.aria-label]="i18n.t('Weight, intake, TDEE and macros over time')"></div>
           </div>
         }
         @case ('day_list') {
           <div class="v-panel">
             <h3>{{ block().meta.title }}</h3>
             <div class="v-scroll-x"><table class="v-table">
-              <thead><tr><th>Day</th>@for (c of dayList().columns; track c) { <th class="num">{{ c }}</th> }</tr></thead>
+              <thead><tr><th>{{ i18n.t('Day') }}</th>@for (c of dayList().columns; track c) { <th class="num">{{ c }}</th> }</tr></thead>
               <tbody>@for (r of dayList().rows; track r.date) {
                 <tr [class.not-countable]="!r.countable"><td>{{ r.date }}</td>@for (c of dayList().columns; track c) {
                   <td class="num">
                     @if (c === 'status') { @if (r.status) { <v-status-tag [status]="r.status" /> } }
                     @else if (c === 'weight') { {{ formatKg(r.weight) }} }
                     @else if (c === 'training_type') { {{ r.training_type ?? '' }} }
-                    @else if (c === 'reliable') { {{ r.reliable === null ? '?' : r.reliable ? 'yes' : 'no' }} }
+                    @else if (c === 'reliable') { {{ r.reliable === null ? '?' : r.reliable ? i18n.t('yes') : i18n.t('no') }} }
                     @else { {{ formatMacro(r.macros[asMacro(c)], asMacro(c)) }} }
                   </td>
                 }</tr>
@@ -161,7 +162,7 @@ import { CHART_PALETTE } from './palette';
           <div class="v-panel finding">
             <h3>{{ block().meta.title }}</h3>
             @if (finding().markdown) { <div class="v-md" [innerHTML]="finding().markdown | markdown"></div> } @else {
-              <p class="v-muted">No assessment yet. Freeze this report below to keep its numbers, then let Claude judge that moment. The text and the figures then belong together.</p>
+              <p class="v-muted">{{ i18n.t('No assessment yet. Freeze this report below to keep its numbers, then let Claude judge that moment. The text and the figures then belong together.') }}</p>
             }
           </div>
         }
@@ -170,8 +171,8 @@ import { CHART_PALETTE } from './palette';
             <h3>{{ block().meta.title }}</h3>
             @if (body().weight_kg != null) {
               <p class="v-small v-muted">
-                {{ format.number(body().weight_kg!, 1) }} kg@if (body().height_cm) { at {{ body().height_cm }} cm }
-                @if (body().measured_at) { · measured {{ format.day(body().measured_at!) }} }
+                {{ format.number(body().weight_kg!, 1) }} kg@if (body().height_cm) { {{ i18n.t('at {cm} cm', { cm: body().height_cm! }) }} }
+                @if (body().measured_at) { · {{ i18n.t('measured') }} {{ format.day(body().measured_at!) }} }
               </p>
             }
             @for (m of rated(); track m.label) {
@@ -181,7 +182,7 @@ import { CHART_PALETTE } from './palette';
                   <span class="val">{{ format.number(m.rated.value, m.decimals) }}</span>
                   <span class="v-tag" [class]="'v-tag ' + toneTag(m.rated.tone)">{{ m.rated.band }}</span>
                   @if (m.rated.to_next != null) {
-                    <span class="v-small v-muted">{{ format.number(absOf(m.rated.to_next), m.decimals) }} to the next class</span>
+                    <span class="v-small v-muted">{{ format.number(absOf(m.rated.to_next), m.decimals) }} {{ i18n.t('to the next class') }}</span>
                   }
                 </div>
                 <div class="scale" [attr.aria-label]="m.label + ': ' + m.rated.band">
@@ -194,9 +195,9 @@ import { CHART_PALETTE } from './palette';
             }
             @if (body().bmi_weight_bands.length && body().weight_kg != null) {
               <details class="marks">
-                <summary class="v-small">What the classes mean in kilograms</summary>
+                <summary class="v-small">{{ i18n.t('What the classes mean in kilograms') }}</summary>
                 <table class="v-table">
-                  <thead><tr><th>Class</th><th class="num">from</th><th class="num">to</th></tr></thead>
+                  <thead><tr><th>{{ i18n.t('Class') }}</th><th class="num">{{ i18n.t('from') }}</th><th class="num">{{ i18n.t('to') }}</th></tr></thead>
                   <tbody>
                     @for (m of body().bmi_weight_bands; track m.name) {
                       <tr [class.here]="inBand(m)">
@@ -211,7 +212,7 @@ import { CHART_PALETTE } from './palette';
             }
             @if (circumferences().length) {
               <table class="v-table circ">
-                <thead><tr><th></th><th class="num">now</th><th class="num">change</th></tr></thead>
+                <thead><tr><th></th><th class="num">{{ i18n.t('now') }}</th><th class="num">{{ i18n.t('Change') }}</th></tr></thead>
                 <tbody>
                   @for (c of circumferences(); track c.key) {
                     <tr>
@@ -226,7 +227,7 @@ import { CHART_PALETTE } from './palette';
               </table>
             }
             @if (body().missing.length) {
-              <p class="v-small v-muted">Not shown: {{ body().missing.join('; ') }}.</p>
+              <p class="v-small v-muted">{{ i18n.t('Not shown: {reasons}.', { reasons: body().missing.join('; ') }) }}</p>
             }
           </div>
         }
@@ -234,28 +235,28 @@ import { CHART_PALETTE } from './palette';
           <div class="v-panel energy">
             <h3>{{ block().meta.title }}</h3>
             @if (energy().tdee_kcal == null) {
-              <p class="v-muted">Not available: {{ energy().missing.join('; ') || 'no data' }}.</p>
+              <p class="v-muted">{{ i18n.t('Not available: {reasons}.', { reasons: energy().missing.join('; ') || i18n.t('no data') }) }}</p>
             } @else {
               <div class="rows">
-                <div><span>Expenditure</span><b>{{ format.number(energy().tdee_kcal!) }} kcal</b><span class="v-small v-muted">{{ basisLabel(energy().basis) }}</span></div>
+                <div><span>{{ i18n.t('Expenditure') }}</span><b>{{ format.number(energy().tdee_kcal!) }} kcal</b><span class="v-small v-muted">{{ basisLabel(energy().basis) }}</span></div>
                 @if (energy().basal_kcal != null) {
-                  <div><span>At rest</span><b>{{ format.number(energy().basal_kcal!) }} kcal</b><span class="v-small v-muted">age {{ energy().age_years }}</span></div>
-                  <div><span>From moving</span><b>{{ format.number(energy().activity_kcal!) }} kcal</b><span class="v-small v-muted">{{ format.number(energy().pal!, 2) }} × resting</span></div>
+                  <div><span>{{ i18n.t('At rest') }}</span><b>{{ format.number(energy().basal_kcal!) }} kcal</b><span class="v-small v-muted">{{ i18n.t('age {n}', { n: energy().age_years ?? '' }) }}</span></div>
+                  <div><span>{{ i18n.t('From moving') }}</span><b>{{ format.number(energy().activity_kcal!) }} kcal</b><span class="v-small v-muted">{{ format.number(energy().pal!, 2) }} × {{ i18n.t('resting') }}</span></div>
                 }
               </div>
               @if (energy().basal_kcal != null) {
-                <div class="split" [attr.aria-label]="'resting versus activity'">
-                  <span class="rest" [style.flex]="energy().basal_kcal!">at rest</span>
-                  <span class="move" [style.flex]="maxOf(energy().activity_kcal!, 1)">moving</span>
+                <div class="split" [attr.aria-label]="i18n.t('resting versus activity')">
+                  <span class="rest" [style.flex]="energy().basal_kcal!">{{ i18n.t('at rest') }}</span>
+                  <span class="move" [style.flex]="maxOf(energy().activity_kcal!, 1)">{{ i18n.t('moving') }}</span>
                 </div>
               }
               @if (energy().caveat) { <p class="v-small warn-text">{{ energy().caveat }}</p> }
-              @if (energy().missing.length) { <p class="v-small v-muted">Not shown: {{ energy().missing.join('; ') }}.</p> }
+              @if (energy().missing.length) { <p class="v-small v-muted">{{ i18n.t('Not shown: {reasons}.', { reasons: energy().missing.join('; ') }) }}</p> }
             }
           </div>
         }
         @default {
-          <div class="v-panel v-muted">Block type “{{ block().meta.type }}” is not supported by this version of the app.</div>
+          <div class="v-panel v-muted">{{ i18n.t('Block type “{type}” is not supported by this version of the app.', { type: block().meta.type }) }}</div>
         }
       }
     }
@@ -307,6 +308,7 @@ import { CHART_PALETTE } from './palette';
 export class ReportBlockView {
   /** Read from the template, so numbers and dates follow the tenant's locale (R69). */
   readonly format = inject(FormatService);
+  readonly i18n = inject(I18nService);
   readonly block = input.required<ReportBlock>();
   readonly formatMacro = formatMacro;
   readonly formatKg = formatKg;
@@ -327,8 +329,20 @@ export class ReportBlockView {
   asMacro(c: string): MacroKey {
     return c as MacroKey;
   }
+
+  /** The burndown tooltip has to find this line among the hovered ones, so both read it here. */
+  private actualSeries(): string {
+    return this.i18n.t('Actual (7-day avg.)');
+  }
+
+  private tdeeSeries(days: number): string {
+    return this.i18n.t('TDEE ({n} d)', { n: days });
+  }
   gradeLabel(q: Quality | null): string {
-    return q === 'green' ? 'reliable' : q === 'yellow' ? 'indicative' : q === 'red' ? 'too little data' : 'no grade';
+    if (q === 'green') return this.i18n.t('reliable');
+    if (q === 'yellow') return this.i18n.t('indicative');
+    if (q === 'red') return this.i18n.t('too little data');
+    return this.i18n.t('no grade');
   }
   kpiValue(): string {
     const k = this.kpi();
@@ -358,7 +372,7 @@ export class ReportBlockView {
     const dot = (c?: string) => `<span style="display:inline-block;width:.55em;height:.55em;border-radius:50%;background:${c ?? 'currentColor'};margin-right:.4em"></span>`;
 
     const head = rows[0]?.value ? day(rows[0].value[0]) : '';
-    const actualRow = rows.find((r) => r.seriesName?.startsWith('Actual'));
+    const actualRow = rows.find((r) => r.seriesName === this.actualSeries());
     const remainingNow = actualRow?.value?.[1];
     const lines: string[] = [];
 
@@ -366,8 +380,15 @@ export class ReportBlockView {
       const i = actualRow.dataIndex ?? -1;
       const prev = i > 0 ? actual[i - 1]?.[1] : undefined;
       const delta = prev != null ? remainingNow - prev : undefined;
-      const change = delta == null ? '' : ` · ${delta <= 0 ? '−' : '+'}${Math.abs(delta).toFixed(2)} kg vs. the day before`;
-      lines.push(`${dot(actualRow.color)}<b>${kg(goal + remainingNow)}</b> · ${kg(remainingNow)} to go${change}`);
+      const change =
+        delta == null
+          ? ''
+          : ' · ' +
+            this.i18n.t('{delta} kg vs. the day before', {
+              delta: `${delta <= 0 ? '−' : '+'}${Math.abs(delta).toFixed(2)}`,
+            });
+      const toGo = this.i18n.t('{kg} to go', { kg: kg(remainingNow) });
+      lines.push(`${dot(actualRow.color)}<b>${kg(goal + remainingNow)}</b> · ${toGo}${change}`);
     }
 
     for (const r of rows) {
@@ -375,13 +396,18 @@ export class ReportBlockView {
       const planned = r.value[1];
       const gap = remainingNow == null ? null : planned - remainingNow;
       const stand =
-        gap == null ? '' : gap >= 0 ? ` · ${kg(Math.abs(gap))} ahead` : ` · ${kg(Math.abs(gap))} behind`;
-      lines.push(`${dot(r.color)}${r.seriesName}: plan ${kg(goal + planned)}${stand}`);
+        gap == null
+          ? ''
+          : ' · ' +
+            this.i18n.t(gap >= 0 ? '{kg} ahead' : '{kg} behind', { kg: kg(Math.abs(gap)) });
+      const plan = this.i18n.t('plan {kg}', { kg: kg(goal + planned) });
+      lines.push(`${dot(r.color)}${r.seriesName}: ${plan}${stand}`);
     }
 
     const last = actual.length ? actual[actual.length - 1][1] : null;
-    if (last != null && rows.some((r) => r.seriesName?.startsWith('Actual'))) {
-      lines.push(`<span class="v-small">goal ${kg(goal)} by ${bd.goal_date}</span>`);
+    if (last != null && rows.some((r) => r.seriesName === this.actualSeries())) {
+      const goalLine = this.i18n.t('goal {kg} by {date}', { kg: kg(goal), date: bd.goal_date });
+      lines.push(`<span class="v-small">${goalLine}</span>`);
     }
     return `${head}<br>${lines.join('<br>')}`;
   }
@@ -389,10 +415,10 @@ export class ReportBlockView {
   /** "rolling_14d" reads like a database column; say it in words. */
   basisLabel(basis: string): string {
     const rolling = /^rolling_(\d+)d$/.exec(basis);
-    if (rolling) return `from the rolling ${rolling[1]}-day window`;
+    if (rolling) return this.i18n.t('from the rolling {n}-day window', { n: rolling[1] });
     const weekly = /^weekly_mean_(\d+)w$/.exec(basis);
-    if (weekly) return `mean of the last ${weekly[1]} weekly values`;
-    return basis === 'none' ? 'no basis yet' : basis;
+    if (weekly) return this.i18n.t('mean of the last {n} weekly values', { n: weekly[1] });
+    return basis === 'none' ? this.i18n.t('no basis yet') : basis;
   }
 
   timeline(): TimelineBlock {
@@ -424,14 +450,15 @@ export class ReportBlockView {
     ] as const;
     const macros = grams
       .filter(([, v]) => v != null)
-      .map(([name, v]) => `${name} ${num(v as number)} g`)
+      .map(([name, v]) => `${this.i18n.t(name)} ${num(v as number)} g`)
       .join(' · ');
+    const flag = row.countable ? '' : ' · ' + this.i18n.t('not counted');
 
     return [
-      `<div style="margin-bottom:.25em"><b>${this.format.day(day ?? '')}</b>${row.countable ? '' : ' · not counted'}</div>`,
-      line(CHART_PALETTE[0], 'Weight', weight, 'kg', 1),
-      line(CHART_PALETTE[1], 'Intake', row.kcal, 'kcal'),
-      line(CHART_PALETTE[2], `TDEE (${this.timeline().tdee_window} d)`, row.tdee, 'kcal'),
+      `<div style="margin-bottom:.25em"><b>${this.format.day(day ?? '')}</b>${flag}</div>`,
+      line(CHART_PALETTE[0], this.i18n.t('Weight'), weight, 'kg', 1),
+      line(CHART_PALETTE[1], this.i18n.t('Intake'), row.kcal, 'kcal'),
+      line(CHART_PALETTE[2], this.tdeeSeries(this.timeline().tdee_window), row.tdee, 'kcal'),
       macros ? `<div style="margin-top:.25em;opacity:.8">${macros}</div>` : '',
     ]
       .filter(Boolean)
@@ -474,8 +501,8 @@ export class ReportBlockView {
       axisLabel: { hideOverlap: true, formatter: (v: string) => v.slice(8) + '.' + v.slice(5, 7) + '.' },
     };
     const kcalMarks = [];
-    if (t.kcal_min != null) kcalMarks.push({ yAxis: t.kcal_min, name: 'corridor min' });
-    if (t.kcal_max != null) kcalMarks.push({ yAxis: t.kcal_max, name: 'corridor max' });
+    if (t.kcal_min != null) kcalMarks.push({ yAxis: t.kcal_min, name: this.i18n.t('corridor min') });
+    if (t.kcal_max != null) kcalMarks.push({ yAxis: t.kcal_max, name: this.i18n.t('corridor max') });
 
     return {
       animation: false,
@@ -499,15 +526,15 @@ export class ReportBlockView {
       ],
       series: [
         {
-          ...line('Weight (7-day avg.)', pick((r) => r.weight_ma), CHART_PALETTE[0]),
+          ...line(this.i18n.t('Weight (7-day avg.)'), pick((r) => r.weight_ma), CHART_PALETTE[0]),
           areaStyle: { opacity: 0.1, color: CHART_PALETTE[0] },
           markLine: t.goal_kg
-            ? { symbol: 'none', silent: true, lineStyle: { type: 'dashed', color: CHART_PALETTE[3] }, label: { formatter: 'goal', fontSize: 10, position: 'insideEndTop' }, data: [{ yAxis: t.goal_kg }] }
+            ? { symbol: 'none', silent: true, lineStyle: { type: 'dashed', color: CHART_PALETTE[3] }, label: { formatter: this.i18n.t('goal'), fontSize: 10, position: 'insideEndTop' }, data: [{ yAxis: t.goal_kg }] }
             : undefined,
         },
-        { ...line('Weigh-ins', pick((r) => r.weight), CHART_PALETTE[4]), showSymbol: true, symbolSize: 4, lineStyle: { opacity: 0 }, connectNulls: false },
+        { ...line(this.i18n.t('Weigh-ins'), pick((r) => r.weight), CHART_PALETTE[4]), showSymbol: true, symbolSize: 4, lineStyle: { opacity: 0 }, connectNulls: false },
         {
-          name: 'Intake',
+          name: this.i18n.t('Intake'),
           type: 'bar',
           xAxisIndex: 1,
           yAxisIndex: 1,
@@ -517,11 +544,11 @@ export class ReportBlockView {
             ? { symbol: 'none', silent: true, lineStyle: { type: 'dotted', color: CHART_PALETTE[2] }, label: { formatter: '{b}', fontSize: 10, position: 'insideEndTop' }, data: kcalMarks }
             : undefined,
         },
-        line(`TDEE (${t.tdee_window} d)`, pick((r) => r.tdee), CHART_PALETTE[2], { xAxisIndex: 1, yAxisIndex: 1 }),
-        line('Protein', pick((r) => r.protein), CHART_PALETTE[0], { xAxisIndex: 2, yAxisIndex: 2 }),
-        line('Carbs', pick((r) => r.carbs), CHART_PALETTE[1], { xAxisIndex: 2, yAxisIndex: 2 }),
-        line('Fat', pick((r) => r.fat), CHART_PALETTE[3], { xAxisIndex: 2, yAxisIndex: 2 }),
-        line('Fiber', pick((r) => r.fiber), CHART_PALETTE[4], { xAxisIndex: 2, yAxisIndex: 2 }),
+        line(this.tdeeSeries(t.tdee_window), pick((r) => r.tdee), CHART_PALETTE[2], { xAxisIndex: 1, yAxisIndex: 1 }),
+        line(this.i18n.t('Protein'), pick((r) => r.protein), CHART_PALETTE[0], { xAxisIndex: 2, yAxisIndex: 2 }),
+        line(this.i18n.t('Carbs'), pick((r) => r.carbs), CHART_PALETTE[1], { xAxisIndex: 2, yAxisIndex: 2 }),
+        line(this.i18n.t('Fat'), pick((r) => r.fat), CHART_PALETTE[3], { xAxisIndex: 2, yAxisIndex: 2 }),
+        line(this.i18n.t('Fiber'), pick((r) => r.fiber), CHART_PALETTE[4], { xAxisIndex: 2, yAxisIndex: 2 }),
       ] as EChartsOption['series'],
     };
   }
@@ -553,7 +580,7 @@ export class ReportBlockView {
       yAxis: {
         type: 'value',
         min: 0,
-        name: 'kg above goal',
+        name: this.i18n.t('kg above goal'),
         nameLocation: 'end',
         nameGap: 12,
         axisLabel: { formatter: '{value}' },
@@ -561,7 +588,7 @@ export class ReportBlockView {
       },
       series: [
         {
-          name: `Goal ${bd.goal_date}`,
+          name: this.i18n.t('Goal {date}', { date: bd.goal_date }),
           type: 'line',
           showSymbol: false,
           data: b.target_path as [string, number][],
@@ -570,7 +597,7 @@ export class ReportBlockView {
         },
         ...stageSeries,
         {
-          name: 'Actual (7-day avg.)',
+          name: this.actualSeries(),
           type: 'line',
           showSymbol: false,
           data: b.actual as [string, number][],
@@ -581,7 +608,7 @@ export class ReportBlockView {
             ? {
                 symbol: 'none',
                 silent: true,
-                label: { formatter: 'today', position: 'insideEndTop', fontSize: 10 },
+                label: { formatter: this.i18n.t('today'), position: 'insideEndTop', fontSize: 10 },
                 lineStyle: { color: CHART_PALETTE[2], type: 'solid', width: 1 },
                 data: [{ xAxis: today }],
               }
@@ -624,8 +651,8 @@ export class ReportBlockView {
     const b = this.body();
     const out: { label: string; rated: RatedValue; decimals: number }[] = [];
     if (b.bmi) out.push({ label: 'BMI', rated: b.bmi, decimals: 1 });
-    if (b.waist_to_height) out.push({ label: 'Waist to height', rated: b.waist_to_height, decimals: 2 });
-    if (b.waist_to_hip) out.push({ label: 'Waist to hip', rated: b.waist_to_hip, decimals: 2 });
+    if (b.waist_to_height) out.push({ label: this.i18n.t('Waist to height'), rated: b.waist_to_height, decimals: 2 });
+    if (b.waist_to_hip) out.push({ label: this.i18n.t('Waist to hip'), rated: b.waist_to_hip, decimals: 2 });
     return out;
   }
 
@@ -635,7 +662,7 @@ export class ReportBlockView {
       .filter(([key]) => b.circumferences[key] != null)
       .map(([key, label]) => ({
         key,
-        label,
+        label: this.i18n.t(label),
         value: b.circumferences[key],
         change: b.changes[key] ?? null,
       }));
@@ -657,7 +684,7 @@ export class ReportBlockView {
       tone: b.tone,
       weight: b.lower != null && b.upper != null ? b.upper - b.lower : fallback,
       here: b.name === r.band,
-      title: `${b.name}: ${b.lower ?? '–'} to ${b.upper ?? '–'}`,
+      title: `${b.name}: ${b.lower ?? '–'} ${this.i18n.t('to')} ${b.upper ?? '–'}`,
     }));
   }
 
@@ -706,9 +733,9 @@ export class ReportBlockView {
         { type: 'value', name: 'kg', scale: true },
       ],
       series: [
-        { name: 'Ø intake', type: 'bar', data: rows.map((r) => r.mean_kcal), itemStyle: { color: CHART_PALETTE[0] } },
-        { name: 'Weekly TDEE', type: 'line', data: rows.map((r) => r.tdee), itemStyle: { color: CHART_PALETTE[1] }, lineStyle: { color: CHART_PALETTE[1] } },
-        { name: 'Ø weight', type: 'line', yAxisIndex: 1, data: rows.map((r) => r.mean_kg), itemStyle: { color: CHART_PALETTE[2] }, lineStyle: { color: CHART_PALETTE[2] } },
+        { name: this.i18n.t('Ø intake'), type: 'bar', data: rows.map((r) => r.mean_kcal), itemStyle: { color: CHART_PALETTE[0] } },
+        { name: this.i18n.t('Weekly TDEE'), type: 'line', data: rows.map((r) => r.tdee), itemStyle: { color: CHART_PALETTE[1] }, lineStyle: { color: CHART_PALETTE[1] } },
+        { name: this.i18n.t('Ø weight'), type: 'line', yAxisIndex: 1, data: rows.map((r) => r.mean_kg), itemStyle: { color: CHART_PALETTE[2] }, lineStyle: { color: CHART_PALETTE[2] } },
       ],
     };
   }

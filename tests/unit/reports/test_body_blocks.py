@@ -154,3 +154,35 @@ def test_no_circumference_is_left_out_of_the_change(ref) -> None:  # type: ignor
     assert set(result.changes) == set(everything), "every measured circumference is compared"
     assert result.changes["waist_cm"] == -2.0
     assert result.changes["neck_cm"] == 0.0
+
+def test_each_bmi_class_carries_both_scales_and_the_distance_to_it(ref) -> None:  # type: ignore[no-untyped-def]
+    """T-REP-033: a class index means nothing on a scale; a weight and a gap do (R81)."""
+    source = _source(ref, body_profile=BodyProfile(height_cm=170.0, sex="m"))
+    result = _body(_ctx(source, ref))
+    assert result.bmi is not None
+
+    by_name = {m.name: m for m in result.bmi.bands}
+    # the BMI boundaries and the weights they mean travel together
+    normal = by_name["normal weight"]
+    assert (normal.lower, normal.upper) == (18.5, 25.0)
+    assert (normal.lower_kg, normal.upper_kg) == (53.5, 72.2)
+
+    # the class the weight falls in has nothing to reach
+    here = by_name[result.bmi.band]
+    assert here.to_reach_kg is None
+
+    # every other class states the kilograms between here and there, signed
+    others = [m for m in result.bmi.bands if m.name != result.bmi.band]
+    assert all(m.to_reach_kg is not None for m in others)
+    weight = result.weight_kg
+    assert weight is not None
+    below = [m for m in others if m.upper_kg is not None and weight >= m.upper_kg]
+    assert below and all(m.to_reach_kg is not None and m.to_reach_kg < 0 for m in below), (
+        "a class below the current weight is reached by losing, so the figure is negative"
+    )
+    # and the nearest one is the smallest step
+    nearest = max(below, key=lambda m: m.to_reach_kg or 0)
+    assert nearest.upper_kg == max(m.upper_kg or 0 for m in below)
+
+    # the same enriched scale is used for the table, not a second list
+    assert result.bmi_weight_bands == result.bmi.bands

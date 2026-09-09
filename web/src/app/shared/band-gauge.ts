@@ -1,5 +1,6 @@
-import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import { BandSpec, BandZone, MacroKey } from '../api';
+import { I18nService } from '../core/i18n.service';
 import { formatMacro, toneOf, ZONE_LABEL } from './format';
 
 /**
@@ -53,6 +54,7 @@ import { formatMacro, toneOf, ZONE_LABEL } from './format';
   `,
 })
 export class BandGauge {
+  private readonly i18n = inject(I18nService);
   readonly macro = input.required<MacroKey>();
   readonly label = input.required<string>();
   readonly unit = input('g');
@@ -76,7 +78,7 @@ export class BandGauge {
   readonly tone = computed(() => toneOf(this.computedZone()));
   readonly aria = computed(() => {
     const z = this.computedZone();
-    return `${this.label()} ${this.formatted()} ${this.unit()}${z ? ', ' + ZONE_LABEL[z] : ''}`;
+    return `${this.label()} ${this.formatted()} ${this.unit()}${z ? ', ' + this.i18n.t(ZONE_LABEL[z]) : ''}`;
   });
 
   /** Strip runs from 0.8·min to 1.15·max so the marker can leave the band visibly. */

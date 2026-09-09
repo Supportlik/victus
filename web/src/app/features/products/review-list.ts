@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { RouterLink } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { ApiClient, LineItem, Product } from '../../api';
+import { I18nService } from '../../core/i18n.service';
 import { describeError } from '../../core/problem';
 import { isoDate, MacroPipe, shiftDate } from '../../shared/format';
 import { ProductSearch } from '../../shared/product-search';
@@ -23,22 +24,22 @@ interface ReviewRow {
   template: `
     <div class="v-page">
       <header class="v-page-head">
-        <div><h2>Review list</h2><p class="sub">Items that are not linked to a product yet. Assign them; the quantity stays, the nutrients follow the product.</p></div>
-        <div class="v-actions v-small v-muted">Scanning {{ from }} to {{ to }}</div>
+        <div><h2>{{ i18n.t('Review list') }}</h2><p class="sub">{{ i18n.t('Items that are not linked to a product yet. Assign them; the quantity stays, the nutrients follow the product.') }}</p></div>
+        <div class="v-actions v-small v-muted">{{ i18n.t('Scanning {from} to {to}', { from, to }) }}</div>
       </header>
       @if (error(); as e) { <div class="v-error">{{ e }}</div> }
       @if (rows().length === 0 && !loading()) {
-        <div class="v-empty">Nothing to review. Every item in this range points at a product or a batch.</div>
+        <div class="v-empty">{{ i18n.t('Nothing to review. Every item in this range points at a product or a batch.') }}</div>
       }
       @if (target(); as t) {
         <div class="v-panel assign">
-          <p>Assign <strong>{{ t.item.consumable_name }}</strong> ({{ t.date }}, {{ t.meal }}) to:</p>
+          <p>{{ i18n.t('Assign to a product:') }} <strong>{{ t.item.consumable_name }}</strong> <span class="v-small v-muted">({{ t.date }}, {{ t.meal }})</span></p>
           <v-product-search (picked)="assign(t, $event)" />
-          <button type="button" class="v-btn quiet" (click)="target.set(null)">Cancel</button>
+          <button type="button" class="v-btn quiet" (click)="target.set(null)">{{ i18n.t('Cancel') }}</button>
         </div>
       }
       <table class="v-table">
-        <thead><tr><th>Day</th><th>Meal</th><th>Item as logged</th><th class="num">Amount</th><th class="num">kcal</th><th></th></tr></thead>
+        <thead><tr><th>{{ i18n.t('Day') }}</th><th>{{ i18n.t('Meal') }}</th><th>{{ i18n.t('Item as logged') }}</th><th class="num">{{ i18n.t('Amount') }}</th><th class="num">kcal</th><th></th></tr></thead>
         <tbody>
           @for (r of rows(); track r.item.id) {
             <tr>
@@ -46,7 +47,7 @@ interface ReviewRow {
               <td>{{ r.item.consumable_name }} <span class="v-small v-muted">{{ r.item.raw_text }}</span></td>
               <td class="num">{{ r.item.amount ?? r.item.base_amount }} {{ r.item.unit_code ?? r.item.base_unit }}</td>
               <td class="num">{{ r.item.kcal | macro: 'kcal' }}</td>
-              <td><button type="button" class="v-btn small" (click)="target.set(r)">Assign</button></td>
+              <td><button type="button" class="v-btn small" (click)="target.set(r)">{{ i18n.t('Assign') }}</button></td>
             </tr>
           }
         </tbody>
@@ -57,6 +58,7 @@ interface ReviewRow {
 })
 export class ReviewList {
   private readonly api = inject(ApiClient);
+  readonly i18n = inject(I18nService);
   readonly to = isoDate(new Date());
   readonly from = shiftDate(this.to, -180);
   readonly rows = signal<ReviewRow[]>([]);

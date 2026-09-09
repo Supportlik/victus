@@ -29,6 +29,17 @@
   --v-agent-soft: light-dark(#ebe7f7, #2a2450);
   --v-primary-ink: #fff;
 
+  // Scale ramp: for a graded scale with more steps than the four meaning colours have.
+  // BMI has six classes, two of which would otherwise share --v-warn and look identical.
+  // The step is the distance from the healthy class, not the class index, because a scale
+  // can be bad in both directions. Dark values are lighter, not darker: a dim fill on a
+  // graphite background is unreadable.
+  --v-scale-1: light-dark(#0f8f63, #57e2a5);
+  --v-scale-2: light-dark(#a97400, #ffd166);
+  --v-scale-3: light-dark(#c25a1f, #ffa96b);
+  --v-scale-4: light-dark(#c0392b, #ff8a8a);
+  --v-scale-5: light-dark(#8e1c1c, #ff5f5f);
+
   // Type scale (ratio 1.2)
   --v-font: 'IBM Plex Sans Variable', 'IBM Plex Sans', system-ui, sans-serif;
   --v-fs-xs: 0.75rem;
@@ -117,6 +128,33 @@ html[data-palette="contrast"] {
   --v-ok: light-dark(#006b3f, #4fe3a0);
   --v-warn: light-dark(#8a5a00, #ffd166);
   --v-bad: light-dark(#b00020, #ff6b6b);
+  --v-scale-1: light-dark(#005c36, #6cffbe);
+  --v-scale-2: light-dark(#6b4600, #ffe083);
+  --v-scale-3: light-dark(#8a3b00, #ffb888);
+  --v-scale-4: light-dark(#8f0018, #ff9a9a);
+  --v-scale-5: light-dark(#5c0010, #ff7070);
+}
+
+// ── motion ────────────────────────────────────────────────────────────────
+// A page change fades and lifts slightly, which reads as "this replaced that" rather
+// than a flash. Kept short: at 180 ms it is felt, not waited for.
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes v-page-in {
+    from { opacity: 0; transform: translateY(0.5rem); }
+  }
+  @keyframes v-page-out {
+    to { opacity: 0; transform: translateY(-0.35rem); }
+  }
+  ::view-transition-old(root) { animation: v-page-out 120ms ease-in both; }
+  ::view-transition-new(root) { animation: v-page-in 180ms ease-out both; }
+}
+
+// The browser would otherwise cross-fade the whole page including the navigation, which
+// makes the rail flicker on every click. Naming it keeps it out of the transition.
+.rail, .tabs { view-transition-name: v-navigation; }
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root), ::view-transition-new(root) { animation: none; }
 }
 
 *, *::before, *::after { box-sizing: border-box; }

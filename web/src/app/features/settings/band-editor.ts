@@ -1,6 +1,7 @@
-import { ChangeDetectionStrategy, Component, input, model } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, input, model } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { todayLocal } from '../../core/format.service';
+import { I18nService } from '../../core/i18n.service';
 
 type Json = Record<string, unknown>;
 
@@ -15,6 +16,15 @@ const MACROS = [
 ] as const;
 
 const LEVELS = ['min', 'opt_min', 'opt_max', 'target', 'max'] as const;
+
+/** The heading each level carries; also the key its screen-reader label is translated by. */
+const LEVEL_TEXT: Record<(typeof LEVELS)[number], string> = {
+  min: 'min',
+  opt_min: 'optimum from',
+  opt_max: 'optimum to',
+  target: 'target',
+  max: 'max',
+};
 
 export interface BandModel {
   name: string;
@@ -100,30 +110,30 @@ export function emptyBand(): BandModel {
   template: `
     <div class="band">
       <div class="v-form-row head">
-        <label class="v-field"><span>Profile</span><input name="bn{{ idx() }}" [(ngModel)]="band().name" placeholder="Rest day" required /></label>
-        <label class="v-field"><span>Applies to</span>
+        <label class="v-field"><span>{{ i18n.t('Profile') }}</span><input name="bn{{ idx() }}" [(ngModel)]="band().name" [placeholder]="i18n.t('Rest day')" required /></label>
+        <label class="v-field"><span>{{ i18n.t('Applies to') }}</span>
           <select name="bt{{ idx() }}" [(ngModel)]="band().training_type">
-            <option value="">every day</option><option value="rest">rest</option><option value="strength">strength</option><option value="martial_arts">martial arts</option>
+            <option value="">{{ i18n.t('every day') }}</option><option value="rest">{{ i18n.t('rest') }}</option><option value="strength">{{ i18n.t('strength') }}</option><option value="martial_arts">{{ i18n.t('martial arts') }}</option>
           </select>
         </label>
-        <label class="v-field"><span>Valid from</span><input name="bf{{ idx() }}" type="date" [(ngModel)]="band().valid_from" required /></label>
-        <label class="v-field"><span>Valid until</span><input name="bu{{ idx() }}" type="date" [(ngModel)]="band().valid_until" /></label>
+        <label class="v-field"><span>{{ i18n.t('Valid from') }}</span><input name="bf{{ idx() }}" type="date" [(ngModel)]="band().valid_from" required /></label>
+        <label class="v-field"><span>{{ i18n.t('Valid until') }}</span><input name="bu{{ idx() }}" type="date" [(ngModel)]="band().valid_until" /></label>
       </div>
       <div class="v-scroll-x">
         <table class="v-table levels">
           <thead>
-            <tr><th>Nutrient</th><th class="num">min</th><th class="num">optimum from</th><th class="num">optimum to</th><th class="num">target</th><th class="num">max</th><th class="num">stretch</th></tr>
+            <tr><th>{{ i18n.t('Nutrient') }}</th><th class="num">{{ i18n.t('min') }}</th><th class="num">{{ i18n.t('optimum from') }}</th><th class="num">{{ i18n.t('optimum to') }}</th><th class="num">{{ i18n.t('target') }}</th><th class="num">{{ i18n.t('max') }}</th><th class="num">{{ i18n.t('stretch') }}</th></tr>
           </thead>
           <tbody>
             @for (m of MACROS; track m.key) {
               <tr>
-                <td>{{ m.label }}</td>
+                <td>{{ i18n.t(m.label) }}</td>
                 @for (level of LEVELS; track level) {
-                  <td class="num"><input type="number" step="any" min="0" [name]="'b' + idx() + m.key + level" [(ngModel)]="band().values[m.key][level]" [attr.aria-label]="m.label + ' ' + level" /></td>
+                  <td class="num"><input type="number" step="any" min="0" [name]="'b' + idx() + m.key + level" [(ngModel)]="band().values[m.key][level]" [attr.aria-label]="i18n.t(m.label) + ' ' + levelLabel(level)" /></td>
                 }
                 <td class="num">
                   @if (m.stretch) {
-                    <input type="number" step="any" min="0" [name]="'b' + idx() + m.key + 'stretch'" [(ngModel)]="band().values[m.key]['stretch']" [attr.aria-label]="m.label + ' stretch'" />
+                    <input type="number" step="any" min="0" [name]="'b' + idx() + m.key + 'stretch'" [(ngModel)]="band().values[m.key]['stretch']" [attr.aria-label]="i18n.t(m.label) + ' ' + i18n.t('stretch')" />
                   } @else { <span class="v-muted">–</span> }
                 </td>
               </tr>
@@ -131,7 +141,7 @@ export function emptyBand(): BandModel {
           </tbody>
         </table>
       </div>
-      <label class="v-field"><span>Note</span><input name="bnote{{ idx() }}" [(ngModel)]="band().note" /></label>
+      <label class="v-field"><span>{{ i18n.t('Note') }}</span><input name="bnote{{ idx() }}" [(ngModel)]="band().note" /></label>
     </div>
   `,
   styles: `
@@ -142,8 +152,13 @@ export function emptyBand(): BandModel {
   `,
 })
 export class BandEditor {
+  readonly i18n = inject(I18nService);
   readonly band = model.required<BandModel>();
   readonly idx = input(0);
   protected readonly MACROS = MACROS;
   protected readonly LEVELS = LEVELS;
+
+  levelLabel(level: (typeof LEVELS)[number]): string {
+    return this.i18n.t(LEVEL_TEXT[level]);
+  }
 }

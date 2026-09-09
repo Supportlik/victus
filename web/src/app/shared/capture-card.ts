@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, input, output, si
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ApiClient, Capture } from '../api';
+import { I18nService } from '../core/i18n.service';
 import { describeError } from '../core/problem';
 
 /**
@@ -22,8 +23,8 @@ import { describeError } from '../core/problem';
       <div class="media">
         @if (images().length) {
           @for (a of images(); track a.id) {
-            <a [href]="api.attachmentUrl(a.id)" target="_blank" rel="noopener" title="Open full size">
-              <img [src]="api.attachmentUrl(a.id)" alt="capture photo" loading="lazy" />
+            <a [href]="api.attachmentUrl(a.id)" target="_blank" rel="noopener" [title]="i18n.t('Open full size')">
+              <img [src]="api.attachmentUrl(a.id)" [alt]="i18n.t('capture photo')" loading="lazy" />
             </a>
           }
         } @else if (c().kind === 'audio') {
@@ -37,48 +38,48 @@ import { describeError } from '../core/problem';
           <time [attr.datetime]="c().captured_at">{{ c().captured_at.replace('T', ' ').slice(0, 16) }}</time>
           <span class="v-tag" [class]="'v-tag ' + tagClass()">{{ statusLabel() }}</span>
           @if (showTarget()) {
-            @if (c().product_id) { <a class="target" [routerLink]="['/products', c().product_id]">product</a> }
+            @if (c().product_id) { <a class="target" [routerLink]="['/products', c().product_id]">{{ i18n.t('product') }}</a> }
             @else if (c().target_date) { <a class="target" [routerLink]="['/days', c().target_date]">{{ c().target_date }}</a> }
-            @else { <span class="v-muted">no day yet</span> }
+            @else { <span class="v-muted">{{ i18n.t('no day yet') }}</span> }
           }
         </div>
         @if (c().text) { <p class="text">{{ c().text }}</p> }
         @if (c().kind === 'audio') {
           @for (a of audios(); track a.id) { <audio controls preload="none" [src]="api.attachmentUrl(a.id)"></audio> }
           @if (c().transcript) { <p class="transcript">“{{ c().transcript }}”</p> }
-          @else if (c().transcript === '') { <p class="v-small v-muted">No speech detected in this recording.</p> }
-          @else { <p class="v-small v-muted">No transcript yet.</p> }
+          @else if (c().transcript === '') { <p class="v-small v-muted">{{ i18n.t('No speech detected in this recording.') }}</p> }
+          @else { <p class="v-small v-muted">{{ i18n.t('No transcript yet.') }}</p> }
         }
         @if (error(); as e) { <div class="v-small err">{{ e }}</div> }
         @if (canAct()) {
           <div class="actions">
             @if (editing()) {
-              <input type="date" [(ngModel)]="pendingDate" name="d{{ c().id }}" aria-label="Day" />
-              <button type="button" class="v-btn small primary" (click)="saveDay()">Save</button>
-              <button type="button" class="v-btn small quiet" (click)="editing.set(false)">Cancel</button>
+              <input type="date" [(ngModel)]="pendingDate" name="d{{ c().id }}" [attr.aria-label]="i18n.t('Day')" />
+              <button type="button" class="v-btn small primary" (click)="saveDay()">{{ i18n.t('Save') }}</button>
+              <button type="button" class="v-btn small quiet" (click)="editing.set(false)">{{ i18n.t('Cancel') }}</button>
             } @else {
               @if (isOpen() && !c().product_id) {
-                <button type="button" class="v-btn small" (click)="editing.set(true); pendingDate = c().target_date ?? ''">{{ c().target_date ? 'Change day' : 'Set day' }}</button>
+                <button type="button" class="v-btn small" (click)="editing.set(true); pendingDate = c().target_date ?? ''">{{ c().target_date ? i18n.t('Change day') : i18n.t('Set day') }}</button>
               }
               @if (isOpen()) {
-                <button type="button" class="v-btn small quiet" (click)="setStatus('discarded')" [disabled]="busy()">Discard</button>
+                <button type="button" class="v-btn small quiet" (click)="setStatus('discarded')" [disabled]="busy()">{{ i18n.t('Discard') }}</button>
               }
               @if (c().status === 'discarded') {
-                <button type="button" class="v-btn small" (click)="setStatus('new')" [disabled]="busy()">Restore</button>
+                <button type="button" class="v-btn small" (click)="setStatus('new')" [disabled]="busy()">{{ i18n.t('Restore') }}</button>
               }
               @if (c().kind === 'audio' && isOpen()) {
-                <button type="button" class="v-btn small quiet" (click)="retranscribe()" [disabled]="busy()">Re-transcribe</button>
+                <button type="button" class="v-btn small quiet" (click)="retranscribe()" [disabled]="busy()">{{ i18n.t('Re-transcribe') }}</button>
               }
               @if (confirmDelete()) {
-                <span class="v-small">Delete for good?</span>
-                <button type="button" class="v-btn small danger" (click)="remove()" [disabled]="busy()">Yes, delete</button>
-                <button type="button" class="v-btn small quiet" (click)="confirmDelete.set(false)">No</button>
+                <span class="v-small">{{ i18n.t('Delete for good?') }}</span>
+                <button type="button" class="v-btn small danger" (click)="remove()" [disabled]="busy()">{{ i18n.t('Yes, delete') }}</button>
+                <button type="button" class="v-btn small quiet" (click)="confirmDelete.set(false)">{{ i18n.t('No') }}</button>
               } @else {
-                <button type="button" class="v-btn small quiet danger" (click)="confirmDelete.set(true)" [disabled]="busy()">Delete</button>
+                <button type="button" class="v-btn small quiet danger" (click)="confirmDelete.set(true)" [disabled]="busy()">{{ i18n.t('Delete') }}</button>
               }
             }
           </div>
-          @if (c().status === 'discarded') { <p class="v-small v-muted">Discarded captures are deleted automatically after one day.</p> }
+          @if (c().status === 'discarded') { <p class="v-small v-muted">{{ i18n.t('Discarded captures are deleted automatically after one day.') }}</p> }
         }
       </div>
     </article>
@@ -105,6 +106,7 @@ import { describeError } from '../core/problem';
 })
 export class CaptureCard {
   readonly api = inject(ApiClient);
+  readonly i18n = inject(I18nService);
   readonly capture = input.required<Capture>();
   readonly compact = input(false);
   /** Show the day / product link in the header (off inside a day thread or product page). */
@@ -141,7 +143,8 @@ export class CaptureCard {
 
   statusLabel(): string {
     const s = this.c().status;
-    return s === 'new' ? 'waiting for the agent' : s === 'assigned' ? 'in draft' : s === 'in_progress' ? 'processing' : s;
+    const text = s === 'new' ? 'waiting for the agent' : s === 'assigned' ? 'in draft' : s === 'in_progress' ? 'processing' : s;
+    return this.i18n.t(text);
   }
 
   tagClass(): string {

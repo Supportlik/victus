@@ -56,12 +56,22 @@ class BandDistributionResult:
 
 @dataclass(frozen=True, slots=True)
 class ThresholdMark:
-    """One class of a scale, in the unit the block shows it in."""
+    """One class of a scale, in the unit the block shows it in.
+
+    A BMI class is also a weight, and a reader can act on the weight rather than on the
+    index. Both live here so nothing has to pair two lists by position and hope they stay
+    in step (R81).
+    """
 
     name: str
     lower: float | None
     upper: float | None
     tone: str
+    #: The same boundaries in the unit the reader weighs themselves in, when there is one.
+    lower_kg: float | None = None
+    upper_kg: float | None = None
+    #: Kilograms from the current weight to reaching this class; None when already in it.
+    to_reach_kg: float | None = None
 
 
 @dataclass(frozen=True, slots=True)

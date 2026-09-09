@@ -1,5 +1,6 @@
-import { ChangeDetectionStrategy, Component, input } from '@angular/core';
-import { MACRO_KEYS, MACRO_UNIT, MacroKey, Macros } from '../api';
+import { ChangeDetectionStrategy, Component, inject, input } from '@angular/core';
+import { MACRO_KEYS, MacroKey, Macros } from '../api';
+import { I18nService } from '../core/i18n.service';
 import { formatMacro } from './format';
 
 /** Compact one-line macro summary: "1,383 kcal · P 154.9 · C 116.6 · F 28.4 · Fi 12.3 · S 7.25". */
@@ -9,7 +10,7 @@ import { formatMacro } from './format';
   template: `
     <span class="kcal">{{ fmt(m().kcal, 'kcal') }} kcal</span>
     @for (k of rest; track k) {
-      <span class="part"><abbr [title]="title[k]">{{ short[k] }}</abbr> {{ fmt(m()[k], k) }}</span>
+      <span class="part"><abbr [title]="titleOf(k)">{{ short[k] }}</abbr> {{ fmt(m()[k], k) }}</span>
     }
   `,
   styles: `
@@ -19,17 +20,22 @@ import { formatMacro } from './format';
   `,
 })
 export class MacroLine {
+  readonly i18n = inject(I18nService);
   readonly m = input.required<Macros>();
   readonly rest = MACRO_KEYS.filter((k) => k !== 'kcal');
   readonly short: Record<MacroKey, string> = { kcal: 'kcal', protein: 'P', carbs: 'C', fat: 'F', fiber: 'Fi', salt: 'S' };
-  readonly title: Record<MacroKey, string> = {
+  /** Spelt out behind the abbreviation, because P and Fi are only obvious once you know them. */
+  private readonly title: Record<MacroKey, string> = {
     kcal: 'Calories',
-    protein: `Protein (${MACRO_UNIT.protein})`,
+    protein: 'Protein (g)',
     carbs: 'Carbohydrates (g)',
     fat: 'Fat (g)',
     fiber: 'Fiber (g)',
     salt: 'Salt (g)',
   };
+  titleOf(k: MacroKey): string {
+    return this.i18n.t(this.title[k]);
+  }
   fmt(v: number | null | undefined, k: MacroKey): string {
     return formatMacro(v, k);
   }

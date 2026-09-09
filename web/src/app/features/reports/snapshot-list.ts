@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, effect, inject, input, output, signal } from '@angular/core';
 import { ApiClient, ReportBlock, ReportSnapshot } from '../../api';
+import { I18nService } from '../../core/i18n.service';
 import { describeError } from '../../core/problem';
 import { MarkdownPipe } from '../../shared/markdown.pipe';
 import { ReportBlockView } from './report-blocks/report-block';
@@ -17,11 +18,11 @@ import { ReportBlockView } from './report-blocks/report-block';
     <section class="v-panel snaps">
       <header>
         <div>
-          <h3>Moments</h3>
-          <p class="v-small v-muted">A snapshot freezes this period's numbers. The agent writes its assessment for exactly those numbers.</p>
+          <h3>{{ i18n.t('Moments') }}</h3>
+          <p class="v-small v-muted">{{ i18n.t('A snapshot freezes the numbers of this period. The agent writes its assessment for exactly those numbers.') }}</p>
         </div>
         <div class="v-actions">
-          <button type="button" class="v-btn primary" (click)="freeze()" [disabled]="busy()">{{ busy() ? 'Freezing…' : 'Freeze this period' }}</button>
+          <button type="button" class="v-btn primary" (click)="freeze()" [disabled]="busy()">{{ busy() ? i18n.t('Freezing…') : i18n.t('Freeze this period') }}</button>
         </div>
       </header>
       @if (error(); as e) { <div class="v-error">{{ e }}</div> }
@@ -33,7 +34,7 @@ import { ReportBlockView } from './report-blocks/report-block';
             <button type="button" class="row" (click)="toggle(s)">
               <span class="when">{{ s.today }}</span>
               <span class="what">{{ s.label || s.title }} <span class="v-small v-muted">{{ s.period_start }} → {{ s.period_end }}</span></span>
-              <span class="v-tag" [class]="'v-tag ' + (s.status === 'assessed' ? 'closed' : s.status === 'failed' ? 'bad' : 'warn')">{{ s.status === 'frozen' ? 'no assessment yet' : s.status }}</span>
+              <span class="v-tag" [class]="'v-tag ' + (s.status === 'assessed' ? 'closed' : s.status === 'failed' ? 'bad' : 'warn')">{{ s.status === 'frozen' ? i18n.t('no assessment yet') : s.status }}</span>
               <span class="chev" aria-hidden="true">{{ open() === s.id ? '▾' : '▸' }}</span>
             </button>
             @if (open() === s.id) {
@@ -41,39 +42,39 @@ import { ReportBlockView } from './report-blocks/report-block';
                 @if (detail(); as d) {
                   @if (d.assessment_md) {
                     <div class="assessment">
-                      <h4>Assessment @if (d.model) { <span class="v-small v-muted">{{ d.model }}@if (d.cost_usd) { · {{ d.cost_usd.toFixed(2) }} USD }</span> }</h4>
+                      <h4>{{ i18n.t('Assessment') }} @if (d.model) { <span class="v-small v-muted">{{ d.model }}@if (d.cost_usd) { · {{ d.cost_usd.toFixed(2) }} USD }</span> }</h4>
                       <div class="v-md" [innerHTML]="d.assessment_md | markdown"></div>
                     </div>
                   } @else {
-                    <p class="v-small v-muted">No assessment yet. Ask the agent in the chat (tool <code>report_assess</code>), or write one yourself.</p>
+                    <p class="v-small v-muted">{{ i18n.t('No assessment yet. Ask the agent in the chat (tool') }} <code>report_assess</code>{{ i18n.t('), or write one yourself.') }}</p>
                     <form class="own" (submit)="submitOwn($event, d)">
-                      <textarea name="own" rows="3" placeholder="Your own note on this moment" [value]="ownText" (input)="ownText = $any($event.target).value"></textarea>
-                      <button type="submit" class="v-btn" [disabled]="busy() || !ownText.trim()">Save note</button>
+                      <textarea name="own" rows="3" [placeholder]="i18n.t('Your own note on this moment')" [value]="ownText" (input)="ownText = $any($event.target).value"></textarea>
+                      <button type="submit" class="v-btn" [disabled]="busy() || !ownText.trim()">{{ i18n.t('Save note') }}</button>
                     </form>
                   }
                   <details class="numbers">
-                    <summary>Frozen numbers</summary>
+                    <summary>{{ i18n.t('Frozen numbers') }}</summary>
                     @if (d.result) {
                       <div class="blocks">@for (b of blocksOf(d); track $index) { <v-report-block [block]="b" /> }</div>
                     }
                   </details>
                   <div class="v-actions">
                     @if (confirmDelete() === d.id) {
-                      <span class="v-small">Delete this moment?</span>
-                      <button type="button" class="v-btn small danger" (click)="remove(d)">Yes</button>
-                      <button type="button" class="v-btn small quiet" (click)="confirmDelete.set(null)">No</button>
+                      <span class="v-small">{{ i18n.t('Delete this moment?') }}</span>
+                      <button type="button" class="v-btn small danger" (click)="remove(d)">{{ i18n.t('Yes') }}</button>
+                      <button type="button" class="v-btn small quiet" (click)="confirmDelete.set(null)">{{ i18n.t('No') }}</button>
                     } @else {
-                      <button type="button" class="v-btn small quiet danger" (click)="confirmDelete.set(d.id)">Delete</button>
+                      <button type="button" class="v-btn small quiet danger" (click)="confirmDelete.set(d.id)">{{ i18n.t('Delete') }}</button>
                     }
                   </div>
                 } @else {
-                  <p class="v-muted v-small">Loading…</p>
+                  <p class="v-muted v-small">{{ i18n.t('Loading…') }}</p>
                 }
               </div>
             }
           </li>
         } @empty {
-          <li class="v-muted v-small empty">No moments yet. Freeze this period to keep its numbers and have them assessed.</li>
+          <li class="v-muted v-small empty">{{ i18n.t('No moments yet. Freeze this period to keep its numbers and have them assessed.') }}</li>
         }
       </ul>
     </section>
@@ -101,6 +102,7 @@ import { ReportBlockView } from './report-blocks/report-block';
 })
 export class SnapshotList {
   private readonly api = inject(ApiClient);
+  readonly i18n = inject(I18nService);
   /** Which report the list belongs to, and which period a new snapshot freezes. */
   readonly report = input.required<string>();
   readonly from = input<string | null>(null);
@@ -161,7 +163,7 @@ export class SnapshotList {
       next: (s) => {
         this.snapshots.update((list) => [s, ...list]);
         this.busy.set(false);
-        this.notice.set('Frozen. Ask the agent for its assessment, or write your own note.');
+        this.notice.set(this.i18n.t('Frozen. Ask the agent for its assessment, or write your own note.'));
         this.created.emit(s);
       },
       error: (e: unknown) => {

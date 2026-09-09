@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { ApiClient, Capture, Portion, Product, ProductProposal, ProductUsage, Unit } from '../../api';
 import { todayLocal } from '../../core/format.service';
+import { I18nService } from '../../core/i18n.service';
 import { describeError } from '../../core/problem';
 import { CaptureCard } from '../../shared/capture-card';
 import { CaptureInput } from '../../shared/capture-input';
@@ -20,17 +21,17 @@ import { ProductForm } from './product-form';
       @if (product(); as p) {
         <header class="v-page-head">
           <div>
-            <a routerLink="/products" class="v-small">← Products</a>
+            <a routerLink="/products" class="v-small">← {{ i18n.t('Products') }}</a>
             <h2>{{ p.name }}</h2>
             <p class="sub">{{ p.brand }} @if (p.verified) { <span class="v-tag ok">values from the label</span> } @else { <span class="v-tag warn">estimate</span> } @if (p.ean) { <span class="v-muted v-small">EAN {{ p.ean }}</span> }</p>
             @if (p.valid_from || p.valid_until) {
-              <p class="v-small v-muted">These values apply {{ validity(p) }}.</p>
+              <p class="v-small v-muted">{{ i18n.t('These values apply {range}.', { range: validity(p) }) }}</p>
             }
           </div>
           <div class="v-actions">
-            <button type="button" class="v-btn" (click)="editing.set(!editing())">{{ editing() ? 'Close editor' : 'Edit' }}</button>
-            <button type="button" class="v-btn" (click)="startVersion(p)">Values changed…</button>
-            <button type="button" class="v-btn danger" (click)="remove()">Delete</button>
+            <button type="button" class="v-btn" (click)="editing.set(!editing())">{{ editing() ? i18n.t('Close editor') : i18n.t('Edit') }}</button>
+            <button type="button" class="v-btn" (click)="startVersion(p)">{{ i18n.t('Values changed…') }}</button>
+            <button type="button" class="v-btn danger" (click)="remove()">{{ i18n.t('Delete') }}</button>
           </div>
         </header>
 
@@ -38,46 +39,46 @@ import { ProductForm } from './product-form';
           <div class="v-panel"><v-product-form [product]="p" (saved)="onSaved($event)" (cancelled)="editing.set(false)" /></div>
         } @else {
           <section class="facts v-panel">
-            <h3>Per {{ p.reference_amount }} {{ p.reference_unit }}</h3>
+            <h3>{{ i18n.t('Per {amount} {unit}', { amount: p.reference_amount, unit: p.reference_unit }) }}</h3>
             <dl>
               <div><dt>kcal</dt><dd>{{ p.kcal | macro: 'kcal' }}</dd></div>
-              <div><dt>Protein</dt><dd>{{ p.protein | macro: 'protein' }} g</dd></div>
-              <div><dt>Carbs</dt><dd>{{ p.carbs | macro: 'carbs' }} g</dd></div>
-              <div><dt>Fat</dt><dd>{{ p.fat | macro: 'fat' }} g</dd></div>
-              <div><dt>Fiber</dt><dd>{{ p.fiber | macro: 'fiber' }} g</dd></div>
-              <div><dt>Salt</dt><dd>{{ p.salt | macro: 'salt' }} g</dd></div>
+              <div><dt>{{ i18n.t('Protein') }}</dt><dd>{{ p.protein | macro: 'protein' }} g</dd></div>
+              <div><dt>{{ i18n.t('Carbs') }}</dt><dd>{{ p.carbs | macro: 'carbs' }} g</dd></div>
+              <div><dt>{{ i18n.t('Fat') }}</dt><dd>{{ p.fat | macro: 'fat' }} g</dd></div>
+              <div><dt>{{ i18n.t('Fiber') }}</dt><dd>{{ p.fiber | macro: 'fiber' }} g</dd></div>
+              <div><dt>{{ i18n.t('Salt') }}</dt><dd>{{ p.salt | macro: 'salt' }} g</dd></div>
             </dl>
-            @if (p.source) { <p class="v-small v-muted">Source: {{ p.source }}</p> }
+            @if (p.source) { <p class="v-small v-muted">{{ i18n.t('Source') }}: {{ p.source }}</p> }
             @if (p.note) { <p class="v-small">{{ p.note }}</p> }
           </section>
         }
 
         @if (versionForm()) {
           <section class="v-panel newver">
-            <h3>Since when do the new values apply?</h3>
-            <p class="v-small v-muted">Use this when the product itself changed: a reformulated recipe, a different supplier, a new label. From that day on the values below count; every day before it keeps the numbers it has now, so nothing you already logged moves. Leave a field empty to carry the current value over.</p>
+            <h3>{{ i18n.t('Since when do the new values apply?') }}</h3>
+            <p class="v-small v-muted">{{ i18n.t('Use this when the product itself changed: a reformulated recipe, a different supplier, a new label. From that day on the values below count; every day before it keeps the numbers it has now, so nothing you already logged moves. Leave a field empty to carry the current value over.') }}</p>
             <div class="v-form-row">
-              <label class="v-field"><span>Valid from</span><input type="date" name="vf" [(ngModel)]="vf" /></label>
-              <label class="v-field"><span>kcal per 100 {{ p.reference_unit }}</span><input type="number" name="vkcal" step="0.1" [(ngModel)]="vkcal" [placeholder]="p.kcal ?? ''" /></label>
-              <label class="v-field"><span>Protein</span><input type="number" name="vprot" step="0.1" [(ngModel)]="vprotein" [placeholder]="p.protein ?? ''" /></label>
-              <label class="v-field"><span>Carbs</span><input type="number" name="vcarb" step="0.1" [(ngModel)]="vcarbs" [placeholder]="p.carbs ?? ''" /></label>
-              <label class="v-field"><span>Fat</span><input type="number" name="vfat" step="0.1" [(ngModel)]="vfat" [placeholder]="p.fat ?? ''" /></label>
-              <label class="v-field"><span>Fiber</span><input type="number" name="vfib" step="0.1" [(ngModel)]="vfiber" [placeholder]="p.fiber ?? ''" /></label>
-              <label class="v-field"><span>Salt</span><input type="number" name="vsalt" step="0.1" [(ngModel)]="vsalt" [placeholder]="p.salt ?? ''" /></label>
-              <label class="v-field wide"><span>Where the new values come from</span><input name="vsrc" [(ngModel)]="vsource" placeholder="new label, September 2026" /></label>
+              <label class="v-field"><span>{{ i18n.t('Valid from') }}</span><input type="date" name="vf" [(ngModel)]="vf" /></label>
+              <label class="v-field"><span>{{ i18n.t('kcal per 100 {unit}', { unit: p.reference_unit }) }}</span><input type="number" name="vkcal" step="0.1" [(ngModel)]="vkcal" [placeholder]="p.kcal ?? ''" /></label>
+              <label class="v-field"><span>{{ i18n.t('Protein') }}</span><input type="number" name="vprot" step="0.1" [(ngModel)]="vprotein" [placeholder]="p.protein ?? ''" /></label>
+              <label class="v-field"><span>{{ i18n.t('Carbs') }}</span><input type="number" name="vcarb" step="0.1" [(ngModel)]="vcarbs" [placeholder]="p.carbs ?? ''" /></label>
+              <label class="v-field"><span>{{ i18n.t('Fat') }}</span><input type="number" name="vfat" step="0.1" [(ngModel)]="vfat" [placeholder]="p.fat ?? ''" /></label>
+              <label class="v-field"><span>{{ i18n.t('Fiber') }}</span><input type="number" name="vfib" step="0.1" [(ngModel)]="vfiber" [placeholder]="p.fiber ?? ''" /></label>
+              <label class="v-field"><span>{{ i18n.t('Salt') }}</span><input type="number" name="vsalt" step="0.1" [(ngModel)]="vsalt" [placeholder]="p.salt ?? ''" /></label>
+              <label class="v-field wide"><span>{{ i18n.t('Where the new values come from') }}</span><input name="vsrc" [(ngModel)]="vsource" [placeholder]="i18n.t('new label, September 2026')" /></label>
             </div>
             <div class="v-actions">
-              <button type="button" class="v-btn primary" (click)="saveVersion(p)" [disabled]="!vf || saving()">Save new version</button>
-              <button type="button" class="v-btn quiet" (click)="versionForm.set(false)">Cancel</button>
+              <button type="button" class="v-btn primary" (click)="saveVersion(p)" [disabled]="!vf || saving()">{{ i18n.t('Save new version') }}</button>
+              <button type="button" class="v-btn quiet" (click)="versionForm.set(false)">{{ i18n.t('Cancel') }}</button>
             </div>
           </section>
         }
 
         @if (versions().length > 1) {
           <section class="v-panel history">
-            <h3>Values over time</h3>
+            <h3>{{ i18n.t('Values over time') }}</h3>
             <table class="v-table">
-              <thead><tr><th>Period</th><th class="num">kcal</th><th class="num">Protein</th><th class="num">Carbs</th><th class="num">Fat</th><th>Source</th></tr></thead>
+              <thead><tr><th>{{ i18n.t('Validity') }}</th><th class="num">kcal</th><th class="num">{{ i18n.t('Protein') }}</th><th class="num">{{ i18n.t('Carbs') }}</th><th class="num">{{ i18n.t('Fat') }}</th><th>{{ i18n.t('Source') }}</th></tr></thead>
               <tbody>
                 @for (v of versions(); track v.id) {
                   <tr [class.current]="v.id === p.id">
@@ -93,22 +94,22 @@ import { ProductForm } from './product-form';
                 }
               </tbody>
             </table>
-            <p class="v-small v-muted">A day keeps the version that applied when it was logged. Reports read each day with its own numbers.</p>
+            <p class="v-small v-muted">{{ i18n.t('A day keeps the version that applied when it was logged. Reports read each day with its own numbers.') }}</p>
           </section>
         }
 
         @if (proposals().length) {
           <section class="v-panel proposals">
-            <h3>Proposed corrections</h3>
-            <p class="v-small v-muted">The agent read these from your label photos or notes. Nothing changes until you approve.</p>
+            <h3>{{ i18n.t('Proposed corrections') }}</h3>
+            <p class="v-small v-muted">{{ i18n.t('The agent read these from your label photos or notes. Nothing changes until you approve.') }}</p>
             @for (pr of proposals(); track pr.id) {
               <div class="proposal">
                 <table class="v-table diff">
-                  <thead><tr><th>Apply</th><th>Field</th><th class="num">Now</th><th class="num">Proposed</th></tr></thead>
+                  <thead><tr><th>{{ i18n.t('Apply') }}</th><th>{{ i18n.t('Field') }}</th><th class="num">{{ i18n.t('Now') }}</th><th class="num">{{ i18n.t('Proposed') }}</th></tr></thead>
                   <tbody>
                     @for (k of keys(pr); track k) {
                       <tr>
-                        <td><input type="checkbox" [checked]="isSelected(pr, k)" (change)="toggle(pr, k)" [attr.aria-label]="'apply ' + k" /></td>
+                        <td><input type="checkbox" [checked]="isSelected(pr, k)" (change)="toggle(pr, k)" [attr.aria-label]="i18n.t('apply {field}', { field: k })" /></td>
                         <td>{{ k }}</td>
                         <td class="num v-muted">{{ pr.current[k] ?? '–' }}</td>
                         <td class="num"><strong>{{ pr.changes[k] }}</strong></td>
@@ -120,9 +121,9 @@ import { ProductForm } from './product-form';
                 <p class="v-small v-muted">{{ pr.source }} · {{ pr.created_at.replace('T', ' ').slice(0, 16) }}</p>
                 <div class="v-actions">
                   <button type="button" class="v-btn primary" (click)="decide(pr, true)" [disabled]="deciding() || !selectedCount(pr)">
-                    {{ selectedCount(pr) === keys(pr).length ? 'Apply all' : 'Apply ' + selectedCount(pr) + ' of ' + keys(pr).length }}
+                    {{ selectedCount(pr) === keys(pr).length ? i18n.t('Apply all') : i18n.t('Apply {n} of {total}', { n: selectedCount(pr), total: keys(pr).length }) }}
                   </button>
-                  <button type="button" class="v-btn" (click)="decide(pr, false)" [disabled]="deciding()">Reject</button>
+                  <button type="button" class="v-btn" (click)="decide(pr, false)" [disabled]="deciding()">{{ i18n.t('Reject') }}</button>
                 </div>
               </div>
             }
@@ -130,11 +131,11 @@ import { ProductForm } from './product-form';
         }
 
         <section class="captures v-panel">
-          <h3>Label photos &amp; notes</h3>
-          <p class="v-small v-muted">Photograph the nutrition label or say what is wrong. The agent reads it on its next run and proposes corrected values; you approve them above. Approved values apply to every day that logged this product.</p>
+          <h3>{{ i18n.t('Label photos & notes') }}</h3>
+          <p class="v-small v-muted">{{ i18n.t('Photograph the nutrition label or say what is wrong. The agent reads it on its next run and proposes corrected values; you approve them above. Approved values apply to every day that logged this product.') }}</p>
           <v-capture-input
             [productId]="p.id"
-            placeholder="Photograph the label, or write what is wrong: 112 kcal per 100 g, not 96"
+            [placeholder]="i18n.t('Photograph the label, or write what is wrong: 112 kcal per 100 g, not 96')"
             (uploaded)="onCapture($event)"
           />
           <div class="cap-list">
@@ -145,74 +146,71 @@ import { ProductForm } from './product-form';
         </section>
 
         <section class="usage v-panel">
-          <h3>Where you ate this</h3>
+          <h3>{{ i18n.t('Where you ate this') }}</h3>
           @if (usage(); as u) {
             @if (u.entries.length) {
-              <p class="v-small v-muted">{{ u.days }} day{{ u.days === 1 ? '' : 's' }} · {{ u.first_date }} to {{ u.last_date }} · {{ u.total_base_amount | number: '1.0-0' }} {{ p.reference_unit }} in total · {{ u.total_kcal | number: '1.0-0' }} kcal</p>
+              <p class="v-small v-muted">{{ u.days === 1 ? i18n.t('{n} day', { n: u.days }) : i18n.t('{n} days', { n: u.days }) }} · {{ u.first_date }} {{ i18n.t('to') }} {{ u.last_date }} · {{ u.total_base_amount | number: '1.0-0' }} {{ p.reference_unit }} {{ i18n.t('in total') }} · {{ u.total_kcal | number: '1.0-0' }} kcal</p>
               <div class="v-scroll-x"><table class="v-table">
-                <thead><tr><th>Day</th><th>Meal</th><th class="num">Amount</th><th class="num">kcal</th><th></th></tr></thead>
+                <thead><tr><th>{{ i18n.t('Day') }}</th><th>{{ i18n.t('Meal') }}</th><th class="num">{{ i18n.t('Amount') }}</th><th class="num">kcal</th><th></th></tr></thead>
                 <tbody>
                   @for (e of u.entries; track e.line_item_id) {
                     <tr>
                       <td><a [routerLink]="['/days', e.date]">{{ e.date }}</a></td>
                       <td>{{ e.meal }}</td>
-                      <td class="num">{{ e.amount ?? e.base_amount }} {{ e.unit_code ?? e.base_unit }}@if (e.estimated) { <span title="estimated"> ⚠️</span> }</td>
+                      <td class="num">{{ e.amount ?? e.base_amount }} {{ e.unit_code ?? e.base_unit }}@if (e.estimated) { <span [title]="i18n.t('estimated')"> ⚠️</span> }</td>
                       <td class="num">{{ e.kcal | number: '1.0-0' }}</td>
-                      <td>@if (e.is_draft) { <span class="v-tag draft">draft</span> }</td>
+                      <td>@if (e.is_draft) { <span class="v-tag draft">{{ i18n.t('draft') }}</span> }</td>
                     </tr>
                   }
                 </tbody>
               </table></div>
             } @else {
-              <p class="v-muted v-small">Not logged yet.</p>
+              <p class="v-muted v-small">{{ i18n.t('Not logged yet.') }}</p>
             }
-          } @else { <p class="v-muted v-small">Loading…</p> }
+          } @else { <p class="v-muted v-small">{{ i18n.t('Loading…') }}</p> }
         </section>
 
         <section class="portions">
-          <h3>Portions</h3>
-          <p class="v-small v-muted">Piece weights live only here, and they are measured in {{ p.reference_unit }} like the values above. One portion per unit can be the default.</p>
+          <h3>{{ i18n.t('Portions') }}</h3>
+          <p class="v-small v-muted">{{ i18n.t('Piece weights live only here, and they are measured in {unit} like the values above. One portion per unit can be the default.', { unit: p.reference_unit }) }}</p>
           <table class="v-table">
-            <thead><tr><th>Label</th><th>Unit</th><th class="num">Weight</th><th>Default</th><th>Weighed</th><th></th></tr></thead>
+            <thead><tr><th>{{ i18n.t('Label') }}</th><th>{{ i18n.t('Unit') }}</th><th class="num">{{ i18n.t('Weight') }}</th><th>{{ i18n.t('Default') }}</th><th>{{ i18n.t('Weighed') }}</th><th></th></tr></thead>
             <tbody>
               @for (po of p.portions ?? []; track po.id) {
                 <tr>
                   <td>{{ po.label }}</td><td>{{ po.unit_code }}</td><td class="num">{{ po.amount }} {{ po.amount_unit }}</td>
-                  <td>{{ po.is_default ? 'yes' : '' }}</td><td>{{ po.weight_source === 'weighed' ? 'yes' : po.weight_source === 'estimated' ? 'estimated' : '' }}</td>
-                  <td class="num"><button type="button" class="v-btn quiet small danger" (click)="deletePortion(po)">remove</button></td>
+                  <td>{{ po.is_default ? i18n.t('yes') : '' }}</td><td>{{ po.weight_source === 'weighed' ? i18n.t('yes') : po.weight_source === 'estimated' ? i18n.t('estimated') : '' }}</td>
+                  <td class="num"><button type="button" class="v-btn quiet small danger" (click)="deletePortion(po)">{{ i18n.t('remove') }}</button></td>
                 </tr>
-              } @empty { <tr><td colspan="6" class="v-muted">No portions yet.</td></tr> }
+              } @empty { <tr><td colspan="6" class="v-muted">{{ i18n.t('No portions yet.') }}</td></tr> }
             </tbody>
           </table>
           <form class="v-form-row add" (ngSubmit)="addPortion()">
             <label class="v-field">
-              <span>Sold or eaten as</span>
+              <span>{{ i18n.t('Sold or eaten as') }}</span>
               <select name="unit" [(ngModel)]="np.unit_code" (ngModelChange)="onPortionUnit($event)">
                 @for (u of countUnits(); track u.code) { <option [value]="u.code">{{ u.singular }}</option> }
               </select>
             </label>
             <label class="v-field">
-              <span>One {{ portionUnitLabel() }} of this is</span>
+              <span>{{ i18n.t('One {unit} of this is', { unit: portionUnitLabel() }) }}</span>
               <span class="pair">
                 <input name="amount" type="number" step="any" min="0" [(ngModel)]="np.amount" required />
                 <span class="fixed">{{ p.reference_unit }}</span>
               </span>
             </label>
             <label class="v-field">
-              <span>Name <span class="v-muted">(optional)</span></span>
+              <span>{{ i18n.t('Name') }} <span class="v-muted">({{ i18n.t('optional') }})</span></span>
               <input name="label" [(ngModel)]="np.label" [placeholder]="portionUnitLabel()" />
             </label>
-            <label class="v-field"><span>Weight is</span><select name="ws" [(ngModel)]="np.weight_source"><option value="weighed">weighed</option><option value="estimated">estimated</option></select></label>
-            <label class="v-field check"><span>Use by default</span><input name="def" type="checkbox" [(ngModel)]="np.is_default" /></label>
+            <label class="v-field"><span>{{ i18n.t('Weight is') }}</span><select name="ws" [(ngModel)]="np.weight_source"><option value="weighed">{{ i18n.t('weighed') }}</option><option value="estimated">{{ i18n.t('estimated') }}</option></select></label>
+            <label class="v-field check"><span>{{ i18n.t('Use by default') }}</span><input name="def" type="checkbox" [(ngModel)]="np.is_default" /></label>
             <p class="v-small v-muted hint">
-              A portion says what one {{ portionUnitLabel() }} of this product weighs, so “2 {{ portionUnitLabel() }}” can be
-              logged without weighing anything. It is measured in <b>{{ p.reference_unit }}</b>,
-              because that is what this product's values are stated per; the other unit would need a
-              density to convert. <b>Use by default</b> decides which one counts when a day just says
-              {{ portionUnitLabel() }} and this product has several of that unit, for instance a small
-              and a large one.
+              {{ i18n.t('A portion says what one {unit} of this product weighs, so “2 {unit}” can be logged without weighing anything. It is measured in', { unit: portionUnitLabel() }) }}
+              <b>{{ p.reference_unit }}</b>{{ i18n.t(', because that is what the values of this product are stated per; the other unit would need a density to convert.') }}
+              <b>{{ i18n.t('Use by default') }}</b> {{ i18n.t('decides which one counts when a day just says {unit} and this product has several of that unit, for instance a small and a large one.', { unit: portionUnitLabel() }) }}
             </p>
-            <button type="submit" class="v-btn" [disabled]="!np.unit_code || !np.amount">Add portion</button>
+            <button type="submit" class="v-btn" [disabled]="!np.unit_code || !np.amount">{{ i18n.t('Add portion') }}</button>
           </form>
         </section>
       }
@@ -244,6 +242,7 @@ import { ProductForm } from './product-form';
 })
 export class ProductDetail {
   readonly api = inject(ApiClient);
+  readonly i18n = inject(I18nService);
   private readonly router = inject(Router);
   readonly id = input.required<string>();
   readonly product = signal<Product | null>(null);
@@ -286,10 +285,14 @@ export class ProductDetail {
       this.api.units().subscribe({ next: (u) => this.units.set(u), error: () => undefined });
     }
   }
-  /** How long a version's values apply, in words. */
+  /** How long the values of a version apply, in words. */
   validity(p: Product): string {
-    const from = p.valid_from ? `from ${p.valid_from}` : 'from the beginning';
-    return p.valid_until ? `${from} to ${p.valid_until}` : `${from} onwards`;
+    if (p.valid_from && p.valid_until) {
+      return this.i18n.t('from {from} to {until}', { from: p.valid_from, until: p.valid_until });
+    }
+    if (p.valid_from) return this.i18n.t('from {from} onwards', { from: p.valid_from });
+    if (p.valid_until) return this.i18n.t('until {until}', { until: p.valid_until });
+    return this.i18n.t('from the beginning');
   }
 
   startVersion(p: Product): void {
@@ -402,7 +405,9 @@ export class ProductDetail {
   }
   remove(): void {
     const p = this.product();
-    if (!p || !window.confirm(`Delete “${p.name}”? Days that use it keep their items only if the API allows it.`)) return;
+    if (!p) return;
+    const question = this.i18n.t('Delete “{name}”? Days that use it keep their items only if the API allows it.', { name: p.name });
+    if (!window.confirm(question)) return;
     this.api.deleteProduct(p.id).subscribe({ next: () => void this.router.navigate(['/products']), error: (e: unknown) => this.error.set(describeError(e)) });
   }
 }

@@ -30,16 +30,25 @@
     .brand-text { display: grid; min-width: 0; }
     .tenant { font-size: var(--v-fs-xs); color: var(--v-ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   }
+  // A round, quiet target that only shows itself on hover or focus: it is a preference,
+  // not an action, and at 2rem it is comfortably clickable without competing with the brand.
   .collapse {
-    border: 1px solid var(--v-line);
-    background: var(--v-surface-2);
-    color: var(--v-ink-2);
-    border-radius: var(--v-radius);
-    width: 1.6rem;
-    height: 1.6rem;
-    cursor: pointer;
-    line-height: 1;
+    display: grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
     flex: none;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--v-ink-3);
+    cursor: pointer;
+    transition: background-color 120ms ease, color 120ms ease;
+
+    &:hover { background: var(--v-surface-2); color: var(--v-ink); }
+    &:focus-visible { outline: 2px solid var(--v-primary); outline-offset: 1px; color: var(--v-ink); }
+    v-icon { transition: transform 160ms ease; }
+    &:hover v-icon { transform: translateX(0.1rem); }
   }
 
   .today {
@@ -66,8 +75,29 @@
     color: var(--v-ink-2);
     text-decoration: none;
     position: relative;
+    transition: background-color 120ms ease, color 120ms ease;
+
+    // The marker grows from nothing on the way in, so switching section reads as movement
+    // rather than as two states swapping. It is a pseudo-element to keep the layout still.
+    &::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 50%;
+      width: 3px;
+      height: 0;
+      border-radius: 0 2px 2px 0;
+      background: var(--v-primary);
+      transform: translateY(-50%);
+      transition: height 160ms ease;
+    }
     &:hover { background: var(--v-surface-2); color: var(--v-ink); }
-    &.active { color: var(--v-ink); background: var(--v-surface-2); font-weight: 500; }
+    &.active {
+      color: var(--v-ink);
+      background: var(--v-surface-2);
+      font-weight: 500;
+      &::before { height: 60%; }
+    }
   }
   li a v-icon { color: var(--v-ink-3); flex: none; }
   li a.active v-icon { color: var(--v-primary); }
@@ -166,7 +196,29 @@
     font-size: 0.66rem;
     line-height: 1.1;
     cursor: pointer;
-    &.active { color: var(--v-primary); font-weight: 600; }
+    transition: color 120ms ease;
+    v-icon { transition: transform 160ms ease; }
+
+    // A bar above the active tab, the same idea as the rail's marker, plus a small lift:
+    // on a phone the label is tiny, so the section has to be readable from the shape.
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 50%;
+      width: 0;
+      height: 2px;
+      border-radius: 0 0 2px 2px;
+      background: var(--v-primary);
+      transform: translateX(-50%);
+      transition: width 160ms ease;
+    }
+    &.active {
+      color: var(--v-primary);
+      font-weight: 600;
+      &::before { width: 45%; }
+      v-icon { transform: translateY(-0.1rem); }
+    }
     .badge {
       position: absolute;
       top: 0.2rem;
@@ -223,4 +275,9 @@
       font-weight: 600;
     }
   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rail li a, .rail li a::before, .rail .collapse, .rail .collapse v-icon,
+  .tab, .tab::before, .tab v-icon { transition: none; }
 }

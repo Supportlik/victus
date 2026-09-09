@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
+import { I18nService } from '../../core/i18n.service';
 import { PrefsService } from '../../core/prefs.service';
 import { describeError } from '../../core/problem';
 import { Logo } from '../../shared/logo';
@@ -18,38 +19,37 @@ import { Logo } from '../../shared/logo';
     <div class="wrap">
       <section class="pitch">
         <div class="mark"><v-logo [size]="56" /><span class="word">Victus</span></div>
-        <p class="tag">Your food log, on your own server.</p>
+        <p class="tag">{{ i18n.t('Your food log, on your own server.') }}</p>
         <ul class="points">
-          <li><span aria-hidden="true">🎙</span> Say or photograph what you ate</li>
-          <li><span aria-hidden="true">✎</span> The agent drafts, you accept</li>
-          <li><span aria-hidden="true">▥</span> Weight, TDEE and target bands in one check-up</li>
+          <li><span aria-hidden="true">🎙</span> {{ i18n.t('Say or photograph what you ate') }}</li>
+          <li><span aria-hidden="true">✎</span> {{ i18n.t('The agent drafts, you accept') }}</li>
+          <li><span aria-hidden="true">▥</span> {{ i18n.t('Weight, TDEE and target bands in one check-up') }}</li>
         </ul>
       </section>
 
       <section class="card">
-        <h1>Sign in</h1>
-        <p class="v-small v-muted">With the passkey on this device. There is no password.</p>
+        <h1>{{ i18n.t('Sign in') }}</h1>
+        <p class="v-small v-muted">{{ i18n.t('With the passkey on this device. There is no password.') }}</p>
 
         @if (error(); as e) { <div class="v-error" role="alert">{{ e }}</div> }
 
         <button type="button" class="v-btn primary big" (click)="signIn()" [disabled]="busy()">
-          <span aria-hidden="true">🔑</span> {{ busy() ? 'Waiting for your passkey…' : 'Sign in with passkey' }}
+          <span aria-hidden="true">🔑</span> {{ busy() ? i18n.t('Waiting for your passkey…') : i18n.t('Sign in with passkey') }}
         </button>
 
         <details class="recovery" [open]="showRecovery()">
-          <summary (click)="showRecovery.set(!showRecovery())">Lost your passkey?</summary>
+          <summary (click)="showRecovery.set(!showRecovery())">{{ i18n.t('Lost your passkey?') }}</summary>
           <p class="v-small v-muted">
-            Enter your e-mail and recovery code. You get a short session that only lets you register a new
-            passkey; afterwards sign in with that passkey.
+            {{ i18n.t('Enter your e-mail and recovery code. You get a short session that only lets you register a new passkey; afterwards sign in with that passkey.') }}
           </p>
           <form (ngSubmit)="recover()" class="rec-form">
-            <label class="v-field"><span>E-mail</span><input name="email" type="email" [(ngModel)]="email" required autocomplete="username" /></label>
-            <label class="v-field"><span>Recovery code</span><input name="code" [(ngModel)]="code" required autocomplete="one-time-code" /></label>
-            <button type="submit" class="v-btn" [disabled]="busy() || !email || !code">Use recovery code</button>
+            <label class="v-field"><span>{{ i18n.t('E-mail') }}</span><input name="email" type="email" [(ngModel)]="email" required autocomplete="username" /></label>
+            <label class="v-field"><span>{{ i18n.t('Recovery code') }}</span><input name="code" [(ngModel)]="code" required autocomplete="one-time-code" /></label>
+            <button type="submit" class="v-btn" [disabled]="busy() || !email || !code">{{ i18n.t('Use recovery code') }}</button>
           </form>
         </details>
 
-        <p class="v-small v-muted hint">Keep two passkeys, on two devices. You can add one under Settings.</p>
+        <p class="v-small v-muted hint">{{ i18n.t('Keep two passkeys, on two devices. You can add one under Settings.') }}</p>
       </section>
     </div>
   `,
@@ -96,6 +96,7 @@ import { Logo } from '../../shared/logo';
   `,
 })
 export class LoginPage {
+  readonly i18n = inject(I18nService);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);

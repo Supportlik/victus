@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { AgentLock, AgentRun, ApiClient } from '../../api';
+import { I18nService } from '../../core/i18n.service';
 import { describeError } from '../../core/problem';
 import { MarkdownPipe } from '../../shared/markdown.pipe';
 
@@ -16,10 +17,10 @@ import { MarkdownPipe } from '../../shared/markdown.pipe';
   template: `
     <div class="v-page">
       <header class="v-page-head">
-        <div><h2>Agent</h2><p class="sub">Runs turn captures into drafts — one model session per day. Nothing here is approved until you say so.</p></div>
+        <div><h2>{{ i18n.t('Agent') }}</h2><p class="sub">{{ i18n.t('Runs turn captures into drafts — one model session per day. Nothing here is approved until you say so.') }}</p></div>
         <div class="v-actions">
-          <a class="v-btn" routerLink="/captures">Captures</a>
-          <button type="button" class="v-btn" (click)="load()">Refresh</button>
+          <a class="v-btn" routerLink="/captures">{{ i18n.t('Captures') }}</a>
+          <button type="button" class="v-btn" (click)="load()">{{ i18n.t('Refresh') }}</button>
         </div>
       </header>
       @if (error(); as e) { <div class="v-error">{{ e }}</div> }
@@ -27,7 +28,7 @@ import { MarkdownPipe } from '../../shared/markdown.pipe';
       <section class="grid">
         <div class="v-scroll">
           <table class="v-table runs">
-            <thead><tr><th>Started</th><th>Status</th><th>Mode</th><th>Runner</th><th>Days</th><th>Tokens</th><th>Cost</th><th></th></tr></thead>
+            <thead><tr><th>{{ i18n.t('Started') }}</th><th>{{ i18n.t('Status') }}</th><th>{{ i18n.t('Mode') }}</th><th>{{ i18n.t('Runner') }}</th><th>{{ i18n.t('Days') }}</th><th>{{ i18n.t('Tokens') }}</th><th>{{ i18n.t('Cost') }}</th><th></th></tr></thead>
             <tbody>
               @for (r of runs(); track r.id) {
                 <tr [class.selected]="selected()?.id === r.id" [attr.data-run]="r.id">
@@ -39,27 +40,27 @@ import { MarkdownPipe } from '../../shared/markdown.pipe';
                   <td class="num">{{ tokens(r) }}</td>
                   <td class="num">{{ r.cost_usd != null ? r.cost_usd.toFixed(2) + ' USD' : '–' }}</td>
                   <td class="actions">
-                    <button type="button" class="v-btn small" (click)="select(r)">Details</button>
-                    @if (active(r)) { <button type="button" class="v-btn small quiet" (click)="cancel(r)">Cancel</button> }
+                    <button type="button" class="v-btn small" (click)="select(r)">{{ i18n.t('Details') }}</button>
+                    @if (active(r)) { <button type="button" class="v-btn small quiet" (click)="cancel(r)">{{ i18n.t('Cancel') }}</button> }
                   </td>
                 </tr>
-              } @empty { <tr><td colspan="8" class="v-muted">No runs yet. Add captures and press “Process now”.</td></tr> }
+              } @empty { <tr><td colspan="8" class="v-muted">{{ i18n.t('No runs yet. Add captures and press “Process now”.') }}</td></tr> }
             </tbody>
           </table>
         </div>
 
         @if (selected(); as r) {
           <section class="v-panel detail" aria-live="polite">
-            <h3>Run {{ r.id.slice(0, 8) }} · {{ r.status.replace('_', ' ') }}</h3>
+            <h3>{{ i18n.t('Run') }} {{ r.id.slice(0, 8) }} · {{ r.status.replace('_', ' ') }}</h3>
             <p class="v-small v-muted">
-              {{ r.mode.replace('_', ' ') }} · {{ r.runner ?? 'worker' }} · model {{ r.model ?? '–' }} · prompt {{ r.prompt_version ?? '–' }}
-              @if (r.finished_at) { · finished {{ r.finished_at.replace('T', ' ').slice(0, 16) }} }
+              {{ r.mode.replace('_', ' ') }} · {{ r.runner ?? 'worker' }} · {{ i18n.t('model') }} {{ r.model ?? '–' }} · {{ i18n.t('prompt') }} {{ r.prompt_version ?? '–' }}
+              @if (r.finished_at) { · {{ i18n.t('finished') }} {{ r.finished_at.replace('T', ' ').slice(0, 16) }} }
             </p>
             @if (r.error) { <div class="v-error">{{ r.error }}</div> }
             @if (r.sessions?.length) {
-              <h4>Sessions (one per day)</h4>
+              <h4>{{ i18n.t('Sessions (one per day)') }}</h4>
               <table class="v-table sessions">
-                <thead><tr><th>Day</th><th>Outcome</th><th>In</th><th>Out</th><th>Cost</th></tr></thead>
+                <thead><tr><th>{{ i18n.t('Day') }}</th><th>{{ i18n.t('Outcome') }}</th><th>{{ i18n.t('Input') }}</th><th>{{ i18n.t('Output') }}</th><th>{{ i18n.t('Cost') }}</th></tr></thead>
                 <tbody>
                   @for (s of r.sessions; track s.date) {
                     <tr>
@@ -74,20 +75,20 @@ import { MarkdownPipe } from '../../shared/markdown.pipe';
             }
             @if (r.summary_md) {
               <div class="v-md summary" [innerHTML]="r.summary_md | markdown"></div>
-              <a class="v-btn" routerLink="/drafts">Review drafts</a>
+              <a class="v-btn" routerLink="/drafts">{{ i18n.t('Review drafts') }}</a>
             } @else if (active(r)) {
-              <p class="v-muted v-small">Still working — the summary appears when the run finishes.</p>
+              <p class="v-muted v-small">{{ i18n.t('Still working — the summary appears when the run finishes.') }}</p>
             }
           </section>
         }
       </section>
 
       <section class="v-panel locks">
-        <h3>Locked days</h3>
-        <p class="v-small v-muted">A day is locked while a run drafts it (at most a few minutes). Release a lock only if the run that held it is gone.</p>
+        <h3>{{ i18n.t('Locked days') }}</h3>
+        <p class="v-small v-muted">{{ i18n.t('A day is locked while a run drafts it (at most a few minutes). Release a lock only if the run that held it is gone.') }}</p>
         @if (locks().length) {
           <table class="v-table">
-            <thead><tr><th>Day</th><th>Runner</th><th>Run</th><th>Until</th><th></th></tr></thead>
+            <thead><tr><th>{{ i18n.t('Day') }}</th><th>{{ i18n.t('Runner') }}</th><th>{{ i18n.t('Run') }}</th><th>{{ i18n.t('Until') }}</th><th></th></tr></thead>
             <tbody>
               @for (l of locks(); track l.date) {
                 <tr [attr.data-lock]="l.date">
@@ -95,17 +96,17 @@ import { MarkdownPipe } from '../../shared/markdown.pipe';
                   <td>{{ l.run_id.slice(0, 8) }}</td><td>{{ l.locked_until.replace('T', ' ').slice(0, 16) }}</td>
                   <td class="actions">
                     @if (confirmUnlock() === l.date) {
-                      <span class="confirm">Release? <button type="button" class="v-btn small danger" (click)="unlock(l)">Yes, release</button>
-                      <button type="button" class="v-btn small quiet" (click)="confirmUnlock.set(null)">No</button></span>
+                      <span class="confirm">{{ i18n.t('Release?') }} <button type="button" class="v-btn small danger" (click)="unlock(l)">{{ i18n.t('Yes, release') }}</button>
+                      <button type="button" class="v-btn small quiet" (click)="confirmUnlock.set(null)">{{ i18n.t('No') }}</button></span>
                     } @else {
-                      <button type="button" class="v-btn small quiet" (click)="confirmUnlock.set(l.date)">Force unlock</button>
+                      <button type="button" class="v-btn small quiet" (click)="confirmUnlock.set(l.date)">{{ i18n.t('Force unlock') }}</button>
                     }
                   </td>
                 </tr>
               }
             </tbody>
           </table>
-        } @else { <p class="v-muted v-small">No day is locked right now.</p> }
+        } @else { <p class="v-muted v-small">{{ i18n.t('No day is locked right now.') }}</p> }
       </section>
     </div>
   `,
@@ -124,6 +125,7 @@ import { MarkdownPipe } from '../../shared/markdown.pipe';
 })
 export class AgentPage {
   private readonly api = inject(ApiClient);
+  readonly i18n = inject(I18nService);
   readonly runs = signal<AgentRun[]>([]);
   readonly locks = signal<AgentLock[]>([]);
   readonly selected = signal<AgentRun | null>(null);

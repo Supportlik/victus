@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, effect, inject, input, ou
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ApiClient, Capture, DayLog, DraftListEntry, LineItem } from '../../api';
+import { I18nService } from '../../core/i18n.service';
 import { describeError } from '../../core/problem';
 import { CaptureCard } from '../../shared/capture-card';
 import { FoodIcon } from '../../shared/food-icon';
@@ -34,19 +35,19 @@ interface Row {
         <div>
           <h3><a [routerLink]="['/days', entry().date]">{{ entry().date | dayName }}</a></h3>
           <p class="v-small v-muted">
-            {{ rows().length }} item{{ rows().length === 1 ? '' : 's' }} waiting
-            @if (day(); as d) { · day total {{ d.macros.kcal | macro: 'kcal' }} kcal }
-            @if (entry().estimated_items) { · {{ entry().estimated_items }} estimate{{ entry().estimated_items === 1 ? '' : 's' }} }
+            {{ rows().length === 1 ? i18n.t('{n} item waiting', { n: rows().length }) : i18n.t('{n} items waiting', { n: rows().length }) }}
+            @if (day(); as d) { · {{ i18n.t('day total') }} {{ d.macros.kcal | macro: 'kcal' }} kcal }
+            @if (entry().estimated_items; as n) { · {{ n === 1 ? i18n.t('{n} estimate', { n }) : i18n.t('{n} estimates', { n }) }} }
           </p>
         </div>
         <div class="v-actions">
-          <button type="button" class="v-btn primary" (click)="approveAll()" [disabled]="busy() || !rows().length">Accept all</button>
+          <button type="button" class="v-btn primary" (click)="approveAll()" [disabled]="busy() || !rows().length">{{ i18n.t('Accept all') }}</button>
           @if (confirmDiscard()) {
-            <span class="v-small">Discard the whole draft?</span>
-            <button type="button" class="v-btn small danger" (click)="discardAll()" [disabled]="busy()">Yes</button>
-            <button type="button" class="v-btn small quiet" (click)="confirmDiscard.set(false)">No</button>
+            <span class="v-small">{{ i18n.t('Discard the whole draft?') }}</span>
+            <button type="button" class="v-btn small danger" (click)="discardAll()" [disabled]="busy()">{{ i18n.t('Yes') }}</button>
+            <button type="button" class="v-btn small quiet" (click)="confirmDiscard.set(false)">{{ i18n.t('No') }}</button>
           } @else {
-            <button type="button" class="v-btn quiet danger" (click)="confirmDiscard.set(true)" [disabled]="busy()">Discard draft</button>
+            <button type="button" class="v-btn quiet danger" (click)="confirmDiscard.set(true)" [disabled]="busy()">{{ i18n.t('Discard draft') }}</button>
           }
         </div>
       </header>
@@ -68,29 +69,29 @@ interface Row {
                 } @else {
                   <span class="name">{{ r.item.consumable_name }}</span>
                 }
-                @if (r.item.estimated || r.item.amount_estimated) { <span class="v-tag warn" title="estimated">estimate</span> }
+                @if (r.item.estimated || r.item.amount_estimated) { <span class="v-tag warn" [title]="i18n.t('estimated')">{{ i18n.t('estimate') }}</span> }
                 @if (r.item.confidence != null) { <span class="conf" [class.low]="r.item.confidence < 0.7">{{ (r.item.confidence * 100).toFixed(0) }} %</span> }
               </div>
               <div class="numbers">
-                <label class="qty"><span class="v-small v-muted">Amount</span>
+                <label class="qty"><span class="v-small v-muted">{{ i18n.t('Amount') }}</span>
                   <input [name]="'a' + r.item.id" type="number" step="any" min="0" [(ngModel)]="r.amount" />
                   <span class="unit">{{ r.item.unit_code ?? r.item.base_unit }}</span>
                 </label>
                 <span class="kcal">{{ r.item.kcal | macro: 'kcal' }} kcal</span>
-                <label class="meal"><span class="v-small v-muted">Meal</span>
+                <label class="meal"><span class="v-small v-muted">{{ i18n.t('Meal') }}</span>
                   <select [name]="'m' + r.item.id" [(ngModel)]="r.mealChoice">
                     @for (m of meals(); track m.id) { <option [ngValue]="m.id">{{ m.name }}</option> }
-                    <option ngValue="new">new meal…</option>
+                    <option ngValue="new">{{ i18n.t('new meal…') }}</option>
                   </select>
                   @if (r.mealChoice === 'new') {
-                    <input [name]="'mn' + r.item.id" [(ngModel)]="r.newMeal" placeholder="Meal name" aria-label="New meal name" />
+                    <input [name]="'mn' + r.item.id" [(ngModel)]="r.newMeal" [placeholder]="i18n.t('Meal name')" [attr.aria-label]="i18n.t('New meal name')" />
                   }
                 </label>
               </div>
               @if (r.item.rationale) { <p class="why v-small v-muted">{{ r.item.rationale }}</p> }
               <div class="v-actions">
-                <button type="button" class="v-btn small primary" (click)="approve(r)" [disabled]="r.busy || busy()">Accept</button>
-                <button type="button" class="v-btn small quiet danger" (click)="drop(r)" [disabled]="r.busy || busy()">Drop</button>
+                <button type="button" class="v-btn small primary" (click)="approve(r)" [disabled]="r.busy || busy()">{{ i18n.t('Accept') }}</button>
+                <button type="button" class="v-btn small quiet danger" (click)="drop(r)" [disabled]="r.busy || busy()">{{ i18n.t('Drop') }}</button>
               </div>
             </div>
             <div class="source">
@@ -99,18 +100,18 @@ interface Row {
               } @else if (r.item.raw_text) {
                 <p class="raw v-small">“{{ r.item.raw_text }}”</p>
               } @else {
-                <p class="v-small v-muted">No source recorded.</p>
+                <p class="v-small v-muted">{{ i18n.t('No source recorded.') }}</p>
               }
             </div>
           </li>
         } @empty {
-          <li class="v-muted v-small">Nothing left to accept here.</li>
+          <li class="v-muted v-small">{{ i18n.t('Nothing left to accept here.') }}</li>
         }
       </ul>
 
       @if (summary()) {
         <details class="agent">
-          <summary>Agent summary</summary>
+          <summary>{{ i18n.t('Agent summary') }}</summary>
           <div class="v-md" [innerHTML]="summary() | markdown"></div>
         </details>
       }
@@ -141,6 +142,7 @@ interface Row {
 })
 export class DraftDayCard {
   private readonly api = inject(ApiClient);
+  readonly i18n = inject(I18nService);
   readonly entry = input.required<DraftListEntry>();
   /** Captures of that day, so each item can show where it came from. */
   readonly captures = input<Capture[]>([]);
@@ -203,7 +205,7 @@ export class DraftDayCard {
     if (r.consumableId !== r.item.consumable_id) body['consumable_id'] = r.consumableId;
     if (r.mealChoice === 'new') {
       if (!r.newMeal.trim()) {
-        this.error.set('Give the new meal a name.');
+        this.error.set(this.i18n.t('Give the new meal a name.'));
         return;
       }
       body['meal_name'] = r.newMeal.trim();

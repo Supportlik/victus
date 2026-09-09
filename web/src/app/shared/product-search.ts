@@ -3,6 +3,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { catchError, debounceTime, distinctUntilChanged, filter, of, switchMap } from 'rxjs';
 import { ApiClient, Product } from '../api';
+import { I18nService } from '../core/i18n.service';
 import { MacroLine } from './macro-line';
 
 /**
@@ -18,12 +19,12 @@ import { MacroLine } from './macro-line';
   imports: [ReactiveFormsModule, MacroLine],
   template: `
     <label class="v-field">
-      <span>{{ label }}</span>
-      <input type="search" [formControl]="query" [placeholder]="placeholder" autocomplete="off" />
+      <span>{{ i18n.t('Search products') }}</span>
+      <input type="search" [formControl]="query" [placeholder]="i18n.t('Name or brand')" autocomplete="off" />
     </label>
     @if (results(); as list) {
       @if (list.length === 0 && query.value.length >= minLength) {
-        <p class="v-muted v-small">Nothing found for “{{ query.value }}”.</p>
+        <p class="v-muted v-small">{{ i18n.t('Nothing found for “{query}”.', { query: query.value }) }}</p>
       } @else if (list.length) {
         <ul class="results" role="listbox">
           @for (p of list; track p.id) {
@@ -49,8 +50,7 @@ import { MacroLine } from './macro-line';
 })
 export class ProductSearch {
   private readonly api = inject(ApiClient);
-  readonly label = 'Search products';
-  readonly placeholder = 'Name or brand';
+  readonly i18n = inject(I18nService);
   readonly minLength = 2;
   /** Day the food was eaten; decides which version of a product is offered. */
   readonly on = input<string | null>(null);
