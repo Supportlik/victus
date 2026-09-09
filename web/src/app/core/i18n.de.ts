@@ -69,6 +69,15 @@ export const DE: Record<string, string> = {
   all: 'alle',
 
   // ── days ──────────────────────────────────────────────────────────────
+  choose: 'auswählen',
+  'no, whole day estimated': 'nein, ganzer Tag geschätzt',
+  'Nothing logged for this day yet': 'Für diesen Tag ist noch nichts erfasst',
+  'Weight and volume': 'Gewicht und Volumen',
+  'Portions of this product': 'Portionen dieses Produkts',
+  'Needs a size once': 'Braucht einmal eine Größe',
+  'One {unit} of {product} is': 'Ein {unit} von {product} ist',
+  'Saved with the product, so “{unit}” works from now on.':
+    'Wird beim Produkt gespeichert, damit „{unit}“ ab jetzt funktioniert.',
   'all days': 'alle Tage',
   previous: 'vorheriger',
   next: 'nächster',
@@ -99,6 +108,28 @@ export const DE: Record<string, string> = {
   Draft: 'Entwurf',
 
   // ── captures and inbox ────────────────────────────────────────────────
+  'Save capture ({n} file)': 'Capture speichern ({n} Datei)',
+  'Save capture ({n} files)': 'Capture speichern ({n} Dateien)',
+  'Stop recording': 'Aufnahme stoppen',
+  'Record a voice note': 'Sprachnotiz aufnehmen',
+  'Recording is not available in this browser': 'Aufnehmen ist in diesem Browser nicht möglich',
+  '{n} taken': '{n} aufgenommen',
+  'Voice, photo or text goes in; drafts come back. Nothing counts until you accept it.':
+    'Sprache, Foto oder Text kommt hinein, Entwürfe kommen zurück. Nichts zählt, bis du es übernimmst.',
+  'Write it, speak it, or photograph it: lunch, 400 g quark with berries':
+    'Schreib es, sag es oder fotografier es: Mittagessen, 400 g Quark mit Beeren',
+  'A frozen report holds the numbers of one moment. It counts once Claude has judged it.':
+    'Ein eingefrorener Bericht hält die Zahlen eines Moments. Er zählt, sobald Claude ihn bewertet hat.',
+  'No drafts. Add a capture above and press “Process now”.':
+    'Keine Entwürfe. Füge oben ein Capture hinzu und drücke „Jetzt verarbeiten“.',
+  'A capture stays here until its drafted item is accepted. Discarded ones are deleted automatically after one day.':
+    'Ein Capture bleibt hier, bis der daraus entstandene Posten übernommen ist. Verworfene werden nach einem Tag automatisch gelöscht.',
+  Done: 'Fertig',
+  'In draft': 'Im Entwurf',
+  Processed: 'Verarbeitet',
+  Failed: 'Fehlgeschlagen',
+  All: 'Alle',
+  Discarded: 'Verworfen',
   'Add a capture': 'Capture hinzufügen',
   'For day': 'Für Tag',
   Record: 'Aufnehmen',
@@ -109,7 +140,6 @@ export const DE: Record<string, string> = {
   'Take the picture': 'Foto aufnehmen',
   'Take another one': 'Noch eins aufnehmen',
   'Switch camera': 'Kamera wechseln',
-  Done: 'Fertig',
   Camera: 'Kamera',
   'Uploading…': 'Wird geladen…',
   'Choose a file instead': 'Stattdessen eine Datei wählen',
@@ -159,6 +189,11 @@ export const DE: Record<string, string> = {
   estimated: 'geschätzt',
 
   // ── weight and body ──────────────────────────────────────────────────
+  'Your scale syncs automatically. Add an entry by hand only when it was not around.':
+    'Deine Waage synchronisiert automatisch. Trage nur dann von Hand ein, wenn sie nicht dabei war.',
+  'The scale says how heavy, the tape says where it sits. Fill in only what you measured; the rest stays empty rather than becoming zero.':
+    'Die Waage sagt, wie schwer, das Maßband sagt, wo es sitzt. Trage nur ein, was du gemessen hast; der Rest bleibt leer statt null zu werden.',
+  'tape, morning, before breakfast': 'Maßband, morgens, vor dem Frühstück',
   'Add a weigh-in': 'Wiegung hinzufügen',
   'Date and time': 'Datum und Uhrzeit',
   'Add weigh-in': 'Wiegung hinzufügen',

@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ApiClient, DayLog, LineItem, MACRO_KEYS, MACRO_LABEL, MACRO_UNIT, MacroKey, Meal, Product, TrainingType, Unit } from '../../api';
 import { HttpErrorResponse } from '@angular/common/http';
+import { I18nService } from '../../core/i18n.service';
 import { describeError } from '../../core/problem';
 import { BandGauge } from '../../shared/band-gauge';
 import { DayNamePipe, MacroPipe, shiftDate } from '../../shared/format';
@@ -24,9 +25,9 @@ import { DayThread } from './day-thread';
       <header class="v-page-head">
         <div>
           <nav class="daynav v-small">
-            <a [routerLink]="['/days', prev()]">← previous</a>
-            <a routerLink="/days">all days</a>
-            <a [routerLink]="['/days', next()]">next →</a>
+            <a [routerLink]="['/days', prev()]">← {{ i18n.t('previous') }}</a>
+            <a routerLink="/days">{{ i18n.t('all days') }}</a>
+            <a [routerLink]="['/days', next()]">{{ i18n.t('next') }} →</a>
           </nav>
           <h2>{{ date() | dayName }}</h2>
           @if (day(); as d) {
@@ -40,20 +41,20 @@ import { DayThread } from './day-thread';
         </div>
         @if (day(); as d) {
           <div class="v-actions">
-            <label class="v-field"><span>Training</span>
+            <label class="v-field"><span>{{ i18n.t('Training') }}</span>
               <select [ngModel]="d.training_type ?? ''" (ngModelChange)="setTraining($event)">
                 <option value="">none / rest</option><option value="rest">rest</option><option value="strength">strength</option><option value="martial_arts">martial arts</option>
               </select>
             </label>
-            <label class="v-field"><span>Reliable</span>
+            <label class="v-field"><span>{{ i18n.t('Reliable') }}</span>
               <select [ngModel]="d.reliable === null ? '' : d.reliable ? 'true' : 'false'" (ngModelChange)="setReliable($event)">
-                <option value="" disabled>choose</option><option value="true">yes, counts</option><option value="false">no, whole day estimated</option>
+                <option value="" disabled>{{ i18n.t('choose') }}</option><option value="true">{{ i18n.t('yes, counts') }}</option><option value="false">{{ i18n.t('no, whole day estimated') }}</option>
               </select>
             </label>
             @if (d.status === 'closed') {
-              <button type="button" class="v-btn" (click)="reopen()">Reopen day</button>
+              <button type="button" class="v-btn" (click)="reopen()">{{ i18n.t('Reopen day') }}</button>
             } @else if (d.status === 'open') {
-              <button type="button" class="v-btn primary" (click)="close()">Close day</button>
+              <button type="button" class="v-btn primary" (click)="close()">{{ i18n.t('Close day') }}</button>
             } @else {
               <a class="v-btn primary" [routerLink]="['/drafts', date()]">Review draft</a>
             }
@@ -63,7 +64,7 @@ import { DayThread } from './day-thread';
 
       @if (missing()) {
         <section class="v-panel create-day">
-          <h3>Nothing logged for this day yet</h3>
+          <h3>{{ i18n.t('Nothing logged for this day yet') }}</h3>
           <p class="v-small v-muted">Create the day to start adding meals. Say whether it will count: a day you only estimate as a whole (travel, party) does not enter the statistics.</p>
           <form class="v-form-row" (ngSubmit)="createDay()">
             <label class="v-field"><span>Counts for statistics?</span>
@@ -77,7 +78,7 @@ import { DayThread } from './day-thread';
                 <option value="">none / rest</option><option value="rest">rest</option><option value="strength">strength</option><option value="martial_arts">martial arts</option>
               </select>
             </label>
-            <button type="submit" class="v-btn primary">Create this day</button>
+            <button type="submit" class="v-btn primary">{{ i18n.t('Create this day') }}</button>
           </form>
         </section>
       } @else if (error(); as e) { <div class="v-error">{{ e }}</div> }
@@ -124,7 +125,7 @@ import { DayThread } from './day-thread';
                   }
                   <span class="v-actions">
                     <button type="button" class="v-btn quiet small" (click)="adding.set(adding() === meal.id ? null : meal.id)">
-                      {{ adding() === meal.id ? 'Cancel' : 'Add item' }}
+                      {{ i18n.t(adding() === meal.id ? 'Cancel' : 'Add item') }}
                     </button>
                     <button type="button" class="v-btn quiet small danger" (click)="deleteMeal(meal)" [disabled]="meal.line_items.length > 0"
                       [title]="meal.line_items.length ? 'Delete or move the items first' : 'Delete this meal'">Delete</button>
@@ -137,41 +138,41 @@ import { DayThread } from './day-thread';
                     } @else {
                       <form class="v-form-row" (ngSubmit)="addItem(meal)">
                         <div class="picked">{{ pending()!.name }} <button type="button" class="v-btn quiet small" (click)="pending.set(null)">change</button></div>
-                        <label class="v-field"><span>Amount</span><input name="amount" type="number" step="any" min="0" [(ngModel)]="amount" required /></label>
-                        <label class="v-field"><span>Unit</span>
+                        <label class="v-field"><span>{{ i18n.t('Amount') }}</span><input name="amount" type="number" step="any" min="0" [(ngModel)]="amount" required /></label>
+                        <label class="v-field"><span>{{ i18n.t('Unit') }}</span>
                           <select name="unit" [(ngModel)]="unitCode">
-                            <optgroup label="Weight and volume">
+                            <optgroup [attr.label]="i18n.t('Weight and volume')">
                               @for (u of measuredUnits(); track u.code) { <option [value]="u.code">{{ u.singular }}</option> }
                             </optgroup>
                             @if (pending()!.portions?.length) {
-                              <optgroup label="Portions of this product">
+                              <optgroup [attr.label]="i18n.t('Portions of this product')">
                                 @for (p of pending()!.portions ?? []; track p.id) { <option [value]="'portion:' + p.id">{{ p.label }} ({{ p.amount }} {{ p.amount_unit }})</option> }
                               </optgroup>
                             }
-                            <optgroup label="Needs a size once">
+                            <optgroup [attr.label]="i18n.t('Needs a size once')">
                               @for (u of undeclaredUnits(); track u.code) { <option [value]="u.code">{{ u.singular }}</option> }
                             </optgroup>
                           </select>
                         </label>
                         @if (needsSize()) {
                           <label class="v-field">
-                            <span>One {{ unitLabel() }} of {{ pending()!.name }} is</span>
+                            <span>{{ i18n.t('One {unit} of {product} is', { unit: unitLabel(), product: pending()!.name }) }}</span>
                             <span class="size">
                               <input name="psize" type="number" step="any" min="0" [(ngModel)]="portionAmount" required />
                               <span class="fixed">{{ pending()!.reference_unit }}</span>
                             </span>
                           </label>
-                          <p class="v-small v-muted hint">Saved with the product, so “{{ unitLabel() }}” works from now on.</p>
+                          <p class="v-small v-muted hint">{{ i18n.t('Saved with the product, so “{unit}” works from now on.', { unit: unitLabel() }) }}</p>
                         }
-                        <label class="v-field check"><span>Estimated</span><input name="est" type="checkbox" [(ngModel)]="estimated" /></label>
-                        <button type="submit" class="v-btn primary" [disabled]="!amount || (needsSize() && !portionAmount)">Add</button>
+                        <label class="v-field check"><span>{{ i18n.t('Estimated') }}</span><input name="est" type="checkbox" [(ngModel)]="estimated" /></label>
+                        <button type="submit" class="v-btn primary" [disabled]="!amount || (needsSize() && !portionAmount)">{{ i18n.t('Add') }}</button>
                       </form>
                     }
                   </div>
                 }
                 <div class="v-scroll-x">
                   <table class="v-table">
-                    <thead><tr><th>Item</th><th class="num">Amount</th><th class="num">kcal</th><th class="num">P</th><th class="num v-hide-m">C</th><th class="num v-hide-m">F</th><th class="num v-hide-m">Fi</th><th class="num v-hide-m">S</th><th></th></tr></thead>
+                    <thead><tr><th>{{ i18n.t('Item') }}</th><th class="num">{{ i18n.t('Amount') }}</th><th class="num">kcal</th><th class="num">P</th><th class="num v-hide-m">C</th><th class="num v-hide-m">F</th><th class="num v-hide-m">Fi</th><th class="num v-hide-m">S</th><th></th></tr></thead>
                     <tbody>
                       @for (it of meal.line_items; track it.id) {
                         <tr [class.draft]="it.is_draft" [class.estimated]="it.estimated || it.amount_estimated" [attr.data-item]="it.id">
@@ -200,7 +201,7 @@ import { DayThread } from './day-thread';
                           </td>
                         </tr>
                       } @empty {
-                        <tr><td colspan="9" class="v-muted">Nothing logged in this meal.</td></tr>
+                        <tr><td colspan="9" class="v-muted">{{ i18n.t('Nothing logged in this meal.') }}</td></tr>
                       }
                       <tr class="total">
                         <td>Total</td><td></td>
@@ -217,8 +218,8 @@ import { DayThread } from './day-thread';
               </article>
             }
             <form class="new-meal" (ngSubmit)="addMeal()">
-              <input name="meal" [(ngModel)]="newMeal" placeholder="New meal, e.g. Lunch" />
-              <button type="submit" class="v-btn" [disabled]="!newMeal.trim()">Add meal</button>
+              <input name="meal" [(ngModel)]="newMeal" [placeholder]="i18n.t('New meal, e.g. Lunch')" />
+              <button type="submit" class="v-btn" [disabled]="!newMeal.trim()">{{ i18n.t('Add meal') }}</button>
             </form>
           </section>
           <v-day-thread [date]="date()" />
@@ -259,6 +260,7 @@ import { DayThread } from './day-thread';
 })
 export class DayView {
   private readonly api = inject(ApiClient);
+  readonly i18n = inject(I18nService);
   readonly date = input.required<string>();
   readonly day = signal<DayLog | null>(null);
   readonly error = signal<string | null>(null);

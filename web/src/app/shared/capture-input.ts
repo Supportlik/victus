@@ -11,6 +11,7 @@ import {
 } from '@angular/core';
 import { ApiClient, Capture } from '../api';
 import { Icon } from './icon';
+import { I18nService } from '../core/i18n.service';
 import { describeError } from '../core/problem';
 
 interface Pending {
@@ -46,22 +47,22 @@ interface Pending {
       ></textarea>
       <div class="row">
       @if (recording()) {
-        <button type="button" class="v-btn danger rec" (click)="stopRecording()" aria-label="Stop recording">
-          <span class="pulse" aria-hidden="true"></span> Stop · {{ elapsed() }}
+        <button type="button" class="v-btn danger rec" (click)="stopRecording()" [attr.aria-label]="i18n.t('Stop recording')">
+          <span class="pulse" aria-hidden="true"></span> {{ i18n.t('Stop') }} · {{ elapsed() }}
         </button>
       } @else {
-        <button type="button" class="v-btn" (click)="startRecording()" [disabled]="busy() || !canRecord" [title]="canRecord ? 'Record a voice note' : 'Recording is not available in this browser'">
-          <v-icon name="mic" [size]="17" /> Record
+        <button type="button" class="v-btn" (click)="startRecording()" [disabled]="busy() || !canRecord" [title]="i18n.t(canRecord ? 'Record a voice note' : 'Recording is not available in this browser')">
+          <v-icon name="mic" [size]="17" /> {{ i18n.t('Record') }}
         </button>
       }
-      <button type="button" class="v-btn" (click)="takePhoto()" [disabled]="busy() || cameraOpen()"><v-icon name="camera" [size]="17" /> Take photo</button>
-      <button type="button" class="v-btn" (click)="picker.click()" [disabled]="busy()"><v-icon name="images" [size]="17" /> Choose</button>
+      <button type="button" class="v-btn" (click)="takePhoto()" [disabled]="busy() || cameraOpen()"><v-icon name="camera" [size]="17" /> {{ i18n.t('Take photo') }}</button>
+      <button type="button" class="v-btn" (click)="picker.click()" [disabled]="busy()"><v-icon name="images" [size]="17" /> {{ i18n.t('Choose') }}</button>
       <input #picker type="file" accept="image/*,audio/*" multiple hidden (change)="onFiles($event)" />
-      @if (busy()) { <span class="v-small v-muted">Uploading…</span> }
+      @if (busy()) { <span class="v-small v-muted">{{ i18n.t('Uploading…') }}</span> }
       @if (notice(); as n) { <span class="v-small v-muted">{{ n }}</span> }
       @if (error(); as e) {
         <span class="v-small err">{{ e }}</span>
-        <button type="button" class="v-btn small quiet" (click)="picker.click()">Choose a file instead</button>
+        <button type="button" class="v-btn small quiet" (click)="picker.click()">{{ i18n.t('Choose a file instead') }}</button>
       }
       </div>
 
@@ -73,7 +74,7 @@ interface Pending {
                 @if (p.kind === 'image' && p.url) { <img [src]="p.url" alt="" /> }
                 @else { <span class="glyph" aria-hidden="true">{{ p.kind === 'audio' ? '🎙' : '📄' }}</span> }
                 <span class="name">{{ p.file.name }}</span>
-                <button type="button" class="v-btn quiet small danger" (click)="drop(p)" aria-label="Remove">✕</button>
+                <button type="button" class="v-btn quiet small danger" (click)="drop(p)" [attr.aria-label]="i18n.t('Remove')">✕</button>
               </li>
             }
           </ul>
@@ -85,19 +86,19 @@ interface Pending {
           {{ saveLabel() }}
         </button>
         @if (hasContent()) {
-          <button type="button" class="v-btn quiet" (click)="clear()" [disabled]="busy()">Discard</button>
+          <button type="button" class="v-btn quiet" (click)="clear()" [disabled]="busy()">{{ i18n.t('Discard') }}</button>
         }
       </div>
     </div>
 
     @if (cameraOpen()) {
-      <div class="cam" role="dialog" aria-label="Camera">
+      <div class="cam" role="dialog" [attr.aria-label]="i18n.t('Camera')">
         <div class="bar">
-          <button type="button" class="v-btn primary" (click)="shoot(false)">Take the picture</button>
-          <button type="button" class="v-btn" (click)="shoot(true)">Take another one</button>
-          @if (canSwitch()) { <button type="button" class="v-btn" (click)="switchCamera()">Switch camera</button> }
-          <span class="shots">{{ pending().length }} taken</span>
-          <button type="button" class="v-btn quiet" (click)="closeCamera()">Done</button>
+          <button type="button" class="v-btn primary" (click)="shoot(false)">{{ i18n.t('Take the picture') }}</button>
+          <button type="button" class="v-btn" (click)="shoot(true)">{{ i18n.t('Take another one') }}</button>
+          @if (canSwitch()) { <button type="button" class="v-btn" (click)="switchCamera()">{{ i18n.t('Switch camera') }}</button> }
+          <span class="shots">{{ i18n.t('{n} taken', { n: pending().length }) }}</span>
+          <button type="button" class="v-btn quiet" (click)="closeCamera()">{{ i18n.t('Done') }}</button>
         </div>
         <video #preview autoplay playsinline muted></video>
       </div>
@@ -132,6 +133,7 @@ interface Pending {
 })
 export class CaptureInput {
   private readonly api = inject(ApiClient);
+  readonly i18n = inject(I18nService);
   /** Day the captures belong to (ISO date); omit for the inbox. */
   readonly targetDate = input<string | null>(null);
   /** Product the captures are about (label photo, correction); omit for days. */
@@ -152,7 +154,10 @@ export class CaptureInput {
   readonly hasContent = computed(() => !!this.note().trim() || this.pending().length > 0);
   readonly saveLabel = computed(() => {
     const files = this.pending().length;
-    return files ? `Save capture (${files} ${files === 1 ? 'file' : 'files'})` : 'Save capture';
+    if (!files) return this.i18n.t('Save capture');
+    return this.i18n.t(files === 1 ? 'Save capture ({n} file)' : 'Save capture ({n} files)', {
+      n: files,
+    });
   });
   readonly canRecord = typeof MediaRecorder !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
   readonly cameraOpen = signal(false);

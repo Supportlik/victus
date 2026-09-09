@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { NgxEchartsDirective } from 'ngx-echarts';
 import type { EChartsOption, ScatterSeriesOption } from 'echarts';
 import { ApiClient, BodyMeasurement, WeightEntry } from '../../api';
+import { I18nService } from '../../core/i18n.service';
 import { FormatService, isoDayIn } from '../../core/format.service';
 import { describeError } from '../../core/problem';
 import { isoDate, KgPipe, shiftDate } from '../../shared/format';
@@ -30,51 +31,51 @@ function localDateTimeValue(at: Date = new Date()): string {
   template: `
     <div class="v-page">
       <header class="v-page-head">
-        <div><h2>Weight</h2><p class="sub">Your scale syncs automatically. Add an entry by hand only when it was not around.</p></div>
-        <label class="v-field"><span>Range</span>
-          <select [ngModel]="days()" (ngModelChange)="days.set(+$event); load()"><option [value]="30">30 days</option><option [value]="90">90 days</option><option [value]="365">1 year</option><option [value]="3650">all</option></select>
+        <div><h2>{{ i18n.t('Weight') }}</h2><p class="sub">{{ i18n.t('Your scale syncs automatically. Add an entry by hand only when it was not around.') }}</p></div>
+        <label class="v-field"><span>{{ i18n.t('Range') }}</span>
+          <select [ngModel]="days()" (ngModelChange)="days.set(+$event); load()"><option [value]="30">{{ i18n.t('30 days') }}</option><option [value]="90">{{ i18n.t('90 days') }}</option><option [value]="365">{{ i18n.t('1 year') }}</option><option [value]="3650">{{ i18n.t('all') }}</option></select>
         </label>
       </header>
       @if (error(); as e) { <div class="v-error">{{ e }}</div> }
       <div class="v-panel chart">
         @if (entries().length) {
-          <div echarts [options]="chart()" class="echart" aria-label="Weight over time"></div>
-        } @else { <div class="v-empty">No weigh-ins in this range.</div> }
+          <div echarts [options]="chart()" class="echart" [attr.aria-label]="i18n.t('Weight over time')"></div>
+        } @else { <div class="v-empty">{{ i18n.t('No weigh-ins in this range.') }}</div> }
       </div>
       <div class="grid">
         <form class="v-panel add" (ngSubmit)="add()">
-          <h3>Add a weigh-in</h3>
+          <h3>{{ i18n.t('Add a weigh-in') }}</h3>
           <div class="v-form-row">
-            <label class="v-field"><span>Date and time</span><input name="at" type="datetime-local" [(ngModel)]="measuredAt" required /></label>
+            <label class="v-field"><span>{{ i18n.t('Date and time') }}</span><input name="at" type="datetime-local" [(ngModel)]="measuredAt" required /></label>
             <label class="v-field"><span>kg</span><input name="kg" type="number" step="0.1" min="30" max="300" [(ngModel)]="kg" required /></label>
           </div>
-          <button type="submit" class="v-btn primary" [disabled]="!kg">Add weigh-in</button>
+          <button type="submit" class="v-btn primary" [disabled]="!kg">{{ i18n.t('Add weigh-in') }}</button>
         </form>
         <form class="v-panel add" (ngSubmit)="addBody()">
-          <h3>Add body measurements</h3>
-          <p class="v-small v-muted">The scale says how heavy, the tape says where it sits. Fill in only what you measured; the rest stays empty rather than becoming zero.</p>
-          <label class="v-field"><span>Date and time</span><input name="bat" type="datetime-local" [(ngModel)]="bodyAt" required /></label>
+          <h3>{{ i18n.t('Add body measurements') }}</h3>
+          <p class="v-small v-muted">{{ i18n.t('The scale says how heavy, the tape says where it sits. Fill in only what you measured; the rest stays empty rather than becoming zero.') }}</p>
+          <label class="v-field"><span>{{ i18n.t('Date and time') }}</span><input name="bat" type="datetime-local" [(ngModel)]="bodyAt" required /></label>
           <div class="v-form-row cm">
             @for (f of bodyFields; track f.key) {
               <label class="v-field">
-                <span>{{ f.label }} <span class="v-muted">cm</span></span>
+                <span>{{ i18n.t(f.label) }} <span class="v-muted">cm</span></span>
                 <input [name]="f.key" type="number" step="0.1" min="10" max="250" [(ngModel)]="body[f.key]" />
               </label>
             }
-            <label class="v-field"><span>Body fat <span class="v-muted">%</span></span><input name="bf" type="number" step="0.1" min="3" max="70" [(ngModel)]="bodyFat" /></label>
+            <label class="v-field"><span>{{ i18n.t('Body fat') }} <span class="v-muted">%</span></span><input name="bf" type="number" step="0.1" min="3" max="70" [(ngModel)]="bodyFat" /></label>
           </div>
-          <label class="v-field"><span>Note</span><input name="bnote" [(ngModel)]="bodyNote" placeholder="tape, morning, before breakfast" /></label>
-          <button type="submit" class="v-btn primary" [disabled]="!anyBodyValue()">Add measurements</button>
+          <label class="v-field"><span>{{ i18n.t('Note') }}</span><input name="bnote" [(ngModel)]="bodyNote" [placeholder]="i18n.t('tape, morning, before breakfast')" /></label>
+          <button type="submit" class="v-btn primary" [disabled]="!anyBodyValue()">{{ i18n.t('Add measurements') }}</button>
         </form>
         <div class="v-scroll-x">
           <table class="v-table">
-            <thead><tr><th>When</th><th class="num">kg</th><th>Source</th><th></th></tr></thead>
+            <thead><tr><th>{{ i18n.t('When') }}</th><th class="num">kg</th><th>{{ i18n.t('Source') }}</th><th></th></tr></thead>
             <tbody>
               @for (w of recent(); track w.id) {
                 <tr>
                   <td>{{ w.measured_at.replace('T', ' ').slice(0, 16) }}</td><td class="num">{{ w.kg | kg }}</td>
-                  <td>@if (w.source === 'manual') { <span class="v-tag">manual</span> } @else { <span class="v-small v-muted">{{ w.source === 'scale_sync' ? 'scale' : w.source }}</span> }</td>
-                  <td class="num">@if (w.source === 'manual') { <button type="button" class="v-btn quiet small danger" (click)="remove(w)">remove</button> }</td>
+                  <td>@if (w.source === 'manual') { <span class="v-tag">{{ i18n.t('manual') }}</span> } @else { <span class="v-small v-muted">{{ i18n.t(w.source === 'scale_sync' ? 'scale' : w.source) }}</span> }</td>
+                  <td class="num">@if (w.source === 'manual') { <button type="button" class="v-btn quiet small danger" (click)="remove(w)">{{ i18n.t('remove') }}</button> }</td>
                 </tr>
               }
             </tbody>
@@ -83,14 +84,14 @@ function localDateTimeValue(at: Date = new Date()): string {
       </div>
       @if (measurements().length) {
         <section class="v-panel body-log">
-          <h3>Body measurements</h3>
+          <h3>{{ i18n.t('Body measurements') }}</h3>
           <div class="v-scroll-x">
             <table class="v-table">
               <thead>
                 <tr>
-                  <th>When</th>
-                  @for (f of bodyFields; track f.key) { <th class="num">{{ f.label }}</th> }
-                  <th class="num">Fat</th><th></th>
+                  <th>{{ i18n.t('When') }}</th>
+                  @for (f of bodyFields; track f.key) { <th class="num">{{ i18n.t(f.label) }}</th> }
+                  <th class="num">{{ i18n.t('Fat') }}</th><th></th>
                 </tr>
               </thead>
               <tbody>
@@ -101,7 +102,7 @@ function localDateTimeValue(at: Date = new Date()): string {
                       <td class="num">{{ valueOf(m, f.key) == null ? '–' : format.number(valueOf(m, f.key)!, 1) }}</td>
                     }
                     <td class="num">{{ m.body_fat_pct == null ? '–' : format.number(m.body_fat_pct, 1) + ' %' }}</td>
-                    <td class="num"><button type="button" class="v-btn quiet small danger" (click)="removeBody(m)">remove</button></td>
+                    <td class="num"><button type="button" class="v-btn quiet small danger" (click)="removeBody(m)">{{ i18n.t('remove') }}</button></td>
                   </tr>
                 }
               </tbody>
@@ -122,6 +123,7 @@ function localDateTimeValue(at: Date = new Date()): string {
 })
 export class WeightPage {
   private readonly api = inject(ApiClient);
+  readonly i18n = inject(I18nService);
   readonly days = signal(90);
   readonly entries = signal<WeightEntry[]>([]);
   readonly measurements = signal<BodyMeasurement[]>([]);

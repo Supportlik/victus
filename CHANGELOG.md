@@ -161,8 +161,9 @@ All notable changes to Victus are documented here. The format follows
 - The interface speaks German or English, switchable in the settings without a rebuild (R78). The
   language is separate from the number format, so German numbers with an English interface is a valid
   choice. The English string is its own key, so an untranslated view reads as correct English rather
-  than showing a key, and `scripts/check_translations.py` reports what is still missing. The shell and
-  the navigation are translated; the individual screens follow.
+  than showing a key, and `scripts/check_translations.py` reports what is still missing. Translated so
+  far: the shell and navigation, the day view, the inbox with the capture form, and the weight page.
+  Products, recipes, reports, settings and the agent screen follow.
 
 - Every class is shown with the scale around it (R77). The report's body block draws the full range,
   marks the class the value falls in and pins the value, and lists the BMI classes as weights with the

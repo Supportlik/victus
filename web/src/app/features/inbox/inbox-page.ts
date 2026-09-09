@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { AgentRun, AgentStatus, ApiClient, Capture, DraftListEntry, ReportSnapshot } from '../../api';
+import { I18nService } from '../../core/i18n.service';
 import { BadgesService } from '../../core/badges.service';
 import { ClaudeHandoff } from '../../core/claude-handoff';
 import { describeError } from '../../core/problem';
@@ -25,16 +26,16 @@ type Filter = 'open' | 'assigned' | 'processed' | 'discarded' | 'failed' | 'all'
   template: `
     <div class="v-page">
       <header class="v-page-head">
-        <div><h2>Inbox</h2><p class="sub">Voice, photo or text goes in; drafts come back. Nothing counts until you accept it.</p></div>
+        <div><h2>{{ i18n.t('Inbox') }}</h2><p class="sub">{{ i18n.t('Voice, photo or text goes in; drafts come back. Nothing counts until you accept it.') }}</p></div>
         <div class="v-actions">
-          <a class="v-btn" routerLink="/agent">Agent runs</a>
+          <a class="v-btn" routerLink="/agent">{{ i18n.t('Agent runs') }}</a>
           @if (runnerReady()) {
             <button type="button" class="v-btn primary" (click)="processNow()" [disabled]="running()">
-              {{ running() ? 'Processing…' : 'Process now' }}
+              {{ i18n.t(running() ? 'Processing…' : 'Process now') }}
             </button>
           } @else {
-            <button type="button" class="v-btn primary" (click)="openClaude()">Open Claude for Processing</button>
-            <button type="button" class="v-btn" (click)="copyPrompt(handoff.processCaptures)">Copy prompt</button>
+            <button type="button" class="v-btn primary" (click)="openClaude()">{{ i18n.t('Open Claude for Processing') }}</button>
+            <button type="button" class="v-btn" (click)="copyPrompt(handoff.processCaptures)">{{ i18n.t('Copy prompt') }}</button>
           }
         </div>
       </header>
@@ -48,12 +49,12 @@ type Filter = 'open' | 'assigned' | 'processed' | 'discarded' | 'failed' | 'all'
 
       <section class="v-panel add">
         <div class="add-head">
-          <h3>Add a capture</h3>
-          <label class="v-field day"><span>For day</span><input name="date" type="date" [(ngModel)]="targetDate" /></label>
+          <h3>{{ i18n.t('Add a capture') }}</h3>
+          <label class="v-field day"><span>{{ i18n.t('For day') }}</span><input name="date" type="date" [(ngModel)]="targetDate" /></label>
         </div>
         <v-capture-input
           [targetDate]="targetDate || null"
-          placeholder="Write it, speak it, or photograph it: lunch, 400 g quark with berries"
+          [placeholder]="i18n.t('Write it, speak it, or photograph it: lunch, 400 g quark with berries')"
           (uploaded)="onUploaded($event)"
         />
       </section>
@@ -69,8 +70,8 @@ type Filter = 'open' | 'assigned' | 'processed' | 'discarded' | 'failed' | 'all'
 
       @if (pendingSnapshots().length) {
         <section class="frozen">
-          <h3>Frozen report moments <span class="v-tag warn">{{ pendingSnapshots().length }}</span></h3>
-          <p class="v-small v-muted">A frozen report holds the numbers of one moment. It counts once Claude has judged it.</p>
+          <h3>{{ i18n.t('Frozen report moments') }} <span class="v-tag warn">{{ pendingSnapshots().length }}</span></h3>
+          <p class="v-small v-muted">{{ i18n.t('A frozen report holds the numbers of one moment. It counts once Claude has judged it.') }}</p>
           @for (snap of pendingSnapshots(); track snap.id) {
             <div class="snap">
               <div class="what">
@@ -80,11 +81,11 @@ type Filter = 'open' | 'assigned' | 'processed' | 'discarded' | 'failed' | 'all'
               <div class="v-actions">
                 @if (runnerReady()) {
                   <button type="button" class="v-btn small primary" (click)="assessNow()" [disabled]="running()">
-                    {{ running() ? 'Assessing…' : 'Assess now' }}
+                    {{ i18n.t(running() ? 'Assessing…' : 'Assess now') }}
                   </button>
                 } @else {
-                  <button type="button" class="v-btn small primary" (click)="openClaude(snap)">Open Claude to assess</button>
-                  <button type="button" class="v-btn small" (click)="copyPrompt(handoff.assessSnapshot(snap.id, snap.label || snap.title))">Copy prompt</button>
+                  <button type="button" class="v-btn small primary" (click)="openClaude(snap)">{{ i18n.t('Open Claude to assess') }}</button>
+                  <button type="button" class="v-btn small" (click)="copyPrompt(handoff.assessSnapshot(snap.id, snap.label || snap.title))">{{ i18n.t('Copy prompt') }}</button>
                 }
               </div>
             </div>
@@ -93,29 +94,29 @@ type Filter = 'open' | 'assigned' | 'processed' | 'discarded' | 'failed' | 'all'
       }
 
       <section class="drafts">
-        <h3>Waiting for your decision @if (drafts().length) { <span class="v-tag draft">{{ drafts().length }}</span> }</h3>
+        <h3>{{ i18n.t('Waiting for your decision') }} @if (drafts().length) { <span class="v-tag draft">{{ drafts().length }}</span> }</h3>
         @for (d of drafts(); track d.date) {
           <v-draft-day-card [entry]="d" [captures]="capturesFor(d.date)" (changed)="reload()" />
         } @empty {
-          <div class="v-empty">No drafts. Add a capture above and press “Process now”.</div>
+          <div class="v-empty">{{ i18n.t('No drafts. Add a capture above and press “Process now”.') }}</div>
         }
       </section>
 
       <section class="captures">
         <div class="head">
-          <h3>Captures</h3>
+          <h3>{{ i18n.t('Captures') }}</h3>
           <div class="filters">
             @for (f of filters; track f.id) {
-              <button type="button" class="chip" [class.active]="filter() === f.id" (click)="filter.set(f.id)">{{ f.label }}@if (count(f.id); as n) { <span class="n">{{ n }}</span> }</button>
+              <button type="button" class="chip" [class.active]="filter() === f.id" (click)="filter.set(f.id)">{{ i18n.t(f.label) }}@if (count(f.id); as n) { <span class="n">{{ n }}</span> }</button>
             }
           </div>
         </div>
-        <p class="v-small v-muted">A capture stays here until its drafted item is accepted. Discarded ones are deleted automatically after one day.</p>
+        <p class="v-small v-muted">{{ i18n.t('A capture stays here until its drafted item is accepted. Discarded ones are deleted automatically after one day.') }}</p>
         <div class="cards">
           @for (c of visible(); track c.id) {
             <v-capture-card [capture]="c" (changed)="replace($event)" (deleted)="removed($event)" />
           } @empty {
-            <div class="v-empty">Nothing here.</div>
+            <div class="v-empty">{{ i18n.t('Nothing here.') }}</div>
           }
         </div>
       </section>
@@ -142,6 +143,7 @@ type Filter = 'open' | 'assigned' | 'processed' | 'discarded' | 'failed' | 'all'
 })
 export class InboxPage {
   readonly api = inject(ApiClient);
+  readonly i18n = inject(I18nService);
   readonly handoff = inject(ClaudeHandoff);
   private readonly badges = inject(BadgesService);
   readonly captures = signal<Capture[]>([]);
@@ -154,7 +156,7 @@ export class InboxPage {
   readonly filters: { id: Filter; label: string }[] = [
     { id: 'open', label: 'Open' },
     { id: 'assigned', label: 'In draft' },
-    { id: 'processed', label: 'Done' },
+    { id: 'processed', label: 'Processed' },
     { id: 'discarded', label: 'Discarded' },
     { id: 'failed', label: 'Failed' },
     { id: 'all', label: 'All' },
