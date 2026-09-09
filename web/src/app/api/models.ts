@@ -644,28 +644,6 @@ export interface TimelineBlock extends BlockBase {
   kcal_max?: number | null;
 }
 
-export interface TimelineRow {
-  date: string;
-  weight?: number | null;
-  weight_ma?: number | null;
-  countable: boolean;
-  tdee?: number | null;
-  kcal?: number | null;
-  protein?: number | null;
-  carbs?: number | null;
-  fat?: number | null;
-  fiber?: number | null;
-  salt?: number | null;
-}
-
-export interface TimelineBlock extends BlockBase {
-  rows: TimelineRow[];
-  tdee_window: number;
-  goal_kg?: number | null;
-  kcal_min?: number | null;
-  kcal_max?: number | null;
-}
-
 export interface DayListBlock extends BlockBase {
   columns: string[];
   rows: DayListRow[];

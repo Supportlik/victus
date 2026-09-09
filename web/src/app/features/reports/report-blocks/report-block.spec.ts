@@ -27,6 +27,11 @@ const blocks: ReportBlock[] = [
   { meta: meta('text_finding', 'Agent finding'), error: false, source: 'agent', markdown: '**On track.** Protein average 158 g.' },
   { meta: meta('histogram_3d', 'Something new'), error: false } as unknown as ReportBlock,
   { meta: meta('tdee_windows', 'Energy expenditure'), error: true, message: 'no weigh-ins in period' },
+  { meta: meta('timeline', 'One time axis'), error: false, tdee_window: 14, goal_kg: 85, kcal_min: 1700, kcal_max: 2300,
+    rows: [
+      { date: '2026-01-05', weight: 89.1, weight_ma: 89.4, countable: true, tdee: 2500, kcal: 1900, protein: 150, carbs: 180, fat: 70, fiber: 32, salt: 6 },
+      { date: '2026-01-06', weight: null, weight_ma: 89.2, countable: false, tdee: 2490, kcal: null, protein: null, carbs: null, fat: null, fiber: null, salt: null },
+    ] },
 ];
 
 describe('ReportBlockView', () => {
@@ -75,6 +80,36 @@ describe('ReportBlockView', () => {
   it('renders markdown findings as HTML', async () => {
     const el = await render(blocks[8]);
     expect(el.querySelector('.v-md strong')?.textContent).toBe('On track.');
+  });
+
+  // T-WEB-034: the three timeline panels share one day, so the tooltip must read the same
+  // from any of them: weight, then intake, then TDEE.
+  it('builds the timeline tooltip in a fixed order, whatever panel is hovered', async () => {
+    const timeline = blocks.find((b) => b.meta.type === 'timeline')!;
+    const fixture = TestBed.createComponent(ReportBlockView);
+    fixture.componentRef.setInput('block', timeline);
+    await fixture.whenStable();
+
+    // ECharts hands over whichever series sit under the pointer; only the day matters
+    const fromWeightPanel = fixture.componentInstance.timelineTooltip([
+      { axisValue: '2026-01-05', seriesName: 'Weight (7-day avg.)' },
+    ]);
+    const fromMacroPanel = fixture.componentInstance.timelineTooltip([
+      { axisValue: '2026-01-05', seriesName: 'Fat' },
+      { axisValue: '2026-01-05', seriesName: 'Protein' },
+    ]);
+    expect(fromMacroPanel).toBe(fromWeightPanel);
+    expect(fromWeightPanel.indexOf('Weight')).toBeLessThan(fromWeightPanel.indexOf('Intake'));
+    expect(fromWeightPanel.indexOf('Intake')).toBeLessThan(fromWeightPanel.indexOf('TDEE'));
+    expect(fromWeightPanel).toContain('89.4');
+    expect(fromWeightPanel).toContain('TDEE (14 d)');
+    expect(fromWeightPanel).toContain('Protein 150 g');
+
+    // a day without intake keeps the order and simply drops the missing lines
+    const thin = fixture.componentInstance.timelineTooltip([{ axisValue: '2026-01-06' }]);
+    expect(thin).toContain('not counted');
+    expect(thin).not.toContain('Intake');
+    expect(thin).toContain('TDEE');
   });
 
   it('shows a placeholder for unknown block types', async () => {

@@ -275,6 +275,47 @@ export class ReportBlockView {
   }
 
   /**
+   * The three panels share one day, so the tooltip shows that day the same way from any of
+   * them: weight on top, intake in the middle, TDEE below, macros last. Letting ECharts list
+   * whatever series sit under the pointer put a different line first in every panel.
+   */
+  timelineTooltip(params: unknown): string {
+    const rows = (Array.isArray(params) ? params : [params]) as { axisValue?: string }[];
+    const day = rows.find((r) => r.axisValue)?.axisValue;
+    const row = this.timeline().rows.find((r) => r.date === day);
+    if (!row) return '';
+    const dot = (c: string) =>
+      `<span style="display:inline-block;width:.55em;height:.55em;border-radius:50%;background:${c};margin-right:.4em"></span>`;
+    // the interface is English throughout; the browser locale must not reformat these
+    const num = (v: number, digits = 0) =>
+      v.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+    const line = (color: string, label: string, value: number | null | undefined, unit: string, digits = 0) =>
+      value == null ? '' : `<div>${dot(color)}${label}: <b>${num(value, digits)}</b> ${unit}</div>`;
+
+    const weight = row.weight_ma ?? row.weight;
+    const grams = [
+      ['Protein', row.protein],
+      ['Carbs', row.carbs],
+      ['Fat', row.fat],
+      ['Fiber', row.fiber],
+    ] as const;
+    const macros = grams
+      .filter(([, v]) => v != null)
+      .map(([name, v]) => `${name} ${num(v as number)} g`)
+      .join(' · ');
+
+    return [
+      `<div style="margin-bottom:.25em"><b>${day}</b>${row.countable ? '' : ' · not counted'}</div>`,
+      line(CHART_PALETTE[0], 'Weight', weight, 'kg', 1),
+      line(CHART_PALETTE[1], 'Intake', row.kcal, 'kcal'),
+      line(CHART_PALETTE[2], `TDEE (${this.timeline().tdee_window} d)`, row.tdee, 'kcal'),
+      macros ? `<div style="margin-top:.25em;opacity:.8">${macros}</div>` : '',
+    ]
+      .filter(Boolean)
+      .join('');
+  }
+
+  /**
    * Four panels, one time axis: weight against the goal, intake against the corridor and
    * the rolling TDEE, and the macro split. Hovering shows the same day in every panel.
    */
@@ -316,7 +357,11 @@ export class ReportBlockView {
     return {
       animation: false,
       axisPointer: { link: [{ xAxisIndex: 'all' }], label: { backgroundColor: '#555' } },
-      tooltip: { trigger: 'axis' },
+      tooltip: {
+        trigger: 'axis',
+        confine: true,
+        formatter: (p: unknown) => this.timelineTooltip(p),
+      },
       legend: { top: 0, type: 'scroll', icon: 'roundRect' },
       grid: grids,
       xAxis: [
@@ -334,7 +379,7 @@ export class ReportBlockView {
           ...line('Weight (7-day avg.)', pick((r) => r.weight_ma), CHART_PALETTE[0]),
           areaStyle: { opacity: 0.1, color: CHART_PALETTE[0] },
           markLine: t.goal_kg
-            ? { symbol: 'none', silent: true, lineStyle: { type: 'dashed', color: CHART_PALETTE[3] }, label: { formatter: 'goal', fontSize: 10 }, data: [{ yAxis: t.goal_kg }] }
+            ? { symbol: 'none', silent: true, lineStyle: { type: 'dashed', color: CHART_PALETTE[3] }, label: { formatter: 'goal', fontSize: 10, position: 'insideEndTop' }, data: [{ yAxis: t.goal_kg }] }
             : undefined,
         },
         { ...line('Weigh-ins', pick((r) => r.weight), CHART_PALETTE[4]), showSymbol: true, symbolSize: 4, lineStyle: { opacity: 0 }, connectNulls: false },
@@ -346,7 +391,7 @@ export class ReportBlockView {
           data: pick((r) => r.kcal),
           itemStyle: { color: CHART_PALETTE[1], opacity: 0.75 },
           markLine: kcalMarks.length
-            ? { symbol: 'none', silent: true, lineStyle: { type: 'dotted', color: CHART_PALETTE[2] }, label: { formatter: '{b}', fontSize: 10 }, data: kcalMarks }
+            ? { symbol: 'none', silent: true, lineStyle: { type: 'dotted', color: CHART_PALETTE[2] }, label: { formatter: '{b}', fontSize: 10, position: 'insideEndTop' }, data: kcalMarks }
             : undefined,
         },
         line(`TDEE (${t.tdee_window} d)`, pick((r) => r.tdee), CHART_PALETTE[2], { xAxisIndex: 1, yAxisIndex: 1 }),
@@ -375,7 +420,7 @@ export class ReportBlockView {
     return {
       animation: false,
       grid: { left: 56, right: 20, top: 8, bottom: 56 },
-      tooltip: { trigger: 'axis', formatter: (p: unknown) => this.burndownTooltip(p, bd) },
+      tooltip: { trigger: 'axis', confine: true, formatter: (p: unknown) => this.burndownTooltip(p, bd) },
       legend: { bottom: 0, type: 'scroll', icon: 'roundRect' },
       xAxis: {
         type: 'time',
@@ -428,7 +473,7 @@ export class ReportBlockView {
     return {
       animation: false,
       grid: { left: 56, right: 56, top: 32, bottom: 32 },
-      tooltip: { trigger: 'axis' },
+      tooltip: { trigger: 'axis', confine: true },
       legend: { top: 0 },
       xAxis: { type: 'category', data: rows.map((r) => r.week_start) },
       yAxis: [
