@@ -151,6 +151,7 @@ Stored as one JSON document per version in `tenant_settings`; every `PUT /settin
 | `calorie_corridor.rating` | enum | `average` | `average` (over the window) / `per_day` |
 | `transcription.language` | str | `en` | Transcription language; the agent also answers in this language |
 | `transcription.vocabulary_prompt` | str | `""` | Vocabulary hint passed to the transcription model (product names, brands) so numbers and names come out right |
+| `captures.processed_retention_days` | int | `10` | Days a processed capture and its files are kept before both are deleted; `0` keeps them for ever |
 | `report_defaults.period` | str | `14d` | Default report window |
 | `report_defaults.palette` | object | dataviz default | Series colours for charts |
 | `target_bands[]` | reference | – | Managed in table `target_band`, one row per `training_type` and validity range (see below) |

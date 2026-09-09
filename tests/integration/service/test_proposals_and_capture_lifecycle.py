@@ -1,4 +1,4 @@
-"""T-SVC-050…055: product proposals, capture delete/purge, transcript echo guard."""
+"""T-SVC-050…066: product proposals, capture delete/purge, retention, echo guard."""
 
 from __future__ import annotations
 
@@ -110,6 +110,47 @@ def test_discarded_captures_are_purged_after_a_day(
         row.processed_at = datetime.now(UTC) - timedelta(days=2)
         uow.commit()
     assert all(c.id != cap.id for c in uc.ListCaptures(factory, alice, blobs).execute())
+
+
+def test_processed_captures_and_their_files_go_after_the_retention(
+    factory: UowFactory, alice: TenantContext
+) -> None:
+    """T-SVC-066: processed captures are cleaned up with their blobs (R66)."""
+    from victus.application.schemas_loader import load_schema
+    from victus.application.use_cases import settings as settings_uc
+
+    blobs = InMemoryBlobStorage()
+    cap = uc.UploadCapture(factory, alice, blobs).execute(
+        uc.UploadInput(data=PNG, filename="plate.png", mime="image/png")
+    )
+    view = uc.GetCapture(factory, alice).execute(cap.id)
+    key = next(iter(blobs.blobs))
+    with factory(alice) as uow:
+        row = uow.captures.get(cap.id)
+        assert row is not None
+        row.status = "processed"
+        row.processed_at = datetime.now(UTC) - timedelta(days=11)
+        uow.commit()
+
+    # the default retention is ten days, so an eleven day old capture is due
+    assert view.attachments
+    assert all(c.id != cap.id for c in uc.ListCaptures(factory, alice, blobs).execute())
+    assert key not in blobs.blobs
+
+    # with the retention turned off a processed capture stays, files and all
+    data = dict(load_schema("tenant-settings")["examples"][0])
+    data["captures"] = {"processed_retention_days": 0}
+    settings_uc.PutSettings(factory, alice).execute(data)
+    kept = uc.UploadCapture(factory, alice, blobs).execute(
+        uc.UploadInput(data=PNG + b"tail", filename="other.png", mime="image/png")
+    )
+    with factory(alice) as uow:
+        row = uow.captures.get(kept.id)
+        assert row is not None
+        row.status = "processed"
+        row.processed_at = datetime.now(UTC) - timedelta(days=400)
+        uow.commit()
+    assert any(c.id == kept.id for c in uc.ListCaptures(factory, alice, blobs).execute())
 
 
 def test_prompt_echo_transcripts_mark_the_capture_failed(

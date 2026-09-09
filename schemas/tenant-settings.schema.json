@@ -343,6 +343,20 @@
         }
       }
     },
+    "captures": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Housekeeping for the capture inbox. Processed captures have already become line items, so keeping them is only useful for looking back at the photo or recording.",
+      "properties": {
+        "processed_retention_days": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3650,
+          "default": 10,
+          "description": "Days a processed capture and its files are kept before both are deleted. 0 keeps them for ever."
+        }
+      }
+    },
     "report_defaults": {
       "type": "object",
       "additionalProperties": false,
@@ -364,7 +378,7 @@
     "rules": {
       "type": "array",
       "maxItems": 100,
-      "description": "Your own instructions for the agent: when something applies and what to do then, e.g. 'bread rolls from the local bakery' → 'take the values from the bakery's own site'. Handed to the agent with every drafting session.",
+      "description": "Your own instructions for the agent: when something applies and what to do then, e.g. 'bread rolls from the local bakery' \u2192 'take the values from the bakery's own site'. Handed to the agent with every drafting session.",
       "items": {
         "type": "object",
         "additionalProperties": false,

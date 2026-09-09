@@ -131,10 +131,11 @@ class CaptureRepo(Repo):
         self.session.delete(attachment)
         self.session.flush()
 
-    def discarded_before(self, cutoff: datetime) -> Sequence[orm.Capture]:
+    def settled_before(self, status: str, cutoff: datetime) -> Sequence[orm.Capture]:
+        """Captures that reached ``status`` before ``cutoff`` (discarded or processed)."""
         stmt = self.scoped(
             select(orm.Capture).where(
-                orm.Capture.status == "discarded",
+                orm.Capture.status == status,
                 orm.Capture.processed_at.is_not(None),
                 orm.Capture.processed_at < cutoff,
             ),

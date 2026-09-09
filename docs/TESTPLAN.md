@@ -192,6 +192,7 @@ The pyramid is deliberate: most cases are `T-DOM`/`T-SVC`; E2E covers the two fl
 | T-WEB-031 | Agent page | mocked runs and locks | render; select a run; cancel; force unlock | runs with status/tokens/cost; detail with sessions and rendered summary; cancel posts `/cancel`; unlock only after inline confirmation, `DELETE /agent/locks/{date}` | mock | yes | 3 |
 | T-WEB-032 | Captures page | mocked captures (audio with transcript, image) | render; set day; discard; duplicate upload | transcript and audio element, image thumbnail via `/attachments/{id}`; `PATCH` bodies; `created: false` shows a notice, no new row | mock | yes | 3 |
 | T-WEB-033 | Web | Capture form on the inbox | Type a line and save without picking any file | One text box and one "Save capture" button exist; the button is disabled while empty, posts `text` plus `target_date` and no file, then clears the form | `capture-input.spec.ts` | automated |
+| T-WEB-035 | Web | Tenant settings form | Read and write `captures.processed_retention_days` | 30 round-trips; `0` is written as `0`; an empty field drops the whole `captures` object | `settings-form.spec.ts` | automated |
 | T-WEB-033 | Day thread states | mocked messages with `processing_state` and agent kinds | render `DayThread` | user captures show "waiting for the agent" / "in draft"; agent messages tagged summary/question/note; composer enabled while a run is active | mock | partly (manual) | 3 |
 
 ## Agent (`T-AGT`)
@@ -238,6 +239,7 @@ The pyramid is deliberate: most cases are `T-DOM`/`T-SVC`; E2E covers the two fl
 | T-SVC-056 | Last item accepted | one drafted item left | `ApproveLineItem` | day leaves draft, becomes reliable, capture processed | service | yes | 3 |
 | T-RPT-010 | Timeline block | seeded days and weights | render a definition with `timeline` | one row per period day, the rolling window as configured, corridor bounds present | reports | yes | 2 |
 | T-SVC-065 | One capture, several files | two photos and a voice note | `UploadCapture(files=…)` | one capture with three ordered attachments, kind audio, re-upload is a no-op, delete removes every orphan blob | service | yes | 3 |
+| T-SVC-066 | Service | Capture retention | Age a processed capture past the retention, then list captures | Capture and its blob are gone; with `processed_retention_days: 0` a 400-day-old capture stays | `test_proposals_and_capture_lifecycle.py` | automated |
 | T-SVC-063 | Rules | settings saved | upsert twice with the same `when`, list, filter by scope | replaced instead of duplicated, priority order, tenant isolation, each change a settings version | service | yes | 3 |
 | T-SVC-064 | Rule validation | blank `when`, unknown scope | `UpsertRule` | 422; `rules_markdown` renders the agent section | service | yes | 3 |
 | T-SVC-061 | Product usage | product logged on two days | `GetProductUsage` | newest day first, totals, foreign tenant 404 | service | yes | 1 |

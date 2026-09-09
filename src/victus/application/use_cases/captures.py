@@ -279,6 +279,9 @@ class UploadCapture(UseCase):
 
 
 DISCARD_RETENTION = timedelta(days=1)
+#: A processed capture has already become line items; the files are only worth keeping
+#: for a while so the photo or recording can still be looked at (R66).
+PROCESSED_RETENTION_DEFAULT_DAYS = 10
 DELETABLE_STATUSES = frozenset(
     {CaptureStatus.NEW.value, CaptureStatus.FAILED.value, CaptureStatus.DISCARDED.value}
 )
@@ -299,10 +302,33 @@ def _remove_capture(uow: UnitOfWork, blobs: BlobStorage | None, cap: orm.Capture
                 blobs.delete(key)
 
 
-def purge_discarded(uow: UnitOfWork, blobs: BlobStorage | None, at: datetime) -> int:
-    """Discarded captures are deleted for good after ``DISCARD_RETENTION``."""
+def processed_retention(uow: UnitOfWork) -> timedelta | None:
+    """How long processed captures are kept; ``None`` when they are kept for ever."""
+    current = uow.settings.current()
+    data: dict[str, Any] = dict(current.data) if current is not None else {}
+    section = data.get("captures")
+    days = PROCESSED_RETENTION_DEFAULT_DAYS
+    if isinstance(section, dict):
+        raw = section.get("processed_retention_days", days)
+        if isinstance(raw, int) and not isinstance(raw, bool) and raw >= 0:
+            days = raw
+    return timedelta(days=days) if days > 0 else None
+
+
+def purge_settled(uow: UnitOfWork, blobs: BlobStorage | None, at: datetime) -> int:
+    """Delete captures nobody needs any more, with their files.
+
+    Discarded ones go after ``DISCARD_RETENTION``; processed ones after the tenant's
+    retention, which can be turned off. Both free the blobs they alone referenced.
+    """
     removed = 0
-    for cap in list(uow.captures.discarded_before(at - DISCARD_RETENTION)):
+    stale: list[orm.Capture] = list(
+        uow.captures.settled_before(CaptureStatus.DISCARDED.value, at - DISCARD_RETENTION)
+    )
+    keep = processed_retention(uow)
+    if keep is not None:
+        stale += list(uow.captures.settled_before(CaptureStatus.PROCESSED.value, at - keep))
+    for cap in stale:
         _remove_capture(uow, blobs, cap)
         removed += 1
     return removed
@@ -353,7 +379,7 @@ class ListCaptures(UseCase):
             raise ValidationFailed(f"unknown capture status '{status}'")
         with self._uow() as uow:
             # housekeeping on read: no worker is needed for the one-day retention
-            if self.ctx.has_scope(SCOPE_CAPTURE_WRITE) and purge_discarded(uow, self.blobs, now()):
+            if self.ctx.has_scope(SCOPE_CAPTURE_WRITE) and purge_settled(uow, self.blobs, now()):
                 uow.commit()
             rows = uow.captures.list(
                 status=status, target_date=target_date, limit=limit, product_id=product_id

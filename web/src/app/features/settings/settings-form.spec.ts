@@ -66,6 +66,19 @@ describe('TenantSettingsForm', () => {
     expect((out['transcription'] as { vocabulary_prompt: string }).vocabulary_prompt).toBe('skyr, quark, rye bread');
   });
 
+  // T-WEB-035: the retention is an integer where 0 means "keep for ever", so an empty
+  // field and a zero must not collapse into the same thing.
+  it('round-trips the capture retention, zero included', () => {
+    const m = TenantSettingsForm.fromData({ ...DOC, captures: { processed_retention_days: 30 } });
+    expect(m.captureRetentionDays).toBe('30');
+
+    m.captureRetentionDays = '0';
+    expect(TenantSettingsForm.mergeInto(DOC, m)['captures']).toEqual({ processed_retention_days: 0 });
+
+    m.captureRetentionDays = '';
+    expect(TenantSettingsForm.mergeInto(DOC, m)['captures']).toBeUndefined();
+  });
+
   it('drops empty optional groups instead of writing empty objects', () => {
     const m = TenantSettingsForm.empty();
     m.kcalPerKg = '7716.17';

@@ -101,6 +101,10 @@ All notable changes to Victus are documented here. The format follows
   "Save capture" button, on the inbox, a day and a product alike. Text on its own is a capture, so a day's
   note and a day capture are the same thing and the separate "Save text" and "Send" buttons are gone.
 
+- Processed captures are cleaned up after `captures.processed_retention_days` (default 10, `0` keeps them
+  for ever), together with the photos and recordings only they referenced (R66). The worker does it each
+  tick, and listing captures does it too.
+
 ### Changed
 - No importer in the product (ADR 0011): existing data enters through the backup archive format, REST or MCP.
 - One model session per day (ADR 0009) and a resumable per-day thread (ADR 0010); lock TTL 5 minutes;

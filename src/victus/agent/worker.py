@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from victus.application.errors import RunNotActive
 from victus.application.tenant_context import TenantContext
 from victus.application.use_cases import agent as agent_uc
+from victus.application.use_cases import captures as captures_uc
 from victus.backup.schedule import CronSpec
 from victus.config.server import ServerConfig
 from victus.domain.values import AgentMode, RunStatus
@@ -112,6 +113,19 @@ class Worker:
         except OSError as exc:  # pragma: no cover - read-only filesystems
             log.debug("heartbeat not written: %s", exc)
 
+    def purge_settled_captures(self, now: datetime | None = None) -> int:
+        """Delete captures past their retention, per tenant, with their files (R66)."""
+        at = now or self._now()
+        removed = 0
+        for tenant in self._tenants():
+            ctx = worker_context(tenant.id)
+            with SqlAlchemyUnitOfWork(self.session_factory, ctx) as uow:
+                gone = captures_uc.purge_settled(uow, self.blobs, at)
+                if gone:
+                    uow.commit()
+                removed += gone
+        return removed
+
     # -- work --
 
     def queue_scheduled_runs(self, now: datetime | None = None) -> int:
@@ -178,8 +192,9 @@ class Worker:
         return outcome
 
     def run_once(self) -> list[RunOutcome]:
-        """One tick: heartbeat, cron, then every queued run. Returns the outcomes."""
+        """One tick: heartbeat, housekeeping, cron, then every queued run."""
         self.touch_heartbeat()
+        self.purge_settled_captures()
         self.queue_scheduled_runs()
         outcomes: list[RunOutcome] = []
         for tenant_id, run_id in self.queued_runs():

@@ -37,6 +37,7 @@ export interface SettingsFormModel {
   language: string;
   vocabulary: string;
   reportPeriod: string;
+  captureRetentionDays: string;
 }
 
 function str(v: unknown): string {
@@ -156,6 +157,17 @@ function obj(v: unknown): Json {
           <textarea name="voc" rows="4" [(ngModel)]="m.vocabulary"></textarea></label>
       </fieldset>
 
+      <fieldset>
+        <legend>Housekeeping</legend>
+        <div class="v-form-row">
+          <label class="v-field">
+            <span>Keep processed captures for <span class="v-muted">(days, 0 keeps them for ever)</span></span>
+            <input name="cret" type="number" min="0" max="3650" step="1" [(ngModel)]="m.captureRetentionDays" placeholder="10" />
+          </label>
+        </div>
+        <p class="v-small v-muted">A processed capture has already become line items. After this many days it is deleted together with its photos and recordings, so the store does not grow for ever.</p>
+      </fieldset>
+
       <div class="v-actions">
         <button type="submit" class="v-btn primary">Save as new version</button>
         <span class="v-small v-muted">Keys not shown here are kept as they are.</span>
@@ -213,6 +225,7 @@ export class TenantSettingsForm {
       goals: [], bands: [], kcalPerKg: '', movingAverageDays: '',
       trendWindows: '', tdeeWindows: '', tdeeReferenceWindow: '', corridorMin: '', corridorMax: '',
       corridorAsymmetric: true, birthDate: '', heightCm: '', sex: '', language: '', vocabulary: '', reportPeriod: '',
+      captureRetentionDays: '',
     };
   }
 
@@ -222,6 +235,7 @@ export class TenantSettingsForm {
     const body = obj(d['body']);
     const tr = obj(d['transcription']);
     const rd = obj(d['report_defaults']);
+    const caps = obj(d['captures']);
     const rawGoals =
       Array.isArray(d['goals']) && (d['goals'] as Json[]).length
         ? (d['goals'] as Json[])
@@ -259,6 +273,7 @@ export class TenantSettingsForm {
       language: str(tr['language']),
       vocabulary: str(tr['vocabulary_prompt']),
       reportPeriod: str(rd['period']),
+      captureRetentionDays: str(caps['processed_retention_days']),
     };
   }
 
@@ -325,6 +340,11 @@ export class TenantSettingsForm {
     const rd: Json = { ...obj(d['report_defaults']) };
     setOrDelete(rd, 'period', m.reportPeriod.trim() || undefined);
     setOrDelete(d, 'report_defaults', Object.keys(rd).length ? rd : undefined);
+    const caps: Json = { ...obj(d['captures']) };
+    // an empty field means "leave it to the default"; 0 is a real answer and must survive
+    const retention = m.captureRetentionDays.trim() === '' ? undefined : num(m.captureRetentionDays);
+    setOrDelete(caps, 'processed_retention_days', retention);
+    setOrDelete(d, 'captures', Object.keys(caps).length ? caps : undefined);
     return d;
   }
 
