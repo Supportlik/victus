@@ -110,6 +110,10 @@ All notable changes to Victus are documented here. The format follows
   own Claude over MCP, with a copy button beside it. Frozen report moments still waiting for a judgement
   are listed on the same screen with the same hand-off.
 
+- Navigation and the capture buttons use the Lucide icon set instead of text glyphs (R68), so the
+  collapsed rail is readable. On a phone the rail becomes a fixed bar with Today and four sections and a
+  "More" sheet for the rest: nothing scrolls sideways and the bar no longer moves with the page.
+
 ### Changed
 - No importer in the product (ADR 0011): existing data enters through the backup archive format, REST or MCP.
 - One model session per day (ADR 0009) and a resumable per-day thread (ADR 0010); lock TTL 5 minutes;

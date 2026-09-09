@@ -10,6 +10,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { ApiClient, Capture } from '../api';
+import { Icon } from './icon';
 import { describeError } from '../core/problem';
 
 interface Pending {
@@ -31,6 +32,7 @@ interface Pending {
 @Component({
   selector: 'v-capture-input',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [Icon],
   template: `
     <div class="cap" [class.compact]="compact()">
       <textarea
@@ -49,11 +51,11 @@ interface Pending {
         </button>
       } @else {
         <button type="button" class="v-btn" (click)="startRecording()" [disabled]="busy() || !canRecord" [title]="canRecord ? 'Record a voice note' : 'Recording is not available in this browser'">
-          <span aria-hidden="true">🎙</span> Record
+          <v-icon name="mic" [size]="17" /> Record
         </button>
       }
-      <button type="button" class="v-btn" (click)="takePhoto()" [disabled]="busy() || cameraOpen()"><span aria-hidden="true">📷</span> Take photo</button>
-      <button type="button" class="v-btn" (click)="picker.click()" [disabled]="busy()"><span aria-hidden="true">🖼</span> Choose</button>
+      <button type="button" class="v-btn" (click)="takePhoto()" [disabled]="busy() || cameraOpen()"><v-icon name="camera" [size]="17" /> Take photo</button>
+      <button type="button" class="v-btn" (click)="picker.click()" [disabled]="busy()"><v-icon name="images" [size]="17" /> Choose</button>
       <input #picker type="file" accept="image/*,audio/*" multiple hidden (change)="onFiles($event)" />
       @if (busy()) { <span class="v-small v-muted">Uploading…</span> }
       @if (notice(); as n) { <span class="v-small v-muted">{{ n }}</span> }

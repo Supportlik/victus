@@ -194,6 +194,7 @@ The pyramid is deliberate: most cases are `T-DOM`/`T-SVC`; E2E covers the two fl
 | T-WEB-033 | Web | Capture form on the inbox | Type a line and save without picking any file | One text box and one "Save capture" button exist; the button is disabled while empty, posts `text` plus `target_date` and no file, then clears the form | `capture-input.spec.ts` | automated |
 | T-WEB-035 | Web | Tenant settings form | Read and write `captures.processed_retention_days` | 30 round-trips; `0` is written as `0`; an empty field drops the whole `captures` object | `settings-form.spec.ts` | automated |
 | T-WEB-036 | Web | Inbox header | Load the page with runner `ready`, then with `no_key` | `ready` shows Process now; `no_key` shows Open Claude for Processing and lists only the unassessed frozen report | `inbox-page.spec.ts` | automated |
+| T-WEB-037 | Web | Phone navigation | Render the shell signed in, then press More | Six entries in the bar; the sheet lists the four remaining sections plus sign out; a recovery session shows no bar at all | `app.spec.ts` | automated |
 | T-WEB-033 | Day thread states | mocked messages with `processing_state` and agent kinds | render `DayThread` | user captures show "waiting for the agent" / "in draft"; agent messages tagged summary/question/note; composer enabled while a run is active | mock | partly (manual) | 3 |
 
 ## Agent (`T-AGT`)

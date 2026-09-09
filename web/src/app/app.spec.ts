@@ -44,6 +44,31 @@ describe('App', () => {
     expect(el.textContent).toContain('Alice’s kitchen');
     expect(el.querySelectorAll('nav.rail li a').length).toBe(8);
     expect(el.querySelector('.health')?.textContent).toContain('0.1.0.dev0');
+    // every entry carries a drawn icon, not a text glyph
+    expect(el.querySelectorAll('nav.rail li a v-icon svg').length).toBe(8);
+  });
+
+  // T-WEB-037: on a phone the bar holds five entries; the rest wait behind More, so nothing
+  // has to be scrolled sideways to be reached.
+  it('puts the remaining entries behind More in the phone bar', async () => {
+    TestBed.inject(AuthService).me.set(me);
+    const fixture = TestBed.createComponent(App);
+    TestBed.inject(HttpTestingController).expectOne('/api/v1/health').flush({ status: 'ok', version: 'x', checks: {} });
+    await fixture.whenStable();
+    const el = fixture.nativeElement as HTMLElement;
+    // Today plus four primary entries plus the More button
+    expect(el.querySelectorAll('nav.tabs .tab').length).toBe(6);
+    expect(el.querySelector('.sheet')).toBeNull();
+
+    const more = Array.from(el.querySelectorAll('nav.tabs button.tab')).find((b) =>
+      b.textContent?.includes('More'),
+    ) as HTMLButtonElement;
+    more.click();
+    await fixture.whenStable();
+    const sheet = (fixture.nativeElement as HTMLElement).querySelector('.sheet')!;
+    expect(sheet.querySelectorAll('a').length).toBe(4);
+    expect(sheet.textContent).toContain('Recipes');
+    expect(sheet.textContent).toContain('Sign out');
   });
 
   it('nudges for a second passkey when only one is registered', async () => {
@@ -65,6 +90,7 @@ describe('App', () => {
     await fixture.whenStable();
     const el = fixture.nativeElement as HTMLElement;
     expect(el.querySelectorAll('nav.rail li a').length).toBe(0);
+    expect(el.querySelector('nav.tabs')).toBeNull();
     expect(el.querySelector('.recovery-notice')).not.toBeNull();
     expect(el.querySelector('.passkey-nudge')).toBeNull();
   });

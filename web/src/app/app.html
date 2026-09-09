@@ -7,16 +7,16 @@
           <span class="brand-text"><h1>{{ title() }}</h1><span class="tenant">{{ auth.me()?.tenant?.name }}</span></span>
         </a>
         <button type="button" class="collapse" (click)="prefs.railCollapsed.set(!prefs.railCollapsed())" [attr.aria-expanded]="!prefs.railCollapsed()" [title]="prefs.railCollapsed() ? 'Expand menu' : 'Collapse menu'">
-          {{ prefs.railCollapsed() ? '»' : '«' }}
+          <v-icon [name]="prefs.railCollapsed() ? 'expand' : 'collapse'" [size]="18" />
         </button>
       </div>
       @if (!auth.isRecoverySession()) {
-        <a class="today" [routerLink]="todayLink()" routerLinkActive="active" title="Today"><span class="glyph" aria-hidden="true">●</span><span class="label">Today</span></a>
+        <a class="today" [routerLink]="todayLink()" routerLinkActive="active" title="Today"><v-icon name="today" /><span class="label">Today</span></a>
         <ul>
           @for (item of nav; track item.path) {
             <li>
               <a [routerLink]="item.path" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: false }" [title]="item.label">
-                <span class="glyph" aria-hidden="true">{{ item.glyph }}</span><span class="label">{{ item.label }}</span>
+                <v-icon [name]="item.icon" /><span class="label">{{ item.label }}</span>
                 @if (badge(item); as n) { <span class="badge" [attr.aria-label]="n + ' waiting'">{{ n > 99 ? '99+' : n }}</span> }
               </a>
             </li>
@@ -26,8 +26,8 @@
       <div class="foot">
         <span class="user">{{ auth.me()?.user?.display_name }}</span>
         <div class="foot-actions">
-          <button type="button" class="v-btn quiet small" (click)="theme.cycleScheme()" [title]="'Appearance: ' + schemeLabel() + ' — click to change'">◐ {{ schemeLabel() }}</button>
-          <button type="button" class="v-btn quiet small" (click)="logout()">Sign out</button>
+          <button type="button" class="v-btn quiet small" (click)="theme.cycleScheme()" [title]="'Appearance: ' + schemeLabel() + ' — click to change'"><v-icon name="scheme" [size]="16" /> {{ schemeLabel() }}</button>
+          <button type="button" class="v-btn quiet small" (click)="logout()"><v-icon name="signout" [size]="16" /> Sign out</button>
         </div>
         <p class="health" aria-live="polite">
           @if (health(); as h) {
@@ -49,11 +49,43 @@
         <div class="v-notice passkey-nudge">
           <span>You have one passkey. Add a second one on another device so a lost phone does not lock you out.
           <a routerLink="/settings" fragment="passkeys">Add a passkey</a></span>
-          <button type="button" class="v-btn quiet small" (click)="dismissNudge()" aria-label="Dismiss">✕</button>
+          <button type="button" class="v-btn quiet small" (click)="dismissNudge()" aria-label="Dismiss"><v-icon name="close" [size]="16" /></button>
         </div>
       }
       <router-outlet />
     </main>
+
+    @if (!auth.isRecoverySession()) {
+      <nav class="tabs" aria-label="Main">
+        <a class="tab" [routerLink]="todayLink()" routerLinkActive="active" title="Today">
+          <v-icon name="today" [size]="22" /><span>Today</span>
+        </a>
+        @for (item of primaryNav; track item.path) {
+          <a class="tab" [routerLink]="item.path" routerLinkActive="active" [title]="item.label">
+            <v-icon [name]="item.icon" [size]="22" /><span>{{ item.label }}</span>
+            @if (badge(item); as n) { <span class="badge">{{ n > 99 ? '99+' : n }}</span> }
+          </a>
+        }
+        <button type="button" class="tab" (click)="moreOpen.set(!moreOpen())" [attr.aria-expanded]="moreOpen()">
+          <v-icon name="more" [size]="22" /><span>More</span>
+          @if (moreBadge(); as n) { <span class="badge">{{ n > 99 ? '99+' : n }}</span> }
+        </button>
+      </nav>
+
+      @if (moreOpen()) {
+        <div class="sheet-backdrop" (click)="closeMore()"></div>
+        <div class="sheet" role="dialog" aria-label="More">
+          @for (item of secondaryNav; track item.path) {
+            <a [routerLink]="item.path" routerLinkActive="active" (click)="closeMore()">
+              <v-icon [name]="item.icon" /><span>{{ item.label }}</span>
+              @if (badge(item); as n) { <span class="badge">{{ n > 99 ? '99+' : n }}</span> }
+            </a>
+          }
+          <button type="button" class="sign-out" (click)="closeMore(); logout()"><v-icon name="signout" /><span>Sign out</span></button>
+          <button type="button" class="scheme" (click)="theme.cycleScheme()"><v-icon name="scheme" /><span>Appearance: {{ schemeLabel() }}</span></button>
+        </div>
+      }
+    }
   </div>
 } @else {
   <main class="bare">

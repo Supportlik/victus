@@ -53,7 +53,7 @@
     color: var(--v-primary-ink);
     text-decoration: none;
     font-weight: 500;
-    .glyph { color: inherit; }
+    v-icon { color: inherit; flex: none; }
   }
 
   ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
@@ -69,7 +69,8 @@
     &:hover { background: var(--v-surface-2); color: var(--v-ink); }
     &.active { color: var(--v-ink); background: var(--v-surface-2); font-weight: 500; }
   }
-  .glyph { width: 1.1rem; text-align: center; color: var(--v-ink-3); font-size: var(--v-fs-s); flex: none; }
+  li a v-icon { color: var(--v-ink-3); flex: none; }
+  li a.active v-icon { color: var(--v-primary); }
   .badge {
     margin-left: auto;
     min-width: 1.35rem;
@@ -110,7 +111,6 @@
     padding: 0.4rem 0.15rem;
     text-align: center;
   }
-  .glyph { width: auto; font-size: var(--v-fs-m); }
   .label { font-size: 0.62rem; line-height: 1.1; letter-spacing: 0.01em; }
   .badge {
     position: absolute;
@@ -129,25 +129,98 @@
 .passkey-nudge, .recovery-notice { margin: 1rem auto 0; max-width: 76rem; padding-inline: 1rem; }
 .passkey-nudge { display: flex; justify-content: space-between; gap: 1rem; align-items: start; }
 
+// Phone: the rail is replaced by a fixed bar of five entries plus More. Everything is
+// reachable with one thumb, nothing scrolls sideways, and the bar never moves on scroll.
+.tabs { display: none; }
+.sheet, .sheet-backdrop { display: none; }
+
 @media (max-width: 52rem) {
   .shell, .shell.collapsed { grid-template-columns: 1fr; }
-  .rail, .shell.collapsed .rail {
+  .rail, .shell.collapsed .rail { display: none; }
+  .content { padding-bottom: calc(4.2rem + env(safe-area-inset-bottom)); }
+
+  .tabs {
     position: fixed;
     inset: auto 0 0 0;
-    height: auto;
-    flex-direction: row;
-    align-items: center;
-    gap: 0.25rem;
-    padding: 0.35rem 0.5rem;
-    border-right: 0;
+    z-index: 20;
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    align-items: stretch;
+    padding-bottom: env(safe-area-inset-bottom);
+    background: var(--v-surface);
     border-top: 1px solid var(--v-line);
-    overflow-x: auto;
-    z-index: 10;
-    .brand-row, .foot { display: none; }
-    .today { margin: 0; padding: 0.35rem 0.6rem; font-size: var(--v-fs-s); .label { display: inline; } }
-    ul { display: flex; }
-    li a { flex-direction: column; gap: 0.1rem; padding: 0.25rem 0.5rem; font-size: var(--v-fs-xs); min-width: 3.4rem; justify-content: flex-start; .label { display: inline; } }
-    .badge { position: absolute; top: 0; right: 0.1rem; margin: 0; min-width: 1.1rem; height: auto; padding: 0 0.25rem; line-height: 1.1rem; font-size: 0.65rem; }
   }
-  .content { padding-bottom: 4.5rem; }
+  .tab {
+    position: relative;
+    display: grid;
+    justify-items: center;
+    align-content: center;
+    gap: 0.15rem;
+    padding: 0.45rem 0.2rem;
+    border: 0;
+    background: none;
+    color: var(--v-ink-3);
+    text-decoration: none;
+    font: inherit;
+    font-size: 0.66rem;
+    line-height: 1.1;
+    cursor: pointer;
+    &.active { color: var(--v-primary); font-weight: 600; }
+    .badge {
+      position: absolute;
+      top: 0.2rem;
+      left: 50%;
+      margin-left: 0.35rem;
+      min-width: 1rem;
+      padding: 0 0.22rem;
+      border-radius: 999px;
+      background: var(--v-primary);
+      color: var(--v-primary-ink);
+      font-size: 0.6rem;
+      line-height: 1rem;
+      font-weight: 600;
+    }
+  }
+
+  .sheet-backdrop { display: block; position: fixed; inset: 0; z-index: 25; background: rgb(0 0 0 / 0.35); }
+  .sheet {
+    display: grid;
+    position: fixed;
+    inset: auto 0 calc(4.2rem + env(safe-area-inset-bottom)) 0;
+    z-index: 26;
+    gap: 2px;
+    padding: 0.5rem;
+    background: var(--v-surface);
+    border-top: 1px solid var(--v-line);
+    box-shadow: 0 -0.5rem 1.5rem rgb(0 0 0 / 0.18);
+
+    a, button {
+      display: flex;
+      align-items: center;
+      gap: 0.7rem;
+      padding: 0.7rem 0.6rem;
+      border: 0;
+      border-radius: var(--v-radius);
+      background: none;
+      color: var(--v-ink-2);
+      text-decoration: none;
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+      &.active { color: var(--v-ink); background: var(--v-surface-2); font-weight: 500; }
+    }
+    .badge {
+      margin-left: auto;
+      min-width: 1.35rem;
+      padding: 0 0.35rem;
+      border-radius: 999px;
+      background: var(--v-primary);
+      color: var(--v-primary-ink);
+      font-size: var(--v-fs-xs);
+      line-height: 1.35rem;
+      text-align: center;
+      font-weight: 600;
+    }
+  }
 }

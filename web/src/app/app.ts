@@ -5,14 +5,18 @@ import { AuthService } from './core/auth/auth.service';
 import { BadgesService } from './core/badges.service';
 import { PrefsService } from './core/prefs.service';
 import { ThemeService } from './core/theme.service';
+import { Icon } from './shared/icon';
 import { Logo } from './shared/logo';
 
 interface NavItem {
   path: string;
   label: string;
-  glyph: string;
+  /** Icon name from shared/icon.ts. */
+  icon: string;
   /** Which badge counter to show next to the label. */
   badge?: 'inbox' | 'days' | 'products';
+  /** On a phone the bottom bar shows only the primary entries; the rest sit behind "More". */
+  primary?: boolean;
 }
 
 const NUDGE_KEY = 'victus.passkeyNudgeDismissed';
@@ -23,7 +27,7 @@ const NUDGE_KEY = 'victus.passkeyNudgeDismissed';
  */
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, Logo],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, Icon, Logo],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -41,15 +45,25 @@ export class App {
 
   /** Nine entries before Inbox merged captures and drafts. */
   protected readonly nav: NavItem[] = [
-    { path: '/days', label: 'Days', glyph: '▤', badge: 'days' },
-    { path: '/inbox', label: 'Inbox', glyph: '⏺', badge: 'inbox' },
-    { path: '/products', label: 'Products', glyph: '◆', badge: 'products' },
-    { path: '/recipes', label: 'Recipes', glyph: '❖' },
-    { path: '/weight', label: 'Weight', glyph: '⚖' },
-    { path: '/reports', label: 'Reports', glyph: '▥' },
-    { path: '/agent', label: 'Agent', glyph: '✦' },
-    { path: '/settings', label: 'Settings', glyph: '⚙' },
+    { path: '/days', label: 'Days', icon: 'days', badge: 'days', primary: true },
+    { path: '/inbox', label: 'Inbox', icon: 'inbox', badge: 'inbox', primary: true },
+    { path: '/products', label: 'Products', icon: 'products', badge: 'products', primary: true },
+    { path: '/recipes', label: 'Recipes', icon: 'recipes' },
+    { path: '/weight', label: 'Weight', icon: 'weight' },
+    { path: '/reports', label: 'Reports', icon: 'reports', primary: true },
+    { path: '/agent', label: 'Agent', icon: 'agent' },
+    { path: '/settings', label: 'Settings', icon: 'settings' },
   ];
+
+  /** Bottom bar on a phone: four entries plus "More", so nothing has to scroll sideways. */
+  protected readonly primaryNav = this.nav.filter((i) => i.primary);
+  protected readonly secondaryNav = this.nav.filter((i) => !i.primary);
+  protected readonly moreOpen = signal(false);
+
+  /** Anything waiting behind "More" is worth a dot on the button. */
+  protected readonly moreBadge = computed(() =>
+    this.secondaryNav.reduce((n, item) => n + this.badge(item), 0),
+  );
 
   protected readonly todayLink = computed(() => `/days/${new Date().toISOString().slice(0, 10)}`);
   protected readonly homeLink = computed(() => this.prefs.landingUrl());
@@ -79,6 +93,10 @@ export class App {
       default:
         return 0;
     }
+  }
+
+  protected closeMore(): void {
+    this.moreOpen.set(false);
   }
 
   protected dismissNudge(): void {
