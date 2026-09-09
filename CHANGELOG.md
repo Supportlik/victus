@@ -158,6 +158,12 @@ All notable changes to Victus are documented here. The format follows
   needs them says which one is absent. Sessions arrive through the API, the MCP (`body_add`) or a
   capture, because a spoken "waist 126, hip 118" is a capture like any other.
 
+- The interface speaks German or English, switchable in the settings without a rebuild (R78). The
+  language is separate from the number format, so German numbers with an English interface is a valid
+  choice. The English string is its own key, so an untranslated view reads as correct English rather
+  than showing a key, and `scripts/check_translations.py` reports what is still missing. The shell and
+  the navigation are translated; the individual screens follow.
+
 - Every class is shown with the scale around it (R77). The report's body block draws the full range,
   marks the class the value falls in and pins the value, and lists the BMI classes as weights with the
   current one highlighted. The weight chart shades those classes behind the curve once a height is

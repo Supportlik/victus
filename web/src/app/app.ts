@@ -4,6 +4,7 @@ import { ApiClient, Health } from './api';
 import { AuthService } from './core/auth/auth.service';
 import { BadgesService } from './core/badges.service';
 import { FormatService, todayLocal } from './core/format.service';
+import { I18nService } from './core/i18n.service';
 import { PrefsService } from './core/prefs.service';
 import { ThemeService } from './core/theme.service';
 import { Icon } from './shared/icon';
@@ -39,6 +40,7 @@ export class App {
   protected readonly theme = inject(ThemeService);
   protected readonly prefs = inject(PrefsService);
   private readonly format = inject(FormatService);
+  protected readonly i18n = inject(I18nService);
 
   protected readonly title = signal('Victus');
   protected readonly health = signal<Health | null>(null);
@@ -87,8 +89,13 @@ export class App {
       if (!this.auth.isAuthenticated() || this.auth.isRecoverySession()) return;
       this.api.settings().subscribe({
         next: (v) => {
-          const regional = (v.data['regional'] ?? {}) as { locale?: string; timezone?: string };
+          const regional = (v.data['regional'] ?? {}) as {
+            locale?: string;
+            timezone?: string;
+            language?: string;
+          };
           this.format.adopt(regional.locale, regional.timezone);
+          this.i18n.adopt(regional.language);
         },
         error: () => undefined,
       });
@@ -123,7 +130,7 @@ export class App {
 
   protected schemeLabel(): string {
     const s = this.theme.scheme();
-    return s === 'system' ? 'Auto' : s === 'light' ? 'Light' : 'Dark';
+    return this.i18n.t(s === 'system' ? 'Auto' : s === 'light' ? 'Light' : 'Dark');
   }
 
   protected logout(): void {

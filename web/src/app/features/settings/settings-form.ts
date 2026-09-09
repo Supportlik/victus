@@ -41,6 +41,7 @@ export interface SettingsFormModel {
   captureRetentionDays: string;
   timezone: string;
   locale: string;
+  uiLanguage: string;
 }
 
 function str(v: unknown): string {
@@ -171,6 +172,14 @@ function obj(v: unknown): Json {
             </datalist>
           </label>
           <label class="v-field">
+            <span>Interface language</span>
+            <select name="uilang" [(ngModel)]="m.uiLanguage">
+              <option value="">Default (English)</option>
+              <option value="en">English</option>
+              <option value="de">Deutsch</option>
+            </select>
+          </label>
+          <label class="v-field">
             <span>Number and date format</span>
             <select name="loc" [(ngModel)]="m.locale">
               <option value="">Default (1.234,5)</option>
@@ -178,7 +187,7 @@ function obj(v: unknown): Json {
             </select>
           </label>
         </div>
-        <p class="v-small v-muted">Timestamps are always stored in UTC. The zone decides which calendar day they belong to, so a weigh-in just after midnight counts on the right day.</p>
+        <p class="v-small v-muted">The language changes the interface only; the number format is separate, so German numbers with an English interface is a valid choice. Timestamps are always stored in UTC. The zone decides which calendar day they belong to, so a weigh-in just after midnight counts on the right day.</p>
       </fieldset>
 
       <fieldset>
@@ -265,7 +274,7 @@ export class TenantSettingsForm {
       goals: [], bands: [], kcalPerKg: '', movingAverageDays: '',
       trendWindows: '', tdeeWindows: '', tdeeReferenceWindow: '', corridorMin: '', corridorMax: '',
       corridorAsymmetric: true, birthDate: '', heightCm: '', sex: '', language: '', vocabulary: '', reportPeriod: '',
-      captureRetentionDays: '', timezone: '', locale: '',
+      captureRetentionDays: '', timezone: '', locale: '', uiLanguage: '',
     };
   }
 
@@ -317,6 +326,7 @@ export class TenantSettingsForm {
       captureRetentionDays: str(caps['processed_retention_days']),
       timezone: str(reg['timezone']),
       locale: str(reg['locale']),
+      uiLanguage: str(reg['language']),
     };
   }
 
@@ -391,6 +401,7 @@ export class TenantSettingsForm {
     const reg: Json = { ...obj(d['regional']) };
     setOrDelete(reg, 'timezone', m.timezone.trim() || undefined);
     setOrDelete(reg, 'locale', m.locale.trim() || undefined);
+    setOrDelete(reg, 'language', m.uiLanguage.trim() || undefined);
     setOrDelete(d, 'regional', Object.keys(reg).length ? reg : undefined);
     return d;
   }

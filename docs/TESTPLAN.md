@@ -206,6 +206,7 @@ The pyramid is deliberate: most cases are `T-DOM`/`T-SVC`; E2E covers the two fl
 | T-WEB-041 | Web | Day view, unit picker | Pick a product without portions, choose the count unit `bag`, give 500 g | The picker groups the units, asks what one bag holds, posts the portion first and then the item against it | `day-view.spec.ts` | automated |
 | T-WEB-042 | Web | Body block | Render a BMI in class I with its scale | One segment per class, the current one marked, the pin inside the bar, the kilogram row highlighted, a shrinking waist shown as an improvement | `report-block.spec.ts` | automated |
 | T-WEB-043 | Web | Weight page | List measurements, submit a partly filled form, render with and without a height | Newest first with dashes for unmeasured values; the request carries only what was filled in; six shaded bands with a height, none without | `weight-page.spec.ts` | automated |
+| T-WEB-044 | Web | Interface language | Switch to German, ask for an unknown string, fill a placeholder, offer a language that is not shipped | Translates once switched; an unknown string comes back unchanged; placeholders fill; an unknown language falls back and the choice is mirrored | `i18n.service.spec.ts` | automated |
 | T-WEB-033 | Day thread states | mocked messages with `processing_state` and agent kinds | render `DayThread` | user captures show "waiting for the agent" / "in draft"; agent messages tagged summary/question/note; composer enabled while a run is active | mock | partly (manual) | 3 |
 
 ## Agent (`T-AGT`)
