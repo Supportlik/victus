@@ -14,10 +14,13 @@ from victus.reports.results import (
     BandDistributionResult,
     BlockError,
     BlockResult,
+    BodyCompositionResult,
     BurndownBlockResult,
     DayListResult,
+    EnergySplitResult,
     ForecastResult,
     KpiTileResult,
+    RatedValue,
     ReportResult,
     TdeeWindowsResult,
     TextFindingResult,
@@ -284,6 +287,91 @@ def _day_list(b: DayListResult) -> str:
     return _table(headers, rows)
 
 
+CIRCUMFERENCE_LABELS: dict[str, str] = {
+    "waist_cm": "Waist",
+    "belly_cm": "Belly",
+    "hip_cm": "Hip",
+    "chest_cm": "Chest",
+    "neck_cm": "Neck",
+    "thigh_cm": "Thigh",
+    "arm_cm": "Arm",
+}
+
+
+def _rated_line(name: str, r: RatedValue, decimals: int) -> str:
+    """One measure: value, its class, and how far the next better one is."""
+    value = f"{r.value:.{decimals}f}"
+    line = f"- **{name}** {value}{(' ' + r.unit) if r.unit else ''} — {r.band}"
+    if r.to_next is not None:
+        line += f", {abs(r.to_next):.{decimals}f} from the next class"
+    return line
+
+
+def _body(b: BodyCompositionResult) -> str:
+    parts: list[str] = []
+    if b.weight_kg is not None:
+        head = f"{b.weight_kg:.1f} kg"
+        if b.height_cm:
+            head += f" at {b.height_cm:.0f} cm"
+        parts.append(f"_{head}_\n")
+    lines: list[str] = []
+    if b.bmi:
+        lines.append(_rated_line("BMI", b.bmi, 1))
+    if b.waist_to_height:
+        lines.append(_rated_line("Waist to height", b.waist_to_height, 2))
+    if b.waist_to_hip:
+        lines.append(_rated_line("Waist to hip", b.waist_to_hip, 2))
+    if b.body_fat_pct is not None:
+        lines.append(f"- **Body fat** {b.body_fat_pct:.1f} %")
+    if lines:
+        parts.append("\n".join(lines))
+    if b.bmi_weight_bands and b.weight_kg is not None:
+        rows = [
+            [
+                m.name,
+                f"{m.lower:.1f} kg" if m.lower else "–",
+                f"{m.upper:.1f} kg" if m.upper else "–",
+            ]
+            for m in b.bmi_weight_bands
+        ]
+        parts.append("\n" + _table(["BMI class", "from", "to"], rows))
+    if b.circumferences:
+        rows = []
+        for key, label in CIRCUMFERENCE_LABELS.items():
+            if key not in b.circumferences:
+                continue
+            change = b.changes.get(key)
+            rows.append(
+                [
+                    label,
+                    f"{b.circumferences[key]:.1f} cm",
+                    f"{change:+.1f} cm" if change is not None else "–",
+                ]
+            )
+        measured = f" (measured {_d(b.measured_at)})" if b.measured_at else ""
+        parts.append(f"\n**Circumferences**{measured}\n\n" + _table(["", "now", "change"], rows))
+    if b.missing:
+        parts.append("\n_Not shown: " + "; ".join(b.missing) + "._")
+    return "\n".join(parts) if parts else "_Nothing measured yet._"
+
+
+def _energy_split(b: EnergySplitResult) -> str:
+    if b.tdee_kcal is None:
+        return "_Not available: " + "; ".join(b.missing or ["no data"]) + "._"
+    lines = [f"- **Expenditure** {b.tdee_kcal:.0f} kcal/day ({_basis(b.basis)})"]
+    if b.basal_kcal is not None:
+        lines.append(f"- **At rest** {b.basal_kcal:.0f} kcal/day")
+        lines.append(f"- **From moving** {b.activity_kcal:.0f} kcal/day")
+        if b.pal is not None:
+            lines.append(f"- **Activity level** {b.pal:.2f} times the resting rate")
+    out = "\n".join(lines)
+    if b.caveat:
+        out += f"\n\n⚠️ {b.caveat}"
+    if b.missing:
+        out += "\n\n_Not shown: " + "; ".join(b.missing) + "._"
+    return out
+
+
 def _block(b: BlockResult) -> str:
     title = f"### {b.meta.title}\n\n"
     if isinstance(b, BlockError):
@@ -308,6 +396,10 @@ def _block(b: BlockResult) -> str:
         return title + _day_list(b)
     if isinstance(b, TextFindingResult):
         return title + (b.markdown or "_No finding recorded._")
+    if isinstance(b, BodyCompositionResult):
+        return title + _body(b)
+    if isinstance(b, EnergySplitResult):
+        return title + _energy_split(b)
     raise TypeError(f"unknown block result {type(b).__name__}")  # pragma: no cover
 
 

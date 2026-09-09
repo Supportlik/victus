@@ -13,6 +13,8 @@ DEFAULT_TITLES: dict[str, str] = {
     "weekly_chart": "Weeks",
     "day_list": "Days",
     "text_finding": "Assessment",
+    "body_composition": "Body",
+    "energy_split": "Where the energy goes",
 }
 
 

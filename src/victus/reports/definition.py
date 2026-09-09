@@ -56,6 +56,18 @@ class _BlockBase(_Strict):
         return v
 
 
+class BodyCompositionDef(_BlockBase):
+    """BMI and the waist ratios. Needs height in the settings; says so when absent."""
+
+    type: Literal["body_composition"]
+
+
+class EnergySplitDef(_BlockBase):
+    """Measured expenditure split into resting rate and activity."""
+
+    type: Literal["energy_split"]
+
+
 class KpiTileDef(_BlockBase):
     type: Literal["kpi_tile"]
     id: str
@@ -152,7 +164,9 @@ BlockDef = Annotated[
     | TimelineDef
     | WeeklyChartDef
     | DayListDef
-    | TextFindingDef,
+    | TextFindingDef
+    | BodyCompositionDef
+    | EnergySplitDef,
     Field(discriminator="type"),
 ]
 

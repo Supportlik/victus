@@ -35,6 +35,8 @@ Every render call takes `from`/`to` (or the default period) and the tenant setti
 | `timeline` | `tdee_window: 14` | `day_macros` + `tdee.rolling_window` | one row per day: weight, moving average, intake, rolling TDEE, macros (R63) |
 | `day_list` | `columns: [kcal, protein, fiber, weight, status]` | repository + `day_macros` | one row per day with flags |
 | `text_finding` | `source: agent | manual`, `id` | newest assessed snapshot | Titled **Assessment**: the judgement of the most recently assessed snapshot, or empty. It is not a log of what the agent did (R71) |
+| `body_composition` | – | `services/body` + `body_measurement` | BMI with the WHO classes and their weights, waist to height, waist to hip, the last session's circumferences and their change (R76) |
+| `energy_split` | – | `services/body` + rolling TDEE | Expenditure split into resting rate and activity, with the activity level and a caveat when it is implausible |
 
 ### Metric paths for `kpi_tile`
 

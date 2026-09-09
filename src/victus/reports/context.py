@@ -10,7 +10,13 @@ from __future__ import annotations
 from datetime import date, timedelta
 from functools import cached_property
 
-from victus.application.ports.report_data import DayMacros, ReportDataSource, TenantReportSettings
+from victus.application.ports.report_data import (
+    BodyProfile,
+    BodySession,
+    DayMacros,
+    ReportDataSource,
+    TenantReportSettings,
+)
 from victus.domain.model.reporting import RollingRow, WeekRow
 from victus.domain.services import tdee, trend
 from victus.domain.values import Period
@@ -68,6 +74,15 @@ class ReportContext:
         return self._series(macro, self.period_days if within_period else self.all_days)
 
     # ── derived values ───────────────────────────────────────────────────
+
+    @cached_property
+    def body_profile(self) -> BodyProfile:
+        return self.source.body_profile()
+
+    @cached_property
+    def body_sessions(self) -> list[BodySession]:
+        """Sessions up to ``today``; a later one would leak the future into a snapshot."""
+        return list(self.source.body_sessions(self.today))
 
     @cached_property
     def current_kg(self) -> float | None:

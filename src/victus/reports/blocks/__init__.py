@@ -6,6 +6,7 @@ from collections.abc import Callable
 
 from victus.reports import definition as d
 from victus.reports.blocks.band_distribution import compute_band_distribution
+from victus.reports.blocks.body import compute_body_composition, compute_energy_split
 from victus.reports.blocks.burndown import compute_burndown
 from victus.reports.blocks.day_list import compute_day_list
 from victus.reports.blocks.forecast import compute_forecast
@@ -31,6 +32,8 @@ COMPUTERS: dict[str, Compute] = {
     "timeline": lambda b, c: compute_timeline(_as(b, d.TimelineDef), c),
     "day_list": lambda b, c: compute_day_list(_as(b, d.DayListDef), c),
     "text_finding": lambda b, c: compute_text_finding(_as(b, d.TextFindingDef), c),
+    "body_composition": lambda b, c: compute_body_composition(_as(b, d.BodyCompositionDef), c),
+    "energy_split": lambda b, c: compute_energy_split(_as(b, d.EnergySplitDef), c),
 }
 
 

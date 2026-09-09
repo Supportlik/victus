@@ -352,6 +352,46 @@
         }
       },
       "description": "Weight, intake, rolling TDEE and macros per day, for stacked panels sharing one time axis."
+    },
+    "body_composition": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "BMI with the WHO classes and their weights, waist to height and waist to hip, plus the circumferences of the last session and their change. Needs height in the tenant settings; a figure whose input is missing is left out and the reason listed.",
+      "required": [
+        "type",
+        "id"
+      ],
+      "properties": {
+        "type": {
+          "const": "body_composition"
+        },
+        "id": {
+          "$ref": "#/$defs/block_id"
+        },
+        "title": {
+          "type": "string"
+        }
+      }
+    },
+    "energy_split": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The measured expenditure split into the resting rate (Mifflin-St Jeor) and activity, with the activity level. Needs height, birth date and sex; flags an implausible level.",
+      "required": [
+        "type",
+        "id"
+      ],
+      "properties": {
+        "type": {
+          "const": "energy_split"
+        },
+        "id": {
+          "$ref": "#/$defs/block_id"
+        },
+        "title": {
+          "type": "string"
+        }
+      }
     }
   },
   "properties": {
@@ -414,6 +454,12 @@
           },
           {
             "$ref": "#/$defs/text_finding"
+          },
+          {
+            "$ref": "#/$defs/body_composition"
+          },
+          {
+            "$ref": "#/$defs/energy_split"
           }
         ]
       }

@@ -55,6 +55,61 @@ class BandDistributionResult:
 
 
 @dataclass(frozen=True, slots=True)
+class ThresholdMark:
+    """One class of a scale, in the unit the block shows it in."""
+
+    name: str
+    lower: float | None
+    upper: float | None
+    tone: str
+
+
+@dataclass(frozen=True, slots=True)
+class RatedValue:
+    """A measured value with the class it falls in and the scale behind it."""
+
+    value: float
+    unit: str
+    band: str
+    tone: str
+    to_next: float | None
+    bands: list[ThresholdMark]
+
+
+@dataclass(frozen=True, slots=True)
+class BodyCompositionResult:
+    meta: BlockMeta
+    weight_kg: float | None = None
+    height_cm: float | None = None
+    bmi: RatedValue | None = None
+    #: The BMI classes expressed as weights, so a class becomes a number to aim at.
+    bmi_weight_bands: list[ThresholdMark] = field(default_factory=list)
+    waist_to_height: RatedValue | None = None
+    waist_to_hip: RatedValue | None = None
+    measured_at: date | None = None
+    circumferences: dict[str, float] = field(default_factory=dict)
+    #: Change against the previous session, per circumference, in centimetres.
+    changes: dict[str, float] = field(default_factory=dict)
+    body_fat_pct: float | None = None
+    #: Why a figure is absent, in words, one entry per missing input.
+    missing: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True, slots=True)
+class EnergySplitResult:
+    meta: BlockMeta
+    tdee_kcal: float | None = None
+    basal_kcal: float | None = None
+    activity_kcal: float | None = None
+    pal: float | None = None
+    age_years: int | None = None
+    basis: str = "none"
+    #: Set when the split is physiologically implausible; shown beside the numbers.
+    caveat: str | None = None
+    missing: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True, slots=True)
 class TdeeWindowsResult:
     meta: BlockMeta
     rows: list[RollingRow]
@@ -155,6 +210,8 @@ class BlockError:
 
 BlockResult = (
     KpiTileResult
+    | BodyCompositionResult
+    | EnergySplitResult
     | BandDistributionResult
     | TdeeWindowsResult
     | TrendResult

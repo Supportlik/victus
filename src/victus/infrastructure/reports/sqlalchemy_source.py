@@ -8,12 +8,19 @@ engine and the API never see SQLAlchemy objects.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import date
 from typing import Any
 
-from victus.application.ports.report_data import DayMacros, TenantReportSettings
+from victus.application.ports.report_data import (
+    BodyProfile,
+    BodySession,
+    DayMacros,
+    TenantReportSettings,
+)
+from victus.application.use_cases import body as body_uc
 from victus.domain.model.reporting import Stage
+from victus.domain.services.calendar import day_of
 from victus.domain.values import (
     Band,
     CalorieCorridor,
@@ -173,6 +180,27 @@ class SqlAlchemyReportDataSource:
     def settings(self) -> TenantReportSettings:
         current = self._uow.settings.current()
         return settings_from_data(current.data if current else {})
+
+    def body_profile(self) -> BodyProfile:
+        height, sex, birth = body_uc.body_profile(self._uow)
+        return BodyProfile(height_cm=height, sex=sex.value if sex else None, birth_date=birth)
+
+    def body_sessions(self, on_or_before: date | None = None) -> Sequence[BodySession]:
+        rows = self._uow.body.list(end=on_or_before)
+        return [
+            BodySession(
+                measured_at=day_of(r.measured_at, self._tz),
+                waist_cm=r.waist_cm,
+                belly_cm=r.belly_cm,
+                hip_cm=r.hip_cm,
+                chest_cm=r.chest_cm,
+                neck_cm=r.neck_cm,
+                thigh_cm=r.thigh_cm,
+                arm_cm=r.arm_cm,
+                body_fat_pct=r.body_fat_pct,
+            )
+            for r in rows
+        ]
 
     def latest_finding(self, source: str) -> str | None:
         """The newest assessment of a frozen report, or nothing (R58, R71).

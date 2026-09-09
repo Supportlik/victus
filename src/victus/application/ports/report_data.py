@@ -52,6 +52,35 @@ class TenantReportSettings:
     goal_name: str | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class BodyProfile:
+    """What the body figures need, all of it optional (R76).
+
+    None means the tenant has not stated it. A block that needs a missing field says so
+    rather than substituting an average, because a BMI computed on a guessed height is
+    worse than no BMI.
+    """
+
+    height_cm: float | None = None
+    sex: str | None = None
+    birth_date: date | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class BodySession:
+    """One tape-measure session, as the report reads it."""
+
+    measured_at: date
+    waist_cm: float | None = None
+    belly_cm: float | None = None
+    hip_cm: float | None = None
+    chest_cm: float | None = None
+    neck_cm: float | None = None
+    thigh_cm: float | None = None
+    arm_cm: float | None = None
+    body_fat_pct: float | None = None
+
+
 class ReportDataSource(Protocol):
     """Everything a report render needs to read, scoped to one tenant."""
 
@@ -76,6 +105,14 @@ class ReportDataSource(Protocol):
         ...
 
     def settings(self) -> TenantReportSettings: ...
+
+    def body_profile(self) -> BodyProfile:
+        """Height, sex and birth date from the tenant settings; any may be missing."""
+        ...
+
+    def body_sessions(self, on_or_before: date | None = None) -> Sequence[BodySession]:
+        """Tape-measure sessions up to a day, oldest first."""
+        ...
 
     def latest_finding(self, source: str) -> str | None:
         """Markdown of the newest finding for ``source`` (``agent`` or ``manual``)."""

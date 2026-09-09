@@ -44,6 +44,10 @@ blocks:
     stages: from_settings
   - type: day_list
     columns: [kcal, protein, fiber, weight, status]
+  - type: body_composition
+    id: body
+  - type: energy_split
+    id: energy
   - type: text_finding
     id: finding
     source: agent|manual
