@@ -32,18 +32,17 @@ type Filter = 'open' | 'assigned' | 'processed' | 'discarded' | 'failed' | 'all'
         </div>
       </header>
       @if (error(); as e) { <div class="v-error">{{ e }}</div> }
-      @if (notice(); as n) { <div class="v-notice">{{ n }}</div> }
 
       <section class="v-panel add">
         <div class="add-head">
           <h3>Add a capture</h3>
           <label class="v-field day"><span>For day</span><input name="date" type="date" [(ngModel)]="targetDate" /></label>
         </div>
-        <v-capture-input [targetDate]="targetDate || null" [text]="text" (uploaded)="onUploaded($event)" />
-        <form class="typed" (ngSubmit)="upload()">
-          <textarea name="text" [(ngModel)]="text" rows="2" placeholder="Type it, or add a line to the photos above: lunch 400 g quark with berries" [disabled]="busy()"></textarea>
-          <button type="submit" class="v-btn" [disabled]="busy() || !text.trim()">Save text</button>
-        </form>
+        <v-capture-input
+          [targetDate]="targetDate || null"
+          placeholder="Write it, speak it, or photograph it: lunch, 400 g quark with berries"
+          (uploaded)="onUploaded($event)"
+        />
       </section>
 
       @if (run(); as r) {
@@ -88,8 +87,6 @@ type Filter = 'open' | 'assigned' | 'processed' | 'discarded' | 'failed' | 'all'
     .add { display: grid; gap: 0.75rem; }
     .add-head { display: flex; justify-content: space-between; align-items: end; gap: 1rem; flex-wrap: wrap; }
     .day { min-width: 11rem; }
-    .typed { display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; align-items: start; }
-    .typed textarea { padding: 0.5rem; border: 1px solid var(--v-line-strong); border-radius: var(--v-radius); background: var(--v-surface); resize: vertical; }
     .run { margin-top: 1rem; } .run.active { border-color: var(--v-agent); }
     .drafts, .captures { margin-top: 1.5rem; display: grid; gap: 0.75rem; }
     .drafts h3, .captures h3 { font-size: var(--v-fs-l); }
@@ -99,7 +96,6 @@ type Filter = 'open' | 'assigned' | 'processed' | 'discarded' | 'failed' | 'all'
     .chip.active { background: var(--v-primary-soft); border-color: var(--v-primary); color: var(--v-primary); }
     .chip .n { font-size: var(--v-fs-xs); color: var(--v-ink-3); }
     .cards { display: grid; gap: 0.6rem; }
-    @media (max-width: 40rem) { .typed { grid-template-columns: 1fr; } }
   `,
 })
 export class InboxPage {
@@ -109,9 +105,7 @@ export class InboxPage {
   readonly drafts = signal<DraftListEntry[]>([]);
   readonly filter = signal<Filter>('open');
   readonly run = signal<AgentRun | null>(null);
-  readonly busy = signal(false);
   readonly error = signal<string | null>(null);
-  readonly notice = signal<string | null>(null);
   readonly filters: { id: Filter; label: string }[] = [
     { id: 'open', label: 'Open' },
     { id: 'assigned', label: 'In draft' },
@@ -120,7 +114,6 @@ export class InboxPage {
     { id: 'failed', label: 'Failed' },
     { id: 'all', label: 'All' },
   ];
-  text = '';
   targetDate = new Date().toISOString().slice(0, 10);
   private timer: ReturnType<typeof setTimeout> | null = null;
 
@@ -165,28 +158,6 @@ export class InboxPage {
   onUploaded(c: Capture): void {
     this.captures.update((list) => [c, ...list]);
     this.badges.refresh();
-  }
-
-  upload(): void {
-    if (!this.text.trim()) return;
-    const form = new FormData();
-    form.append('text', this.text.trim());
-    if (this.targetDate) form.append('target_date', this.targetDate);
-    this.busy.set(true);
-    this.error.set(null);
-    this.notice.set(null);
-    this.api.uploadCapture(form).subscribe({
-      next: (c) => {
-        if (c.created === false) this.notice.set('This capture already exists (same content) — nothing was added.');
-        else this.onUploaded(c);
-        this.text = '';
-        this.busy.set(false);
-      },
-      error: (e: unknown) => {
-        this.error.set(describeError(e));
-        this.busy.set(false);
-      },
-    });
   }
 
   replace(u: Capture): void {

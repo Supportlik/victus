@@ -1,5 +1,4 @@
 import { ChangeDetectionStrategy, Component, effect, inject, input, signal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
 import { ApiClient, Capture, DayMessage } from '../../api';
 import { BadgesService } from '../../core/badges.service';
 import { describeError } from '../../core/problem';
@@ -14,7 +13,7 @@ import { MarkdownPipe } from '../../shared/markdown.pipe';
 @Component({
   selector: 'v-day-thread',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, MarkdownPipe, CaptureInput, CaptureCard],
+  imports: [MarkdownPipe, CaptureInput, CaptureCard],
   template: `
     <aside class="thread">
       <h3>Talk to this day</h3>
@@ -41,13 +40,12 @@ import { MarkdownPipe } from '../../shared/markdown.pipe';
           <li class="v-muted v-small">No messages yet.</li>
         }
       </ol>
-      <form (ngSubmit)="send()" class="composer">
-        <textarea name="text" [(ngModel)]="text" rows="2" placeholder="e.g. the chicken was 300 g, not 400" [disabled]="sending()"></textarea>
-        <div class="v-actions">
-          <button type="submit" class="v-btn primary" [disabled]="sending() || !text.trim()">Send</button>
-          <v-capture-input [targetDate]="date()" [compact]="true" (uploaded)="reload()" />
-        </div>
-      </form>
+      <v-capture-input
+        [targetDate]="date()"
+        [compact]="true"
+        placeholder="Add to this day, or correct it: the chicken was 300 g, not 400"
+        (uploaded)="reload()"
+      />
     </aside>
   `,
   styles: `
@@ -61,8 +59,6 @@ import { MarkdownPipe } from '../../shared/markdown.pipe';
     .meta { display: flex; gap: 0.5rem; align-items: center; font-size: var(--v-fs-xs); color: var(--v-ink-3); margin-bottom: 0.2rem; }
     .who { color: var(--v-ink-2); font-weight: 500; }
     .body { white-space: pre-wrap; font-size: var(--v-fs-s); }
-    .composer { display: grid; gap: 0.4rem; }
-    .composer textarea { padding: 0.5rem; border: 1px solid var(--v-line-strong); border-radius: var(--v-radius); background: var(--v-surface); }
   `,
 })
 export class DayThread {
@@ -70,9 +66,7 @@ export class DayThread {
   private readonly badges = inject(BadgesService);
   readonly date = input.required<string>();
   readonly messages = signal<DayMessage[]>([]);
-  readonly sending = signal(false);
   readonly error = signal<string | null>(null);
-  text = '';
 
   constructor() {
     effect(() => {
@@ -110,20 +104,4 @@ export class DayThread {
     };
   }
 
-  send(): void {
-    const t = this.text.trim();
-    if (!t) return;
-    this.sending.set(true);
-    this.api.addDayMessage(this.date(), t).subscribe({
-      next: () => {
-        this.text = '';
-        this.sending.set(false);
-        this.reload();
-      },
-      error: (e: unknown) => {
-        this.error.set(describeError(e));
-        this.sending.set(false);
-      },
-    });
-  }
 }

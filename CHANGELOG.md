@@ -90,10 +90,16 @@ All notable changes to Victus are documented here. The format follows
 
 - "Take photo" uses the webcam on a computer: a live preview with a shutter button, falling back to the
   file dialog when no camera is available. On phones it still opens the camera app.
+  A rejected constraint is retried with a bare video request, because some desktop drivers refuse
+  every constraint they do not know, and an insecure page now says so instead of reporting no camera.
 
 - A capture can carry several files (R64, migration 0006): photos, a voice note and a typed line taken
   together stay one capture, so the agent sees them as one thing. The camera stays open for another
   picture, offers a camera switch and runs full screen on a phone; the tray shows what will be sent.
+
+- One capture, one form (R65): the text box sits with the record, camera and file buttons behind a single
+  "Save capture" button, on the inbox, a day and a product alike. Text on its own is a capture, so a day's
+  note and a day capture are the same thing and the separate "Save text" and "Send" buttons are gone.
 
 ### Changed
 - No importer in the product (ADR 0011): existing data enters through the backup archive format, REST or MCP.

@@ -82,7 +82,11 @@ import { ProductForm } from './product-form';
         <section class="captures v-panel">
           <h3>Label photos &amp; notes</h3>
           <p class="v-small v-muted">Photograph the nutrition label or say what is wrong. The agent reads it on its next run and proposes corrected values; you approve them above. Approved values apply to every day that logged this product.</p>
-          <v-capture-input [productId]="p.id" (uploaded)="onCapture($event)" />
+          <v-capture-input
+            [productId]="p.id"
+            placeholder="Photograph the label, or write what is wrong: 112 kcal per 100 g, not 96"
+            (uploaded)="onCapture($event)"
+          />
           <div class="cap-list">
             @for (c of captures(); track c.id) {
               <v-capture-card [capture]="c" [compact]="true" [showTarget]="false" (changed)="replaceCapture($event)" (deleted)="removeCapture($event)" />

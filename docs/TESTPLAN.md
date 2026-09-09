@@ -191,6 +191,7 @@ The pyramid is deliberate: most cases are `T-DOM`/`T-SVC`; E2E covers the two fl
 | T-WEB-030 | ApiClient capture/agent methods | – | call `updateCapture`, `transcribeCapture`, `captures(status,date)`, `attachmentUrl`, `agentRuns`, `cancelAgentRun`, `agentLocks`, `forceUnlock` | paths, methods, params and bodies match `docs/API.md` | mock | yes | 3 |
 | T-WEB-031 | Agent page | mocked runs and locks | render; select a run; cancel; force unlock | runs with status/tokens/cost; detail with sessions and rendered summary; cancel posts `/cancel`; unlock only after inline confirmation, `DELETE /agent/locks/{date}` | mock | yes | 3 |
 | T-WEB-032 | Captures page | mocked captures (audio with transcript, image) | render; set day; discard; duplicate upload | transcript and audio element, image thumbnail via `/attachments/{id}`; `PATCH` bodies; `created: false` shows a notice, no new row | mock | yes | 3 |
+| T-WEB-033 | Web | Capture form on the inbox | Type a line and save without picking any file | One text box and one "Save capture" button exist; the button is disabled while empty, posts `text` plus `target_date` and no file, then clears the form | `capture-input.spec.ts` | automated |
 | T-WEB-033 | Day thread states | mocked messages with `processing_state` and agent kinds | render `DayThread` | user captures show "waiting for the agent" / "in draft"; agent messages tagged summary/question/note; composer enabled while a run is active | mock | partly (manual) | 3 |
 
 ## Agent (`T-AGT`)

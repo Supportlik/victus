@@ -1,4 +1,14 @@
-import { ChangeDetectionStrategy, Component, ElementRef, inject, input, output, signal, viewChild } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  ElementRef,
+  inject,
+  input,
+  output,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { ApiClient, Capture } from '../api';
 import { describeError } from '../core/problem';
 
@@ -9,10 +19,10 @@ interface Pending {
 }
 
 /**
- * Voice, camera and file input for captures, usable on a day, a product or the inbox.
+ * One capture, in one form: a line of text, photos, a voice note, or any mix of them.
  *
- * Everything collected here goes up as **one** capture, so several photos, a voice note
- * and a line of text taken together keep their context (R64):
+ * There is no separate way to save text — text and files are the same capture, and the
+ * single "Save capture" button sends whatever has been gathered (R64, R65):
  * - "Record" uses MediaRecorder (webm/opus in Chrome and Firefox, mp4 in Safari).
  * - "Take photo" opens the camera in place — full screen on a phone, with a camera switch
  *   and "another one" — and says why when no camera is reachable.
@@ -23,6 +33,16 @@ interface Pending {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="cap" [class.compact]="compact()">
+      <textarea
+        class="note"
+        name="note"
+        [rows]="compact() ? 2 : 3"
+        [value]="note()"
+        (input)="onNote($event)"
+        [placeholder]="placeholder()"
+        [disabled]="busy()"
+      ></textarea>
+      <div class="row">
       @if (recording()) {
         <button type="button" class="v-btn danger rec" (click)="stopRecording()" aria-label="Stop recording">
           <span class="pulse" aria-hidden="true"></span> Stop · {{ elapsed() }}
@@ -41,6 +61,7 @@ interface Pending {
         <span class="v-small err">{{ e }}</span>
         <button type="button" class="v-btn small quiet" (click)="picker.click()">Choose a file instead</button>
       }
+      </div>
 
       @if (pending().length) {
         <div class="tray">
@@ -54,14 +75,17 @@ interface Pending {
               </li>
             }
           </ul>
-          <div class="v-actions">
-            <button type="button" class="v-btn primary" (click)="submit()" [disabled]="busy()">
-              Save as one capture ({{ pending().length }})
-            </button>
-            <button type="button" class="v-btn quiet" (click)="clear()" [disabled]="busy()">Discard</button>
-          </div>
         </div>
       }
+
+      <div class="v-actions">
+        <button type="button" class="v-btn primary" (click)="submit()" [disabled]="busy() || !hasContent()">
+          {{ saveLabel() }}
+        </button>
+        @if (hasContent()) {
+          <button type="button" class="v-btn quiet" (click)="clear()" [disabled]="busy()">Discard</button>
+        }
+      </div>
     </div>
 
     @if (cameraOpen()) {
@@ -78,13 +102,17 @@ interface Pending {
     }
   `,
   styles: `
-    .cap { display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; }
+    .cap { display: grid; gap: 0.5rem; }
+    .row { display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; }
+    .note { width: 100%; box-sizing: border-box; padding: 0.5rem; border: 1px solid var(--v-line-strong); border-radius: var(--v-radius); background: var(--v-surface); color: inherit; font: inherit; resize: vertical; }
+    .note:focus-visible { outline: 2px solid var(--v-primary); outline-offset: 1px; }
+    .cap.compact .note { font-size: var(--v-fs-s); }
     .cap.compact .v-btn { padding: 0.3rem 0.6rem; font-size: var(--v-fs-s); }
     .rec { font-variant-numeric: tabular-nums; }
     .pulse { width: 0.6rem; height: 0.6rem; border-radius: 50%; background: var(--v-bad); display: inline-block; animation: pulse 1s infinite; }
     .err { color: var(--v-bad); }
 
-    .tray { flex-basis: 100%; display: grid; gap: 0.5rem; padding: 0.5rem; border: 1px dashed var(--v-line-strong); border-radius: var(--v-radius-l); }
+    .tray { display: grid; gap: 0.5rem; padding: 0.5rem; border: 1px dashed var(--v-line-strong); border-radius: var(--v-radius-l); }
     .items { list-style: none; margin: 0; padding: 0; display: flex; gap: 0.5rem; flex-wrap: wrap; }
     .items li { display: flex; align-items: center; gap: 0.35rem; padding: 0.25rem 0.4rem; border: 1px solid var(--v-line); border-radius: var(--v-radius); background: var(--v-surface); }
     .items img { width: 3rem; height: 3rem; object-fit: cover; border-radius: var(--v-radius); }
@@ -107,8 +135,8 @@ export class CaptureInput {
   /** Product the captures are about (label photo, correction); omit for days. */
   readonly productId = input<number | null>(null);
   readonly compact = input(false);
-  /** Text sent with the files, so a typed line stays part of the same capture. */
-  readonly text = input<string>('');
+  /** Hint in the empty text box; the wording differs per screen. */
+  readonly placeholder = input('What did you eat? You can also add photos or a voice note.');
   readonly uploaded = output<Capture>();
 
   readonly busy = signal(false);
@@ -117,6 +145,13 @@ export class CaptureInput {
   readonly error = signal<string | null>(null);
   readonly notice = signal<string | null>(null);
   readonly pending = signal<Pending[]>([]);
+  readonly note = signal('');
+  /** Nothing is sent while the form is empty — text alone is a capture, files alone too. */
+  readonly hasContent = computed(() => !!this.note().trim() || this.pending().length > 0);
+  readonly saveLabel = computed(() => {
+    const files = this.pending().length;
+    return files ? `Save capture (${files} ${files === 1 ? 'file' : 'files'})` : 'Save capture';
+  });
   readonly canRecord = typeof MediaRecorder !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
   readonly cameraOpen = signal(false);
   readonly canSwitch = signal(false);
@@ -177,19 +212,39 @@ export class CaptureInput {
   async takePhoto(): Promise<void> {
     this.error.set(null);
     this.notice.set(null);
+    if (typeof window !== 'undefined' && window.isSecureContext === false) {
+      this.error.set(
+        `The camera needs a secure connection. This page is ${location.origin}; open it over https or on localhost.`,
+      );
+      return;
+    }
     if (!navigator.mediaDevices?.getUserMedia) {
-      this.error.set('This browser exposes no camera (it needs a secure connection).');
+      this.error.set('This browser exposes no camera API. Update it, or open the page over https.');
       return;
     }
     await this.openCamera();
   }
 
-  private async openCamera(): Promise<void> {
+  /**
+   * Ask for the camera. Desktops have no front/back camera and some drivers reject
+   * every constraint they do not know, so a failed request is retried bare.
+   */
+  private async grabCamera(): Promise<MediaStream> {
     try {
-      this.cameraStream = await navigator.mediaDevices.getUserMedia({
+      return await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: this.facing }, width: { ideal: 1600 } },
         audio: false,
       });
+    } catch (e) {
+      const name = e instanceof Error ? e.name : '';
+      if (name === 'NotAllowedError' || name === 'SecurityError') throw e;
+      return await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    }
+  }
+
+  private async openCamera(): Promise<void> {
+    try {
+      this.cameraStream = await this.grabCamera();
       this.cameraOpen.set(true);
       void this.detectCameras();
       // the <video> exists only once the dialog is rendered
@@ -258,7 +313,8 @@ export class CaptureInput {
 
   private mediaMessage(e: unknown, what: string): string {
     const name = e instanceof Error ? e.name : '';
-    if (name === 'NotAllowedError') return `${what} blocked: allow it for this site in the browser.`;
+    if (name === 'NotAllowedError')
+      return `${what} blocked. Allow it for this site in the browser, and on Windows check Settings › Privacy › ${what}.`;
     if (name === 'NotFoundError' || name === 'OverconstrainedError') return `No ${what.toLowerCase()} found on this device.`;
     if (name === 'NotReadableError') return `The ${what.toLowerCase()} is in use by another program.`;
     return `${what} not available${e instanceof Error && e.message ? `: ${e.message}` : ''}.`;
@@ -279,6 +335,10 @@ export class CaptureInput {
     this.pending.update((list) => [...list, { file, url, kind }]);
   }
 
+  onNote(ev: Event): void {
+    this.note.set((ev.target as HTMLTextAreaElement).value);
+  }
+
   drop(p: Pending): void {
     if (p.url) URL.revokeObjectURL(p.url);
     this.pending.update((list) => list.filter((x) => x !== p));
@@ -287,15 +347,15 @@ export class CaptureInput {
   clear(): void {
     this.pending().forEach((p) => p.url && URL.revokeObjectURL(p.url));
     this.pending.set([]);
+    this.note.set('');
   }
 
-  /** Upload the whole tray as one capture. */
+  /** Upload the text and every file as one capture. */
   submit(): void {
-    const items = this.pending();
-    if (!items.length) return;
+    if (!this.hasContent()) return;
     const form = new FormData();
-    for (const p of items) form.append('file', p.file, p.file.name);
-    const text = this.text().trim();
+    for (const p of this.pending()) form.append('file', p.file, p.file.name);
+    const text = this.note().trim();
     if (text) form.append('text', text);
     const day = this.targetDate();
     const product = this.productId();
