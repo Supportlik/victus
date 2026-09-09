@@ -141,6 +141,11 @@ All notable changes to Victus are documented here. The format follows
   frozen report that is waiting, one short session each, and locks no day. With a model key the inbox
   shows "Assess now"; without one it still hands the job to the user's own Claude.
 
+- The unit picker on a day no longer offers units that cannot work (R73). It groups weight and volume,
+  the portions a product has, and count units it has no portion for. Choosing one of the last kind asks
+  what one of them holds and stores the answer with the product, instead of accepting the item and
+  rejecting it on save with "no portion for unit".
+
 ### Changed
 - No importer in the product (ADR 0011): existing data enters through the backup archive format, REST or MCP.
 - One model session per day (ADR 0009) and a resumable per-day thread (ADR 0010); lock TTL 5 minutes;

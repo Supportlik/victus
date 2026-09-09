@@ -7,6 +7,12 @@ import { DayLog } from '../../api';
 import { DayView } from './day-view';
 
 const band = { min: 105, opt_min: 150, opt_max: 185, target: 165, max: 200, stretch: 185 };
+const UNITS = [
+  { code: 'g', singular: 'g', plural: 'g', unit_type: 'mass' as const },
+  { code: 'ml', singular: 'ml', plural: 'ml', unit_type: 'volume' as const },
+  { code: 'bag', singular: 'bag', plural: 'bags', unit_type: 'count' as const },
+  { code: 'slice', singular: 'slice', plural: 'slices', unit_type: 'count' as const },
+];
 const day: DayLog = {
   date: '2026-01-02',
   status: 'open',
@@ -45,7 +51,7 @@ describe('DayView', () => {
     fixture.componentRef.setInput('date', '2026-01-02');
     await fixture.whenStable();
     const http = TestBed.inject(HttpTestingController);
-    http.expectOne('/api/v1/units').flush([{ code: 'g', singular: 'g', plural: 'g', unit_type: 'mass' }]);
+    http.expectOne('/api/v1/units').flush(UNITS);
     http.expectOne('/api/v1/days/2026-01-02').flush(day);
     await fixture.whenStable();
     // The thread panel mounts once the day is loaded and then asks for its messages.
@@ -119,5 +125,48 @@ describe('DayView', () => {
     req.flush({ ...day, status: 'closed' });
     await fixture.whenStable();
     expect(el.querySelector('v-status-tag')?.textContent).toContain('Closed');
+  });
+
+  // T-WEB-041: a count unit without a portion used to be offered and then rejected on save
+  // with "no portion for unit". It now asks for the size once and keeps it (R73).
+  it('asks what an undeclared unit holds and saves it with the product', async () => {
+    const fixture = await render();
+    const http = TestBed.inject(HttpTestingController);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // open the add form for the first meal and pick a product with no portions
+    const add = Array.from(el.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Add item') as HTMLButtonElement;
+    add.click();
+    fixture.detectChanges();
+    fixture.componentInstance.pending.set({
+      id: 42, name: 'Frosta High Protein', reference_amount: 100, reference_unit: 'g',
+      verified: true, kcal: 96, protein: 8, portions: [],
+    });
+    fixture.componentInstance.amount = 1;
+    fixture.componentInstance.unitCode = 'bag';
+    fixture.detectChanges();
+
+    // the unit is in the group that needs a size, and the form says so
+    expect(fixture.componentInstance.needsSize()).toBe(true);
+    const groups = Array.from(el.querySelectorAll('optgroup')).map((g) => g.getAttribute('label'));
+    expect(groups).toContain('Weight and volume');
+    expect(groups).toContain('Needs a size once');
+    expect(el.textContent).toContain('One bag of Frosta High Protein is');
+
+    fixture.componentInstance.portionAmount = 500;
+    fixture.detectChanges();
+    // submitting through the DOM does not fire in jsdom; the handler is what matters here
+    fixture.componentInstance.addItem(day.meals[0]);
+
+    // the portion is declared first...
+    const portion = http.expectOne('/api/v1/products/42/portions');
+    expect(portion.request.body).toMatchObject({ unit_code: 'bag', amount: 500, amount_unit: 'g', is_default: true });
+    portion.flush({ id: 7, product_id: 42, unit_code: 'bag', label: 'bag', amount: 500, amount_unit: 'g', is_default: true });
+
+    // ...then the item is added against it, so nothing is rejected
+    const item = http.expectOne(`/api/v1/meals/${day.meals[0].id}/line-items`);
+    expect(item.request.body).toMatchObject({ consumable_id: 42, amount: 1, unit_code: 'bag', portion_id: 7 });
+    item.flush({});
+    http.match(() => true).forEach((r) => r.flush(r.request.method === 'GET' ? [] : {}));
   });
 });

@@ -199,6 +199,7 @@ The pyramid is deliberate: most cases are `T-DOM`/`T-SVC`; E2E covers the two fl
 | T-WEB-038 | Web | Report tooltip | Adopt `de-DE`, then `en-GB` | The same values read 89,4 / 1.900 and 89.4 / 1,900 | `report-block.spec.ts` | automated |
 | T-WEB-039 | Web | Product search | Set `on` and type a query | The request carries `on`, so an older day is offered the values of its time | `product-search.spec.ts` | automated |
 | T-WEB-040 | Web | Inbox, frozen report | Press Assess now with runner `ready` | Queues one run with mode `assess` | `inbox-page.spec.ts` | automated |
+| T-WEB-041 | Web | Day view, unit picker | Pick a product without portions, choose the count unit `bag`, give 500 g | The picker groups the units, asks what one bag holds, posts the portion first and then the item against it | `day-view.spec.ts` | automated |
 | T-WEB-033 | Day thread states | mocked messages with `processing_state` and agent kinds | render `DayThread` | user captures show "waiting for the agent" / "in draft"; agent messages tagged summary/question/note; composer enabled while a run is active | mock | partly (manual) | 3 |
 
 ## Agent (`T-AGT`)

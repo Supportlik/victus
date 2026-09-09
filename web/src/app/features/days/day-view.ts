@@ -140,12 +140,34 @@ import { DayThread } from './day-thread';
                         <label class="v-field"><span>Amount</span><input name="amount" type="number" step="any" min="0" [(ngModel)]="amount" required /></label>
                         <label class="v-field"><span>Unit</span>
                           <select name="unit" [(ngModel)]="unitCode">
-                            @for (u of units(); track u.code) { <option [value]="u.code">{{ u.singular }}</option> }
-                            @for (p of pending()!.portions ?? []; track p.id) { <option [value]="'portion:' + p.id">{{ p.label }} ({{ p.amount }} {{ p.amount_unit }})</option> }
+                            <optgroup label="Weight and volume">
+                              @for (u of measuredUnits(); track u.code) { <option [value]="u.code">{{ u.singular }}</option> }
+                            </optgroup>
+                            @if (pending()!.portions?.length) {
+                              <optgroup label="Portions of this product">
+                                @for (p of pending()!.portions ?? []; track p.id) { <option [value]="'portion:' + p.id">{{ p.label }} ({{ p.amount }} {{ p.amount_unit }})</option> }
+                              </optgroup>
+                            }
+                            <optgroup label="Needs a size once">
+                              @for (u of undeclaredUnits(); track u.code) { <option [value]="u.code">{{ u.singular }}</option> }
+                            </optgroup>
                           </select>
                         </label>
+                        @if (needsSize()) {
+                          <label class="v-field">
+                            <span>One {{ unitLabel() }} of {{ pending()!.name }} is</span>
+                            <span class="size">
+                              <input name="psize" type="number" step="any" min="0" [(ngModel)]="portionAmount" required />
+                              <select name="punit" [(ngModel)]="portionUnit">
+                                <option value="g">g</option>
+                                <option value="ml">ml</option>
+                              </select>
+                            </span>
+                          </label>
+                          <p class="v-small v-muted hint">Saved with the product, so “{{ unitLabel() }}” works from now on.</p>
+                        }
                         <label class="v-field check"><span>Estimated</span><input name="est" type="checkbox" [(ngModel)]="estimated" /></label>
-                        <button type="submit" class="v-btn primary" [disabled]="!amount">Add</button>
+                        <button type="submit" class="v-btn primary" [disabled]="!amount || (needsSize() && !portionAmount)">Add</button>
                       </form>
                     }
                   </div>
@@ -226,6 +248,9 @@ import { DayThread } from './day-thread';
     .add { padding: 0.75rem; margin-bottom: 0.5rem; border: 1px solid var(--v-line); border-radius: var(--v-radius-l); background: var(--v-surface); }
     .picked { align-self: end; font-weight: 500; }
     .check { align-items: center; grid-template-columns: auto auto; }
+    .size { display: flex; gap: 0.3rem; }
+    .size input { min-width: 5rem; }
+    .add .hint { grid-column: 1 / -1; margin: 0; }
     tr.draft td { background: var(--v-agent-soft); }
     .warn-mark { margin-left: 0.25rem; }
     .row-actions { white-space: nowrap; text-align: right; }
@@ -246,11 +271,34 @@ export class DayView {
   readonly pending = signal<Product | null>(null);
   readonly prev = computed(() => shiftDate(this.date(), -1));
   readonly next = computed(() => shiftDate(this.date(), 1));
+  /** Grams and millilitres always work; they need no portion. */
+  readonly measuredUnits = computed(() => this.units().filter((u) => u.unit_type !== 'count'));
+
+  /**
+   * Count units this product has no portion for. Offering them without saying so was the
+   * whole problem: the item was rejected on save with "no portion for unit" (R73).
+   */
+  readonly undeclaredUnits = computed(() => {
+    const declared = new Set((this.pending()?.portions ?? []).map((p) => p.unit_code));
+    return this.units().filter((u) => u.unit_type === 'count' && !declared.has(u.code));
+  });
+
+  readonly needsSize = computed(() =>
+    this.undeclaredUnits().some((u) => u.code === this.unitCode),
+  );
+
+  readonly unitLabel = computed(
+    () => this.units().find((u) => u.code === this.unitCode)?.singular ?? this.unitCode,
+  );
+
   readonly macroKeys = MACRO_KEYS;
   readonly label = MACRO_LABEL;
   readonly unit = MACRO_UNIT;
   amount: number | null = null;
   unitCode = 'g';
+  /** Size of a unit the chosen product has no portion for; stored with the product. */
+  portionAmount: number | null = null;
+  portionUnit: 'g' | 'ml' = 'g';
   estimated = false;
   newMeal = '';
   readonly editingMeal = signal<number | null>(null);
@@ -372,6 +420,33 @@ export class DayView {
   addItem(meal: Meal): void {
     const p = this.pending();
     if (!p || !this.amount) return;
+    // a unit without a portion is declared once, then used like any other
+    if (this.needsSize()) {
+      if (!this.portionAmount) return;
+      const code = this.unitCode;
+      const label = this.unitLabel();
+      this.api
+        .createPortion(p.id, {
+          unit_code: code,
+          label,
+          amount: this.portionAmount,
+          amount_unit: this.portionUnit,
+          is_default: true,
+          weight_source: this.estimated ? 'estimated' : 'weighed',
+        })
+        .subscribe({
+          next: (portion) => {
+            this.pending.update((prod) =>
+              prod ? { ...prod, portions: [...(prod.portions ?? []), portion] } : prod,
+            );
+            this.unitCode = 'portion:' + portion.id;
+            this.portionAmount = null;
+            this.addItem(meal);
+          },
+          error: (e: unknown) => this.error.set(describeError(e)),
+        });
+      return;
+    }
     const portionId = this.unitCode.startsWith('portion:') ? Number(this.unitCode.slice(8)) : null;
     const portion = portionId ? p.portions?.find((x) => x.id === portionId) : undefined;
     this.api
@@ -389,6 +464,7 @@ export class DayView {
           this.amount = null;
           this.estimated = false;
           this.unitCode = 'g';
+          this.portionAmount = null;
           this.reload();
         },
         error: (e: unknown) => this.error.set(describeError(e)),
