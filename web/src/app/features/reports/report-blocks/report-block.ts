@@ -3,6 +3,10 @@ import { NgxEchartsDirective } from 'ngx-echarts';
 import type { EChartsOption } from 'echarts';
 import {
   BandDistributionBlock,
+  BodyCompositionBlock,
+  EnergySplitBlock,
+  RatedValue,
+  ThresholdMark,
   BurndownBlock,
   DayListBlock,
   ErrorBlock,
@@ -161,6 +165,95 @@ import { CHART_PALETTE } from './palette';
             }
           </div>
         }
+        @case ('body_composition') {
+          <div class="v-panel body">
+            <h3>{{ block().meta.title }}</h3>
+            @if (body().weight_kg != null) {
+              <p class="v-small v-muted">
+                {{ format.number(body().weight_kg!, 1) }} kg@if (body().height_cm) { at {{ body().height_cm }} cm }
+                @if (body().measured_at) { · measured {{ format.day(body().measured_at!) }} }
+              </p>
+            }
+            @for (m of rated(); track m.label) {
+              <div class="measure">
+                <div class="head">
+                  <span class="what">{{ m.label }}</span>
+                  <span class="val">{{ format.number(m.rated.value, m.decimals) }}</span>
+                  <span class="v-tag" [class]="'v-tag ' + toneTag(m.rated.tone)">{{ m.rated.band }}</span>
+                  @if (m.rated.to_next != null) {
+                    <span class="v-small v-muted">{{ format.number(absOf(m.rated.to_next), m.decimals) }} to the next class</span>
+                  }
+                </div>
+                <div class="scale" [attr.aria-label]="m.label + ': ' + m.rated.band">
+                  @for (seg of segments(m.rated); track seg.name) {
+                    <span class="seg" [class]="'seg ' + seg.tone" [class.here]="seg.here" [style.flex]="seg.weight" [title]="seg.title"></span>
+                  }
+                  <span class="pin" [style.left.%]="position(m.rated)"></span>
+                </div>
+              </div>
+            }
+            @if (body().bmi_weight_bands.length && body().weight_kg != null) {
+              <details class="marks">
+                <summary class="v-small">What the classes mean in kilograms</summary>
+                <table class="v-table">
+                  <thead><tr><th>Class</th><th class="num">from</th><th class="num">to</th></tr></thead>
+                  <tbody>
+                    @for (m of body().bmi_weight_bands; track m.name) {
+                      <tr [class.here]="inBand(m)">
+                        <td>{{ m.name }}</td>
+                        <td class="num">{{ m.lower ? format.number(m.lower, 1) + ' kg' : '–' }}</td>
+                        <td class="num">{{ m.upper ? format.number(m.upper, 1) + ' kg' : '–' }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </details>
+            }
+            @if (circumferences().length) {
+              <table class="v-table circ">
+                <thead><tr><th></th><th class="num">now</th><th class="num">change</th></tr></thead>
+                <tbody>
+                  @for (c of circumferences(); track c.key) {
+                    <tr>
+                      <td>{{ c.label }}</td>
+                      <td class="num">{{ format.number(c.value, 1) }} cm</td>
+                      <td class="num" [class.down]="(c.change ?? 0) < 0" [class.up]="(c.change ?? 0) > 0">
+                        {{ c.change == null ? '–' : (c.change > 0 ? '+' : '−') + format.number(absOf(c.change), 1) + ' cm' }}
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            }
+            @if (body().missing.length) {
+              <p class="v-small v-muted">Not shown: {{ body().missing.join('; ') }}.</p>
+            }
+          </div>
+        }
+        @case ('energy_split') {
+          <div class="v-panel energy">
+            <h3>{{ block().meta.title }}</h3>
+            @if (energy().tdee_kcal == null) {
+              <p class="v-muted">Not available: {{ energy().missing.join('; ') || 'no data' }}.</p>
+            } @else {
+              <div class="rows">
+                <div><span>Expenditure</span><b>{{ format.number(energy().tdee_kcal!) }} kcal</b><span class="v-small v-muted">{{ basisLabel(energy().basis) }}</span></div>
+                @if (energy().basal_kcal != null) {
+                  <div><span>At rest</span><b>{{ format.number(energy().basal_kcal!) }} kcal</b><span class="v-small v-muted">age {{ energy().age_years }}</span></div>
+                  <div><span>From moving</span><b>{{ format.number(energy().activity_kcal!) }} kcal</b><span class="v-small v-muted">{{ format.number(energy().pal!, 2) }} × resting</span></div>
+                }
+              </div>
+              @if (energy().basal_kcal != null) {
+                <div class="split" [attr.aria-label]="'resting versus activity'">
+                  <span class="rest" [style.flex]="energy().basal_kcal!">at rest</span>
+                  <span class="move" [style.flex]="maxOf(energy().activity_kcal!, 1)">moving</span>
+                </div>
+              }
+              @if (energy().caveat) { <p class="v-small warn-text">{{ energy().caveat }}</p> }
+              @if (energy().missing.length) { <p class="v-small v-muted">Not shown: {{ energy().missing.join('; ') }}.</p> }
+            }
+          </div>
+        }
         @default {
           <div class="v-panel v-muted">Block type “{{ block().meta.type }}” is not supported by this version of the app.</div>
         }
@@ -168,6 +261,33 @@ import { CHART_PALETTE } from './palette';
     }
   `,
   styles: `
+    .body, .energy { display: grid; gap: 0.6rem; }
+    .measure { display: grid; gap: 0.3rem; }
+    .measure .head { display: flex; gap: 0.5rem; align-items: baseline; flex-wrap: wrap; }
+    .measure .what { min-width: 8rem; color: var(--v-ink-2); }
+    .measure .val { font-size: var(--v-fs-l); font-weight: 600; font-variant-numeric: tabular-nums; }
+    .scale { position: relative; display: flex; height: 0.7rem; border-radius: 999px; overflow: hidden; background: var(--v-surface-2); }
+    .seg { display: block; opacity: 0.35; }
+    .seg.here { opacity: 0.9; }
+    .seg.ok { background: var(--v-ok); }
+    .seg.watch { background: var(--v-warn); }
+    .seg.warn { background: var(--v-warn); }
+    .seg.bad { background: var(--v-bad); }
+    .pin { position: absolute; top: -0.15rem; width: 2px; height: 1rem; background: var(--v-ink); transform: translateX(-1px); }
+    .marks summary { cursor: pointer; color: var(--v-ink-2); }
+    .marks tr.here { background: var(--v-primary-soft); font-weight: 500; }
+    .circ .down { color: var(--v-ok); }
+    .circ .up { color: var(--v-warn); }
+    .energy .rows { display: grid; gap: 0.3rem; }
+    .energy .rows > div { display: flex; gap: 0.5rem; align-items: baseline; }
+    .energy .rows > div > span:first-child { min-width: 8rem; color: var(--v-ink-2); }
+    .energy .rows b { font-variant-numeric: tabular-nums; }
+    .split { display: flex; height: 1.4rem; border-radius: var(--v-radius); overflow: hidden; font-size: var(--v-fs-xs); }
+    .split span { display: grid; place-items: center; color: var(--v-primary-ink); }
+    .split .rest { background: var(--v-primary); }
+    .split .move { background: var(--v-ok); }
+    .warn-text { color: var(--v-warn); }
+
     :host { display: block; min-width: 0; }
     /* One row each for title, value and note, so tiles line up whether or not a note is present. */
     .tile { display: grid; grid-template-rows: auto 1fr auto; gap: 0.15rem; padding: 0.9rem 1.1rem; border: 1px solid var(--v-line); border-left-width: 4px; border-radius: var(--v-radius-l); background: var(--v-surface); height: 100%; min-height: 6.5rem; align-content: start; }
@@ -185,7 +305,8 @@ import { CHART_PALETTE } from './palette';
   `,
 })
 export class ReportBlockView {
-  private readonly format = inject(FormatService);
+  /** Read from the template, so numbers and dates follow the tenant's locale (R69). */
+  readonly format = inject(FormatService);
   readonly block = input.required<ReportBlock>();
   readonly formatMacro = formatMacro;
   readonly formatKg = formatKg;
@@ -468,6 +589,108 @@ export class ReportBlockView {
         },
       ],
     };
+  }
+
+  // ── body composition ─────────────────────────────────────────────────────
+
+  private static readonly CIRCUMFERENCE_LABELS: Record<string, string> = {
+    waist_cm: 'Waist',
+    belly_cm: 'Belly',
+    hip_cm: 'Hip',
+    chest_cm: 'Chest',
+    neck_cm: 'Neck',
+    thigh_cm: 'Thigh',
+    arm_cm: 'Arm',
+  };
+
+  body(): BodyCompositionBlock {
+    return this.block() as BodyCompositionBlock;
+  }
+
+  energy(): EnergySplitBlock {
+    return this.block() as EnergySplitBlock;
+  }
+
+  absOf(value: number): number {
+    return Math.abs(value);
+  }
+
+  maxOf(value: number, floor: number): number {
+    return Math.max(value, floor);
+  }
+
+  /** The measures that could be computed, in a fixed order with their precision. */
+  rated(): { label: string; rated: RatedValue; decimals: number }[] {
+    const b = this.body();
+    const out: { label: string; rated: RatedValue; decimals: number }[] = [];
+    if (b.bmi) out.push({ label: 'BMI', rated: b.bmi, decimals: 1 });
+    if (b.waist_to_height) out.push({ label: 'Waist to height', rated: b.waist_to_height, decimals: 2 });
+    if (b.waist_to_hip) out.push({ label: 'Waist to hip', rated: b.waist_to_hip, decimals: 2 });
+    return out;
+  }
+
+  circumferences(): { key: string; label: string; value: number; change: number | null }[] {
+    const b = this.body();
+    return Object.entries(ReportBlockView.CIRCUMFERENCE_LABELS)
+      .filter(([key]) => b.circumferences[key] != null)
+      .map(([key, label]) => ({
+        key,
+        label,
+        value: b.circumferences[key],
+        change: b.changes[key] ?? null,
+      }));
+  }
+
+  /**
+   * The scale as segments, so the reader sees the whole range and not only the class.
+   *
+   * The open classes at either end have no width of their own, so they are drawn as wide
+   * as the average closed one; otherwise a bar with an open top would be meaningless.
+   */
+  segments(r: RatedValue): { name: string; tone: string; weight: number; here: boolean; title: string }[] {
+    const widths = r.bands
+      .filter((b) => b.lower != null && b.upper != null)
+      .map((b) => b.upper! - b.lower!);
+    const fallback = widths.length ? widths.reduce((a, c) => a + c, 0) / widths.length : 1;
+    return r.bands.map((b) => ({
+      name: b.name,
+      tone: b.tone,
+      weight: b.lower != null && b.upper != null ? b.upper - b.lower : fallback,
+      here: b.name === r.band,
+      title: `${b.name}: ${b.lower ?? '–'} to ${b.upper ?? '–'}`,
+    }));
+  }
+
+  /** Where the value sits along the drawn scale, as a percentage. */
+  position(r: RatedValue): number {
+    const segs = this.segments(r);
+    const total = segs.reduce((a, s) => a + s.weight, 0);
+    if (!total) return 0;
+    let before = 0;
+    for (const [i, band] of r.bands.entries()) {
+      if (band.name !== r.band) {
+        before += segs[i].weight;
+        continue;
+      }
+      const lower = band.lower ?? r.value - segs[i].weight;
+      const upper = band.upper ?? r.value + segs[i].weight;
+      const within = upper > lower ? (r.value - lower) / (upper - lower) : 0.5;
+      const clamped = Math.min(Math.max(within, 0), 1);
+      return ((before + clamped * segs[i].weight) / total) * 100;
+    }
+    return 100;
+  }
+
+  toneTag(tone: string): string {
+    return tone === 'ok' ? 'ok' : tone === 'bad' ? 'bad' : 'warn';
+  }
+
+  /** Whether the current weight falls in this class, for the kilogram table. */
+  inBand(mark: ThresholdMark): boolean {
+    const kg = this.body().weight_kg;
+    if (kg == null) return false;
+    if (mark.lower != null && kg < mark.lower) return false;
+    return !(mark.upper != null && kg >= mark.upper);
   }
 
   weeklyChart(): EChartsOption {

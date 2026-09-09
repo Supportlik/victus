@@ -35,6 +35,8 @@ import {
   ReportDefinition,
   ReportResult,
   AgentStatus,
+  BodyMeasurement,
+  BodyMeasurementInput,
   ReportSnapshot,
   Rule,
   TargetBand,
@@ -233,6 +235,18 @@ export class ApiClient {
   }
   deleteWeight(id: number): Observable<void> {
     return this.http.delete<void>(`${API_BASE}/weight/${id}`);
+  }
+  /** Tape-measure sessions, oldest first (R76). */
+  bodyMeasurements(query: { from?: string; to?: string; limit?: number } = {}): Observable<BodyMeasurement[]> {
+    return this.http.get<BodyMeasurement[]>(`${API_BASE}/body-measurements`, {
+      params: params({ from: query.from, to: query.to, limit: query.limit }),
+    });
+  }
+  addBodyMeasurement(body: BodyMeasurementInput): Observable<BodyMeasurement> {
+    return this.http.post<BodyMeasurement>(`${API_BASE}/body-measurements`, body);
+  }
+  deleteBodyMeasurement(id: number): Observable<void> {
+    return this.http.delete<void>(`${API_BASE}/body-measurements/${id}`);
   }
 
   // settings

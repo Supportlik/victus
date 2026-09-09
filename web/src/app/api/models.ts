@@ -383,6 +383,24 @@ export interface ApproveRequest {
 }
 
 // ── Weight ───────────────────────────────────────────────────────────────
+/** One tape-measure session; unmeasured values stay null (R76). */
+export interface BodyMeasurement {
+  id: number;
+  measured_at: string;
+  waist_cm?: number | null;
+  belly_cm?: number | null;
+  hip_cm?: number | null;
+  chest_cm?: number | null;
+  neck_cm?: number | null;
+  thigh_cm?: number | null;
+  arm_cm?: number | null;
+  body_fat_pct?: number | null;
+  note?: string | null;
+  source: string;
+}
+
+export type BodyMeasurementInput = Omit<BodyMeasurement, 'id' | 'source'>;
+
 export interface WeightEntry {
   id: number;
   measured_at: string;
@@ -668,6 +686,51 @@ export interface TextFindingBlock extends BlockBase {
   markdown: string | null;
 }
 
+/** One class of a scale, in the unit the block shows it in. */
+export interface ThresholdMark {
+  name: string;
+  lower?: number | null;
+  upper?: number | null;
+  tone: 'ok' | 'watch' | 'warn' | 'bad' | string;
+}
+
+/** A measured value with the class it falls in and the scale behind it. */
+export interface RatedValue {
+  value: number;
+  unit: string;
+  band: string;
+  tone: 'ok' | 'watch' | 'warn' | 'bad' | string;
+  to_next?: number | null;
+  bands: ThresholdMark[];
+}
+
+export interface BodyCompositionBlock extends BlockBase {
+  weight_kg?: number | null;
+  height_cm?: number | null;
+  bmi?: RatedValue | null;
+  /** The BMI classes as weights, so a class becomes a number to aim at. */
+  bmi_weight_bands: ThresholdMark[];
+  waist_to_height?: RatedValue | null;
+  waist_to_hip?: RatedValue | null;
+  measured_at?: string | null;
+  circumferences: Record<string, number>;
+  changes: Record<string, number>;
+  body_fat_pct?: number | null;
+  /** Why a figure is absent, one entry per missing input. */
+  missing: string[];
+}
+
+export interface EnergySplitBlock extends BlockBase {
+  tdee_kcal?: number | null;
+  basal_kcal?: number | null;
+  activity_kcal?: number | null;
+  pal?: number | null;
+  age_years?: number | null;
+  basis: string;
+  caveat?: string | null;
+  missing: string[];
+}
+
 export interface ErrorBlock extends BlockBase {
   error: true;
   message: string;
@@ -684,6 +747,8 @@ export type ReportBlock =
   | TimelineBlock
   | DayListBlock
   | TextFindingBlock
+  | BodyCompositionBlock
+  | EnergySplitBlock
   | ErrorBlock;
 
 export interface ReportResult {

@@ -1,11 +1,26 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { NgxEchartsDirective } from 'ngx-echarts';
-import type { EChartsOption } from 'echarts';
-import { ApiClient, WeightEntry } from '../../api';
+import type { EChartsOption, ScatterSeriesOption } from 'echarts';
+import { ApiClient, BodyMeasurement, WeightEntry } from '../../api';
+import { FormatService, isoDayIn } from '../../core/format.service';
 import { describeError } from '../../core/problem';
 import { isoDate, KgPipe, shiftDate } from '../../shared/format';
 import { CHART_PALETTE } from '../reports/report-blocks/palette';
+
+/** The circumferences a session may carry. */
+type CircumferenceKey = 'waist_cm' | 'belly_cm' | 'hip_cm' | 'chest_cm' | 'neck_cm' | 'thigh_cm' | 'arm_cm';
+
+/**
+ * Value for a `datetime-local` field: the wall clock of the configured zone, not UTC.
+ * `toISOString().slice(0, 16)` would offer the wrong hour, and just after midnight the
+ * wrong day (R69).
+ */
+function localDateTimeValue(at: Date = new Date()): string {
+  const day = isoDayIn(at);
+  const time = at.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+  return `${day}T${time}`;
+}
 
 /** Weigh-ins from the scale sync plus manual entries; the moving average is computed here for display. */
 @Component({
@@ -35,6 +50,22 @@ import { CHART_PALETTE } from '../reports/report-blocks/palette';
           </div>
           <button type="submit" class="v-btn primary" [disabled]="!kg">Add weigh-in</button>
         </form>
+        <form class="v-panel add" (ngSubmit)="addBody()">
+          <h3>Add body measurements</h3>
+          <p class="v-small v-muted">The scale says how heavy, the tape says where it sits. Fill in only what you measured; the rest stays empty rather than becoming zero.</p>
+          <label class="v-field"><span>Date and time</span><input name="bat" type="datetime-local" [(ngModel)]="bodyAt" required /></label>
+          <div class="v-form-row cm">
+            @for (f of bodyFields; track f.key) {
+              <label class="v-field">
+                <span>{{ f.label }} <span class="v-muted">cm</span></span>
+                <input [name]="f.key" type="number" step="0.1" min="10" max="250" [(ngModel)]="body[f.key]" />
+              </label>
+            }
+            <label class="v-field"><span>Body fat <span class="v-muted">%</span></span><input name="bf" type="number" step="0.1" min="3" max="70" [(ngModel)]="bodyFat" /></label>
+          </div>
+          <label class="v-field"><span>Note</span><input name="bnote" [(ngModel)]="bodyNote" placeholder="tape, morning, before breakfast" /></label>
+          <button type="submit" class="v-btn primary" [disabled]="!anyBodyValue()">Add measurements</button>
+        </form>
         <div class="v-scroll-x">
           <table class="v-table">
             <thead><tr><th>When</th><th class="num">kg</th><th>Source</th><th></th></tr></thead>
@@ -50,12 +81,42 @@ import { CHART_PALETTE } from '../reports/report-blocks/palette';
           </table>
         </div>
       </div>
+      @if (measurements().length) {
+        <section class="v-panel body-log">
+          <h3>Body measurements</h3>
+          <div class="v-scroll-x">
+            <table class="v-table">
+              <thead>
+                <tr>
+                  <th>When</th>
+                  @for (f of bodyFields; track f.key) { <th class="num">{{ f.label }}</th> }
+                  <th class="num">Fat</th><th></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (m of measurements(); track m.id) {
+                  <tr>
+                    <td>{{ m.measured_at.replace('T', ' ').slice(0, 16) }}</td>
+                    @for (f of bodyFields; track f.key) {
+                      <td class="num">{{ valueOf(m, f.key) == null ? '–' : format.number(valueOf(m, f.key)!, 1) }}</td>
+                    }
+                    <td class="num">{{ m.body_fat_pct == null ? '–' : format.number(m.body_fat_pct, 1) + ' %' }}</td>
+                    <td class="num"><button type="button" class="v-btn quiet small danger" (click)="removeBody(m)">remove</button></td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </section>
+      }
     </div>
   `,
   styles: `
     .chart { margin-bottom: 1.25rem; } .echart { height: 20rem; width: 100%; }
     .grid { display: grid; grid-template-columns: minmax(16rem, 1fr) minmax(0, 2fr); gap: 1.5rem; align-items: start; }
     .add { display: grid; gap: 0.75rem; }
+    .add .cm { grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr)); }
+    .body-log { margin-top: 1.5rem; display: grid; gap: 0.6rem; }
     @media (max-width: 52rem) { .grid { grid-template-columns: 1fr; } }
   `,
 })
@@ -63,9 +124,90 @@ export class WeightPage {
   private readonly api = inject(ApiClient);
   readonly days = signal(90);
   readonly entries = signal<WeightEntry[]>([]);
+  readonly measurements = signal<BodyMeasurement[]>([]);
+  readonly settings = signal<Record<string, unknown> | null>(null);
   readonly error = signal<string | null>(null);
-  measuredAt = new Date().toISOString().slice(0, 16);
+  readonly format = inject(FormatService);
+  measuredAt = localDateTimeValue();
   kg: number | null = null;
+
+  /** The circumferences, in the order they are asked for and shown. */
+  readonly bodyFields: { key: CircumferenceKey; label: string }[] = [
+    { key: 'waist_cm', label: 'Waist' },
+    { key: 'belly_cm', label: 'Belly' },
+    { key: 'hip_cm', label: 'Hip' },
+    { key: 'chest_cm', label: 'Chest' },
+    { key: 'neck_cm', label: 'Neck' },
+    { key: 'thigh_cm', label: 'Thigh' },
+    { key: 'arm_cm', label: 'Arm' },
+  ];
+  bodyAt = localDateTimeValue();
+  body: Record<CircumferenceKey, number | null> = {
+    waist_cm: null, belly_cm: null, hip_cm: null, chest_cm: null,
+    neck_cm: null, thigh_cm: null, arm_cm: null,
+  };
+  bodyFat: number | null = null;
+  bodyNote = '';
+
+  /** Height from the settings; without it the chart cannot show BMI classes. */
+  readonly heightCm = computed(() => {
+    const data = this.settings();
+    const section = (data?.['body'] ?? {}) as { height_cm?: number };
+    return typeof section.height_cm === 'number' ? section.height_cm : null;
+  });
+
+  /**
+   * The BMI classes as shaded bands behind the curve, in kilograms.
+   *
+   * A weight on its own says little: the same 96 kg is one class at 170 cm and another at
+   * 190. Without a height in the settings there is nothing to draw and the chart stays as
+   * it was (R76). Attached to the weigh-in series rather than a series of its own, so the
+   * legend keeps two entries.
+   */
+  private bmiArea(): ScatterSeriesOption['markArea'] {
+    const height = this.heightCm();
+    if (!height) return undefined;
+    const metres = height / 100;
+    const kg = (bmi: number) => Math.round(bmi * metres * metres * 10) / 10;
+    // WHO classes; the outer two are open and are left open here too
+    const classes: { name: string; from: number | null; to: number | null; tone: string }[] = [
+      { name: 'underweight', from: null, to: 18.5, tone: 'warn' },
+      { name: 'normal weight', from: 18.5, to: 25, tone: 'ok' },
+      { name: 'overweight', from: 25, to: 30, tone: 'watch' },
+      { name: 'obesity I', from: 30, to: 35, tone: 'warn' },
+      { name: 'obesity II', from: 35, to: 40, tone: 'warn' },
+      { name: 'obesity III', from: 40, to: null, tone: 'bad' },
+    ];
+    const colour: Record<string, string> = {
+      ok: 'rgba(27, 175, 122, 0.10)',
+      watch: 'rgba(235, 168, 52, 0.10)',
+      warn: 'rgba(235, 104, 52, 0.10)',
+      bad: 'rgba(214, 62, 62, 0.10)',
+    };
+    return {
+      silent: true,
+      label: { show: true, position: 'insideTopLeft', fontSize: 10, opacity: 0.8 },
+      data: classes.map(
+        (c) =>
+          [
+            {
+              ...(c.from == null ? {} : { yAxis: kg(c.from) }),
+              name: c.name,
+              itemStyle: { color: colour[c.tone] },
+            },
+            c.to == null ? {} : { yAxis: kg(c.to) },
+          ] as NonNullable<NonNullable<ScatterSeriesOption['markArea']>['data']>[number],
+      ),
+    };
+  }
+
+  anyBodyValue(): boolean {
+    return Object.values(this.body).some((v) => v != null) || this.bodyFat != null;
+  }
+
+  valueOf(m: BodyMeasurement, key: CircumferenceKey): number | null {
+    return m[key] ?? null;
+  }
 
   readonly recent = computed(() => [...this.entries()].sort((a, b) => (a.measured_at < b.measured_at ? 1 : -1)).slice(0, 60));
 
@@ -88,7 +230,7 @@ export class WeightPage {
       xAxis: { type: 'time' },
       yAxis: { type: 'value', scale: true, axisLabel: { formatter: '{value} kg' } },
       series: [
-        { name: 'Weigh-in', type: 'scatter', symbolSize: 5, data: daily, itemStyle: { color: CHART_PALETTE[0], opacity: 0.6 } },
+        { name: 'Weigh-in', type: 'scatter', symbolSize: 5, data: daily, itemStyle: { color: CHART_PALETTE[0], opacity: 0.6 }, markArea: this.bmiArea() },
         { name: '7-day average', type: 'line', showSymbol: false, smooth: false, data: ma, lineStyle: { width: 2, color: CHART_PALETTE[1] }, itemStyle: { color: CHART_PALETTE[1] } },
       ],
     };
@@ -97,9 +239,40 @@ export class WeightPage {
   constructor() {
     this.load();
   }
+
+  addBody(): void {
+    if (!this.anyBodyValue()) return;
+    this.api
+      .addBodyMeasurement({
+        measured_at: new Date(this.bodyAt).toISOString(),
+        ...this.body,
+        body_fat_pct: this.bodyFat,
+        note: this.bodyNote.trim() || null,
+      })
+      .subscribe({
+        next: () => {
+          for (const key of Object.keys(this.body) as CircumferenceKey[]) this.body[key] = null;
+          this.bodyFat = null;
+          this.bodyNote = '';
+          this.load();
+        },
+        error: (e: unknown) => this.error.set(describeError(e)),
+      });
+  }
+
+  removeBody(m: BodyMeasurement): void {
+    this.api.deleteBodyMeasurement(m.id).subscribe({
+      next: () => this.load(),
+      error: (e: unknown) => this.error.set(describeError(e)),
+    });
+  }
   load(): void {
     const to = isoDate(new Date());
     this.api.weight(shiftDate(to, -this.days()), to).subscribe({ next: (w) => this.entries.set(w), error: (e: unknown) => this.error.set(describeError(e)) });
+    this.api.bodyMeasurements({ limit: 40 }).subscribe({ next: (m) => this.measurements.set([...m].reverse()), error: () => undefined });
+    if (!this.settings()) {
+      this.api.settings().subscribe({ next: (v) => this.settings.set(v.data), error: () => undefined });
+    }
   }
   add(): void {
     if (!this.kg) return;

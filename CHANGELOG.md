@@ -158,6 +158,12 @@ All notable changes to Victus are documented here. The format follows
   needs them says which one is absent. Sessions arrive through the API, the MCP (`body_add`) or a
   capture, because a spoken "waist 126, hip 118" is a capture like any other.
 
+- Every class is shown with the scale around it (R77). The report's body block draws the full range,
+  marks the class the value falls in and pins the value, and lists the BMI classes as weights with the
+  current one highlighted. The weight chart shades those classes behind the curve once a height is
+  known. Circumferences are entered on the weight page and listed with their change against the
+  previous session.
+
 ### Changed
 - No importer in the product (ADR 0011): existing data enters through the backup archive format, REST or MCP.
 - One model session per day (ADR 0009) and a resumable per-day thread (ADR 0010); lock TTL 5 minutes;

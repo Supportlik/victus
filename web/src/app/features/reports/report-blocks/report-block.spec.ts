@@ -28,6 +28,25 @@ const blocks: ReportBlock[] = [
   { meta: meta('text_finding', 'Agent finding'), error: false, source: 'agent', markdown: '**On track.** Protein average 158 g.' },
   { meta: meta('histogram_3d', 'Something new'), error: false } as unknown as ReportBlock,
   { meta: meta('tdee_windows', 'Energy expenditure'), error: true, message: 'no weigh-ins in period' },
+  { meta: meta('body_composition', 'Body'), error: false, weight_kg: 100.0, height_cm: 180,
+    bmi: { value: 30.86, unit: '', band: 'obesity class I', tone: 'warn', to_next: 0.86,
+      bands: [
+        { name: 'underweight', lower: null, upper: 18.5, tone: 'warn' },
+        { name: 'normal weight', lower: 18.5, upper: 25, tone: 'ok' },
+        { name: 'overweight', lower: 25, upper: 30, tone: 'watch' },
+        { name: 'obesity class I', lower: 30, upper: 35, tone: 'warn' },
+        { name: 'obesity class III', lower: 40, upper: null, tone: 'bad' },
+      ] },
+    bmi_weight_bands: [
+      { name: 'normal weight', lower: 59.9, upper: 81.0, tone: 'ok' },
+      { name: 'obesity class I', lower: 97.2, upper: 113.4, tone: 'warn' },
+    ],
+    waist_to_height: null, waist_to_hip: null, measured_at: '2026-01-05',
+    circumferences: { waist_cm: 96, hip_cm: 108 }, changes: { waist_cm: -4 },
+    body_fat_pct: null, missing: ['no waist measurement'] },
+  { meta: meta('energy_split', 'Where the energy goes'), error: false, tdee_kcal: 2800,
+    basal_kcal: 1750, activity_kcal: 1050, pal: 1.6, age_years: 36, basis: 'rolling_14d',
+    caveat: null, missing: [] },
   { meta: meta('timeline', 'One time axis'), error: false, tdee_window: 14, goal_kg: 85, kcal_min: 1700, kcal_max: 2300,
     rows: [
       { date: '2026-01-05', weight: 89.1, weight_ma: 89.4, countable: true, tdee: 2500, kcal: 1900, protein: 150, carbs: 180, fat: 70, fiber: 32, salt: 6 },
@@ -129,6 +148,38 @@ describe('ReportBlockView', () => {
     const english = fixture.componentInstance.timelineTooltip([{ axisValue: '2026-01-05' }]);
     expect(english).toContain('89.4');
     expect(english).toContain('1,900');
+  });
+
+  // T-WEB-042: a class is only useful with the scale around it, so the block draws the
+  // whole range, marks the class the value sits in and pins the value itself (R76).
+  it('draws the BMI scale, the kilogram classes and the circumference changes', async () => {
+    const el = await render(blocks.find((b) => b.meta.type === 'body_composition')!);
+    expect(el.textContent).toContain('BMI');
+    expect(el.textContent).toContain('obesity class I');
+    expect(el.textContent).toContain('to the next class');
+
+    // one segment per class, the current one marked, and the pin inside the bar
+    const segments = el.querySelectorAll('.scale .seg');
+    expect(segments.length).toBe(5);
+    expect(el.querySelectorAll('.scale .seg.here').length).toBe(1);
+    const left = Number((el.querySelector('.scale .pin') as HTMLElement).style.left.replace('%', ''));
+    expect(left).toBeGreaterThan(0);
+    expect(left).toBeLessThan(100);
+
+    // the classes as kilograms, with the one the weight falls in highlighted
+    expect(el.querySelector('.marks tr.here')?.textContent).toContain('obesity class I');
+    // a shrinking waist reads as an improvement
+    expect(el.querySelector('.circ .down')?.textContent).toContain('4');
+    expect(el.textContent).toContain('Not shown: no waist measurement');
+  });
+
+  it('splits the expenditure into resting and moving', async () => {
+    const el = await render(blocks.find((b) => b.meta.type === 'energy_split')!);
+    expect(el.textContent).toContain('At rest');
+    expect(el.textContent).toContain('From moving');
+    expect(el.textContent).toContain('1.60');
+    expect(el.querySelector('.split .rest')).not.toBeNull();
+    expect(el.querySelector('.warn-text')).toBeNull();
   });
 
   it('shows a placeholder for unknown block types', async () => {
