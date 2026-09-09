@@ -76,7 +76,7 @@ export const FR: Record<string, string> = {
   'Portions of this product': 'Portions de ce produit',
   'Needs a size once': 'Nécessite une taille, une fois',
   'One {unit} of {product} is': 'Un {unit} de {product} fait',
-  'One {unit} is': 'Un {unit} fait',
+  'One {unit} is': '1 {unit} fait',
   'Saved with the product, so “{unit}” works from now on.':
     'Enregistré avec le produit, pour que « {unit} » fonctionne désormais.',
   'Saved with {product}, so “{unit}” works from now on.':
