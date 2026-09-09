@@ -20,7 +20,7 @@ and is updated per stage.
 
 | Content | Definition of done | Risks |
 |---|---|---|
-| Repository, `uv` + hatchling packaging, package skeleton, Angular skeleton, CI/security/web/docker/release workflows, README, `docs/` incl. SPEC/TESTPLAN/BACKUP/OPERATIONS, ADRs 0001–0008, empty JSON schemas, MIT licence, CHANGELOG, `deploy/` with the full Compose stack and backup wrappers | CI green; `victus --version`; `ng build` passes | — |
+| Repository, `uv` + hatchling packaging, package skeleton, Angular skeleton, CI/security/web/docker/release workflows, README, `docs/` incl. SPEC/TESTPLAN/BACKUP/OPERATIONS, ADRs 0001–0008, empty JSON schemas, licence, CHANGELOG, `deploy/` with the full Compose stack and backup wrappers | CI green; `victus --version`; `ng build` passes | — |
 
 ### Stage 1 — Core
 

@@ -4,7 +4,7 @@
 [![Web](https://github.com/Supportlik/victus/actions/workflows/web.yml/badge.svg)](https://github.com/Supportlik/victus/actions/workflows/web.yml)
 [![Security](https://github.com/Supportlik/victus/actions/workflows/security.yml/badge.svg)](https://github.com/Supportlik/victus/actions/workflows/security.yml)
 [![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13%20%7C%203.14-blue)](pyproject.toml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![License: PolyForm Noncommercial](https://img.shields.io/badge/license-PolyForm%20Noncommercial-blue.svg)](LICENSE)
 
 **Self-hosted nutrition tracking with a real API.** Victus keeps your food diary, product
 database, recipes, weight history and target bands in one database, exposes everything over
@@ -126,4 +126,20 @@ scans dependencies and sources (pip-audit, npm audit, Trivy, CodeQL) and builds 
 
 ## License
 
-[MIT](LICENSE) — © 2026 Michael Bortlik
+[PolyForm Noncommercial 1.0.0](LICENSE) — © 2026 Michael Bortlik
+
+**Yours to run, not to sell.** The source is public and every noncommercial use is granted:
+host it for yourself, your family or your household, read it, change it, pass your changes on.
+Charities, schools, public research and health organisations may use it too, whatever their
+funding. What needs a separate licence from the copyright holder is making money from it,
+selling the software or a modified version, and running it as a paid or hosted service for
+other people. If that is what you want, ask.
+
+This is deliberately **not** an open-source licence: the Open Source Definition forbids
+restricting commercial use, and this licence restricts exactly that. Everything Victus depends
+on is permissively licensed, so nothing here is passed on under stricter terms than its own
+authors chose.
+
+Contributions are welcome under the agreement in [CONTRIBUTING.md](CONTRIBUTING.md): you keep
+your copyright and also grant the maintainer the right to license your contribution
+commercially. Without that the arrangement breaks at the first outside line of code.

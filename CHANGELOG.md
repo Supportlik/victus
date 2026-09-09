@@ -136,6 +136,12 @@ All notable changes to Victus are documented here. The format follows
   shows "Assess now"; without one it still hands the job to the user's own Claude.
 
 ### Changed
+- **Licence: PolyForm Noncommercial 1.0.0 instead of MIT** (ADR 0012). Every noncommercial use is
+  granted, including running it for yourself or your household and use by charities, schools and
+  public health or research organisations. Selling the software or a derivative, and running it as a
+  paid or hosted service for other people, need a separate licence from the copyright holder. This is
+  deliberately not an open-source licence. `CONTRIBUTING.md` adds a contributor agreement so the
+  project stays licensable as a whole.
 - No importer in the product (ADR 0011): existing data enters through the backup archive format, REST or MCP.
 - One model session per day (ADR 0009) and a resumable per-day thread (ADR 0010); lock TTL 5 minutes;
   agent runs start on demand (`POST /agent/runs`), cron optional.

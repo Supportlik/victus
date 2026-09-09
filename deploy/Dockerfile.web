@@ -21,7 +21,7 @@ ARG VERSION=dev
 LABEL org.opencontainers.image.title="victus-web" \
       org.opencontainers.image.description="Victus — Angular web app served by nginx" \
       org.opencontainers.image.source="https://github.com/Supportlik/victus" \
-      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.licenses="LicenseRef-PolyForm-Noncommercial-1.0.0" \
       org.opencontainers.image.version="${VERSION}"
 
 # The unprivileged image runs as user `nginx` and cannot bind port 80;

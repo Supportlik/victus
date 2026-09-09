@@ -10,5 +10,5 @@ RUN xcaddy build --with github.com/caddy-dns/cloudflare
 
 FROM caddy:2.11.4-alpine
 LABEL org.opencontainers.image.source="https://github.com/Supportlik/victus" \
-      org.opencontainers.image.licenses="MIT"
+      org.opencontainers.image.licenses="LicenseRef-PolyForm-Noncommercial-1.0.0"
 COPY --from=builder /usr/bin/caddy /usr/bin/caddy

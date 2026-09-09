@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = "Self-hosted nutrition tracking: REST API, passkey web app, report builder, agent inbox and MCP server"
 readme = "README.md"
 requires-python = ">=3.12"
-license = "MIT"
+license = "LicenseRef-PolyForm-Noncommercial-1.0.0"
 license-files = ["LICENSE"]
 authors = [{ name = "Michael Bortlik", email = "michael@bortlik.io" }]
 keywords = ["nutrition", "calorie-tracking", "tdee", "fastapi", "passkey", "webauthn", "mcp", "self-hosted"]

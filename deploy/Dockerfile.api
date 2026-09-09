@@ -41,7 +41,7 @@ ARG VERSION=dev
 LABEL org.opencontainers.image.title="victus-api" \
       org.opencontainers.image.description="Victus — self-hosted nutrition tracking (API, worker, backup, MCP)" \
       org.opencontainers.image.source="https://github.com/Supportlik/victus" \
-      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.licenses="LicenseRef-PolyForm-Noncommercial-1.0.0" \
       org.opencontainers.image.version="${VERSION}"
 
 # ffmpeg: audio conversion for transcription (e.g. .oga → mp3).

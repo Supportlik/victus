@@ -60,7 +60,7 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
           labels: |
             org.opencontainers.image.title=${{ matrix.image }}
-            org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.licenses=LicenseRef-PolyForm-Noncommercial-1.0.0
 
       - name: Build (and push on main / tags)
         id: build
