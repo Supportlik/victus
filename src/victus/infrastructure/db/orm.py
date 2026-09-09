@@ -847,21 +847,34 @@ class DayMessage(Base):
 
 
 class ProductProposal(Base):
-    """A product change the agent read from a label photo or a note; a person decides."""
+    """A product change the agent read from a label photo or a note; a person decides.
+
+    ``kind='update'`` carries changed values for an existing ``product_id``.
+    ``kind='new'`` proposes a product that does not exist yet: the values live on the
+    one-off consumable in ``consumable_id``, so a day can already log the food while
+    the catalogue entry waits for a person (R54, R81).
+    """
 
     __tablename__ = "product_proposal"
     __table_args__ = (
         CheckConstraint(
             "status IN ('pending','approved','rejected')", name="ck_product_proposal_status"
         ),
+        CheckConstraint("kind IN ('update','new')", name="ck_product_proposal_kind"),
         Index("ix_product_proposal_tenant_status", "tenant_id", "status"),
         Index("ix_product_proposal_product", "product_id"),
     )
 
     id: Mapped[str] = mapped_column(ID, primary_key=True, default=new_id)
     tenant_id: Mapped[str] = mapped_column(ID, ForeignKey("tenant.id"), nullable=False)
-    product_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("product.id", ondelete="CASCADE"), nullable=False
+    #: NULL for ``kind='new'`` — the product does not exist until a person approves.
+    product_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("product.id", ondelete="CASCADE")
+    )
+    kind: Mapped[str] = mapped_column(String(8), nullable=False, default="update")
+    #: The one-off consumable holding the proposed values while ``kind='new'`` is pending.
+    consumable_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("consumable.id", ondelete="CASCADE")
     )
     capture_id: Mapped[str | None] = mapped_column(
         ID, ForeignKey("capture.id", ondelete="SET NULL")

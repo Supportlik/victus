@@ -192,6 +192,10 @@ All notable changes to Victus are documented here. The format follows
   the language beside the number format, which stays a separate choice.
 
 ### Fixed
+- A KPI note in a rendered Markdown report is a sentence again. Since the server started sending
+  keys and parameters instead of prose (R78), the Markdown renderer printed the object itself —
+  `Message(key='{n}-day moving average', params={'n': 7})` — in every report an agent or the CLI
+  reads. The other message fields were already filled in; only the KPI note was missed.
 - Choosing a unit the product has no portion for asks what it holds again. The chosen unit was a
   plain field read inside a `computed()`, so picking "bag" never re-evaluated the question — the
   field stayed hidden and the item was refused on save with "no portion for unit". A product is now
@@ -224,6 +228,22 @@ All notable changes to Victus are documented here. The format follows
 - `victus token revoke` takes the prefix that `victus token list` prints, not only the internal id.
 
 ### Changed
+- **`write` proposes, `approve` decides** (ADR 0013, R81). The approve scope guarded `day_approve`,
+  `line_item_approve` and `draft_discard`, but a token with plain `write` reached the same end state
+  around them: `line_item_create` wrote finished items, `line_item_delete` discarded drafts one by
+  one and removed approved ones, `close_day` and `reliable` moved a day into the TDEE series, the
+  catalogue was writable outright, and a proposal could be decided. Now an actor without `approve`
+  adds items **as drafts**, may withdraw only its own draft (`agent:write`), and cannot touch what a
+  person approved; catalogue writes and proposal decisions need `approve`. A browser session is
+  unaffected — it holds every scope.
+- A product the agent has never seen no longer has to be invented into the catalogue: `product_create`
+  without `approve` files a **`kind='new'` proposal** and returns `log_against_consumable_id`, a one-off
+  consumable the day can log at once with correct macros. Approving it in the app **promotes** that
+  consumable into the product, keeping its id — every line item already logged against it stays
+  exactly as it was and the product becomes searchable. Rejecting leaves the meal untouched and the
+  catalogue clean. Proposals now carry portions too, so the tub or can a product comes in arrives with it.
+- The timeline tooltip shows the weigh-in beside the 7-day average instead of only one of them, so a
+  day's reading on the scale can be read against the trend.
 - No importer in the product (ADR 0011): existing data enters through the backup archive format, REST or MCP.
 - One model session per day (ADR 0009) and a resumable per-day thread (ADR 0010); lock TTL 5 minutes;
   agent runs start on demand (`POST /agent/runs`), cron optional.

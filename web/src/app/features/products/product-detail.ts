@@ -392,7 +392,7 @@ export class ProductDetail {
     call.subscribe({
       next: () => {
         this.deciding.set(false);
-        this.load(pr.product_id);
+        this.load(pr.product_id ?? Number(this.id()));
       },
       error: (e: unknown) => {
         this.error.set(describeError(e));

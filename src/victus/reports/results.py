@@ -70,7 +70,7 @@ class ThresholdMark:
 
     A BMI class is also a weight, and a reader can act on the weight rather than on the
     index. Both live here so nothing has to pair two lists by position and hope they stay
-    in step (R81).
+    in step (R82).
     """
 
     name: str

@@ -57,6 +57,9 @@ def test_markdown_structure(checkup) -> None:  # type: ignore[no-untyped-def]
     assert "Reference TDEE: **" in md
     assert any(e in md for e in ("🟢", "🟡", "🔴"))
     assert "- first" in md  # agent finding rendered verbatim
+    # T-RPT-012: a KPI note is a Message (R78); Markdown fills it in, never prints the object
+    assert "7-day moving average" in md
+    assert "Message(" not in md
 
 
 def test_markdown_shows_block_errors_without_crashing(ref: Reference) -> None:

@@ -58,6 +58,28 @@ class ProductRepo(Repo):
         self.session.flush()
         return item
 
+    def promote_ad_hoc(self, consumable_id: int, name: str, **fields: object) -> orm.Product:
+        """Turn a one-off consumable into a catalogue product, keeping its id (R81).
+
+        Line items point at the consumable, so a promotion rewires nothing: the food
+        stays logged exactly as it was and becomes searchable from now on. The subtype
+        row goes first — the supertype's ``kind`` is half of the foreign key.
+        """
+        consumable = self.get_consumable(consumable_id)
+        if consumable is None:
+            raise ValueError(f"consumable {consumable_id} not found")
+        item = self.session.get(orm.AdHocItem, consumable_id)
+        if item is not None:
+            self.session.delete(item)
+            self.session.flush()
+        consumable.kind = "product"
+        consumable.name = name
+        self.session.flush()
+        product = orm.Product(id=consumable_id, kind="product", **fields)
+        self.session.add(product)
+        self.session.flush()
+        return product
+
     def list(self, *, category_id: int | None = None) -> Sequence[orm.Product]:
         stmt = (
             select(orm.Product)

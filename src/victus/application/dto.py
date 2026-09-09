@@ -392,7 +392,8 @@ class CaptureView:
 @dataclass(frozen=True, slots=True)
 class ProductProposalView:
     id: str
-    product_id: int
+    #: NULL while a ``new`` proposal is pending — the product does not exist yet.
+    product_id: int | None
     product_name: str | None
     capture_id: str | None
     run_id: str | None
@@ -403,6 +404,10 @@ class ProductProposalView:
     status: str
     created_at: datetime
     decided_at: datetime | None
+    #: ``update`` (values of an existing product) or ``new`` (a product to be created).
+    kind: str = "update"
+    #: The one-off consumable a pending ``new`` proposal is logged against.
+    consumable_id: int | None = None
 
 
 @dataclass(frozen=True, slots=True)

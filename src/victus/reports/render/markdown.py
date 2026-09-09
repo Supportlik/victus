@@ -80,7 +80,7 @@ def _kpi(b: KpiTileResult) -> str:
     elif b.zone is not None:
         light = " " + ZONE_EMOJI[b.zone]
     delta = f" ({signed(b.delta, b.decimals)} vs. previous period)" if b.delta is not None else ""
-    note = f" · {b.note}" if b.note else ""
+    note = f" · {b.note.fill()}" if b.note else ""  # a Message, not a sentence yet (R78)
     return f"**{b.meta.title}:** {num(b.value, b.decimals, b.unit)}{light}{delta}{note}"
 
 

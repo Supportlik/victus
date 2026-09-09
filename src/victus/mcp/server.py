@@ -62,8 +62,12 @@ INSTRUCTIONS = (
     "Victus nutrition tracking. Read tools return JSON; write tools need the matching scope. "
     "Drafting a day: agent_run_start → day_thread_get → product_search per item → draft_create "
     "→ agent_run_finish. Approval is a separate, human decision (day_approve). "
-    "Product captures (captures_open scope=product: label photos with product_id): capture_get → "
-    "product_propose(changes, capture_id, source); a person approves in the app."
+    "Without the approve scope nothing you write is a fact: items are added as drafts, "
+    "catalogue writes become proposals, and approved data cannot be changed or removed. "
+    "A food that has no product yet: product_create files a proposal and returns "
+    "log_against_consumable_id — use that id in the draft, the person approves the product in "
+    "the app. Product captures (captures_open scope=product: label photos with product_id): "
+    "capture_get → product_propose(changes, capture_id, source); a person approves in the app."
 )
 
 ContextResolver = Callable[[], TenantContext]

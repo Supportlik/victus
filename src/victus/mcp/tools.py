@@ -23,6 +23,7 @@ from typing import Any, Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from victus.application import dto
 from victus.application.errors import ApplicationError
 from victus.application.ports.blob_storage import BlobStorage
 from victus.application.ports.transcription import TranscriptionPort
@@ -472,6 +473,16 @@ class ProductUsageIn(_In):
     limit: int = Field(default=50, ge=1, le=500)
 
 
+class ProductPortionIn(_In):
+    """A count portion offered with a new product (the tub, can or slice it comes in)."""
+
+    unit_code: str = Field(description="Count unit code, e.g. 'piece', 'slice', 'cup', 'can'.")
+    label: str | None = None
+    amount: float = Field(gt=0, description="Weight/volume of one unit in amount_unit.")
+    amount_unit: Literal["g", "ml"] = "g"
+    is_default: bool = False
+
+
 class ProductCreateIn(_In):
     name: str
     brand: str | None = None
@@ -489,6 +500,16 @@ class ProductCreateIn(_In):
     )
     note: str | None = None
     ean: str | None = None
+    portions: list[ProductPortionIn] | None = Field(
+        default=None,
+        description="Portions to create with the product, e.g. the 400 g tub it is sold in.",
+    )
+    capture_id: str | None = Field(
+        default=None, description="The capture the values were read from (label photo, note)."
+    )
+    rationale: str | None = Field(
+        default=None, description="Why these values — the person reviewing reads this."
+    )
 
 
 class PortionCreateIn(_In):
@@ -881,8 +902,13 @@ def _meal_delete(tc: ToolContext, inp: MealDeleteIn) -> ToolResult:
 def _product_update(tc: ToolContext, inp: ProductUpdateIn) -> ToolResult:
     changes = {k: v for k, v in inp.model_dump().items() if k != "product_id" and v is not None}
     changes["verified"] = False  # a person confirms label readings in the review list
-    view = product_uc.UpdateProduct(tc.uow_factory, tc.ctx).execute(inp.product_id, changes)
-    return cast(dict[str, Any], jsonable(view))
+    view = proposal_uc.update_or_propose_product(
+        tc.uow_factory, tc.ctx, inp.product_id, changes, run_id=tc.run_id
+    )
+    out = cast(dict[str, Any], jsonable(view))
+    if isinstance(view, dto.ProductProposalView):
+        out["pending_review"] = True
+    return out
 
 
 def _rules_list(tc: ToolContext, inp: RulesListIn) -> ToolResult:
@@ -922,24 +948,45 @@ def _product_propose(tc: ToolContext, inp: ProductProposeIn) -> ToolResult:
 
 
 def _product_create(tc: ToolContext, inp: ProductCreateIn) -> ToolResult:
-    view = product_uc.CreateProduct(tc.uow_factory, tc.ctx).execute(
-        product_uc.ProductInput(**inp.model_dump())
+    fields = inp.model_dump()
+    portions = fields.pop("portions", None)
+    capture_id = fields.pop("capture_id", None)
+    rationale = fields.pop("rationale", None)
+    view = proposal_uc.create_or_propose_product(
+        tc.uow_factory,
+        tc.ctx,
+        product_uc.ProductInput(**fields),
+        portions=list(portions) if portions else None,  # model_dump already nested them
+        rationale=rationale,
+        capture_id=capture_id,
+        run_id=tc.run_id,
     )
-    return cast(dict[str, Any], jsonable(view))
+    out = cast(dict[str, Any], jsonable(view))
+    if isinstance(view, dto.ProductProposalView):
+        # The catalogue entry waits for a person; the one-off carries the values today.
+        out["pending_review"] = True
+        out["log_against_consumable_id"] = view.consumable_id
+    return out
 
 
 def _portion_create(tc: ToolContext, inp: PortionCreateIn) -> ToolResult:
-    view = product_uc.AddPortion(tc.uow_factory, tc.ctx).execute(
+    view = proposal_uc.add_or_propose_portion(
+        tc.uow_factory,
+        tc.ctx,
         inp.product_id,
-        product_uc.PortionInput(
-            unit_code=inp.unit_code,
-            label=inp.label,
-            amount=inp.amount,
-            amount_unit=inp.amount_unit,
-            is_default=inp.is_default,
-        ),
+        {
+            "unit_code": inp.unit_code,
+            "label": inp.label,
+            "amount": inp.amount,
+            "amount_unit": inp.amount_unit,
+            "is_default": inp.is_default,
+        },
+        run_id=tc.run_id,
     )
-    return cast(dict[str, Any], jsonable(view))
+    out = cast(dict[str, Any], jsonable(view))
+    if isinstance(view, dto.ProductProposalView):
+        out["pending_review"] = True
+    return out
 
 
 def _weight_add(tc: ToolContext, inp: WeightAddIn) -> ToolResult:
@@ -1154,7 +1201,9 @@ TOOLS: tuple[ToolSpec, ...] = (
     ),
     _spec(
         "line_item_create",
-        "Add a line item to a meal of a day (meal created when missing).",
+        "Add a line item to a meal of a day (meal created when missing). Without the "
+        "approve scope it is added as a draft for review — the same gate as a drafted "
+        "item, so nothing you write becomes a fact on its own.",
         SCOPE_WRITE,
         LineItemCreateIn,
         _line_item_create,
@@ -1162,7 +1211,8 @@ TOOLS: tuple[ToolSpec, ...] = (
     ),
     _spec(
         "line_item_update",
-        "Change amount, unit, portion or consumable of a line item.",
+        "Change amount, unit, portion or consumable of a line item. Drafts only: "
+        "changing an approved item needs the approve scope.",
         SCOPE_WRITE,
         LineItemUpdateIn,
         _line_item_update,
@@ -1170,7 +1220,8 @@ TOOLS: tuple[ToolSpec, ...] = (
     ),
     _spec(
         "line_item_delete",
-        "Delete a line item.",
+        "Delete a line item. You may withdraw your own draft; removing an approved item "
+        "needs the approve scope.",
         SCOPE_WRITE,
         LineItemDeleteIn,
         _line_item_delete,
@@ -1277,7 +1328,8 @@ TOOLS: tuple[ToolSpec, ...] = (
     _spec(
         "product_update",
         "Correct a product's nutrients per reference amount, e.g. from a label photo capture. "
-        "Values propagate to every logged quantity of that product; set `source`.",
+        "Without the approve scope it becomes a proposal a person decides; with it, values "
+        "propagate to every logged quantity of that product. Set `source`.",
         SCOPE_WRITE,
         ProductUpdateIn,
         _product_update,
@@ -1285,7 +1337,11 @@ TOOLS: tuple[ToolSpec, ...] = (
     ),
     _spec(
         "product_create",
-        "Create a product with nutrients per reference amount (100 g/ml).",
+        "Register a product with nutrients per reference amount (100 g/ml), optionally "
+        "with its portions. Without the approve scope this does not touch the catalogue: "
+        "it files a pending proposal and returns `log_against_consumable_id`, which you "
+        "use in the day draft right away. Approving it in the app turns that one-off into "
+        "the catalogue entry, keeping every item already logged against it.",
         SCOPE_WRITE,
         ProductCreateIn,
         _product_create,
@@ -1293,7 +1349,8 @@ TOOLS: tuple[ToolSpec, ...] = (
     ),
     _spec(
         "portion_create",
-        "Add a count portion (piece, slice, cup…) with its weight to a product.",
+        "Add a count portion (piece, slice, cup…) with its weight to a product. Without the "
+        "approve scope it becomes a proposal a person decides.",
         SCOPE_WRITE,
         PortionCreateIn,
         _portion_create,

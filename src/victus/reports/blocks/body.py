@@ -32,7 +32,7 @@ def _rated(rated: calc.Rated, unit: str, decimals: int) -> RatedValue:
 
 
 def _bmi_marks(height_cm: float, weight_kg: float | None) -> list[ThresholdMark]:
-    """The BMI classes with both scales and the distance to each (R81).
+    """The BMI classes with both scales and the distance to each (R82).
 
     A class index means nothing to a person standing on a scale. The same boundary as a
     weight does, and so does "still 14.4 kg away", which is why both travel with the band

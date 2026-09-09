@@ -11,8 +11,13 @@ from typing import Any
 from victus.application import dto
 from victus.application.errors import Conflict, NotFound, ValidationFailed
 from victus.application.ports.unit_of_work import UnitOfWork
-from victus.application.tenant_context import SCOPE_READ, SCOPE_WRITE
-from victus.application.use_cases._base import UseCase, now
+from victus.application.tenant_context import (
+    SCOPE_AGENT_WRITE,
+    SCOPE_APPROVE,
+    SCOPE_READ,
+    SCOPE_WRITE,
+)
+from victus.application.use_cases._base import UseCase, now, require_decision
 from victus.application.use_cases._mappers import (
     line_item_view,
     target_band_domain,
@@ -243,6 +248,8 @@ class UpdateDayFlags(UseCase):
             d = _day_or_404(uow, day)
             diff: dict[str, Any] = {}
             if "reliable" in changes:
+                # R81: reliability decides whether the day counts towards TDEE.
+                self.ctx.require(SCOPE_APPROVE)
                 d.reliable = changes["reliable"]
                 diff["reliable"] = changes["reliable"]
             if "training_type" in changes:
@@ -335,10 +342,20 @@ def _item_view(uow: UnitOfWork, li: orm.LineItem, day: date) -> dto.LineItemView
 
 
 class AddLineItem(UseCase):
+    """Log an item. Without ``approve`` it is a proposal, not a fact (R81).
+
+    An actor that cannot approve — an API token for the agent, an integration —
+    may add to a day, but what it adds arrives as a draft for review, exactly like
+    a drafted item. Otherwise ``line_item_approve`` would only guard the front door.
+    """
+
     def execute(
         self, meal_id: int, item: LineItemInput, *, origin: str = "manual", is_draft: bool = False
     ) -> dto.LineItemView:
         self.ctx.require(SCOPE_WRITE)
+        if not self.ctx.has_scope(SCOPE_APPROVE):
+            is_draft = True
+            origin = "agent" if origin == "manual" else origin
         with self._uow() as uow:
             meal = uow.day_logs.get_meal(meal_id)
             if meal is None:
@@ -384,6 +401,9 @@ class UpdateLineItem(UseCase):
             li = uow.day_logs.get_line_item(item_id)
             if li is None:
                 raise NotFound(f"line item {item_id} not found")
+            if not li.is_draft:
+                # R81: an approved item is a reviewed fact; changing it is a decision.
+                self.ctx.require(SCOPE_APPROVE)
             diff: dict[str, Any] = {}
             consumable = li.consumable
             original_consumable_id = li.consumable_id
@@ -426,12 +446,21 @@ class UpdateLineItem(UseCase):
 
 
 class DeleteLineItem(UseCase):
+    """Remove an item. A fact needs ``approve``; a draft may be withdrawn by its author.
+
+    Deleting drafts one by one is what ``draft_discard`` does wholesale, so ``write``
+    alone is not enough: either the person decides (``approve``) or the agent takes
+    back its own proposal (``agent:write``) — see R81.
+    """
+
     def execute(self, item_id: int) -> None:
         self.ctx.require(SCOPE_WRITE)
         with self._uow() as uow:
             li = uow.day_logs.get_line_item(item_id)
             if li is None:
                 raise NotFound(f"line item {item_id} not found")
+            if not (li.is_draft and self.ctx.has_scope(SCOPE_AGENT_WRITE)):
+                self.ctx.require(SCOPE_APPROVE)
             uow.audit.record(
                 "line_item.delete", "line_item", str(li.id), {"consumable_id": li.consumable_id}
             )
@@ -449,8 +478,10 @@ def freeze_band(uow: UnitOfWork, d: orm.DayLog) -> None:
 
 
 class CloseDay(UseCase):
+    """Close a day so it counts for TDEE — the same decision as ``day_approve(close=True)``."""
+
     def execute(self, day: date) -> dto.DayView:
-        self.ctx.require(SCOPE_WRITE)
+        require_decision(self.ctx)
         with self._uow() as uow:
             d = _day_or_404(uow, day)
             if d.reliable is None:
@@ -470,8 +501,10 @@ class CloseDay(UseCase):
 
 
 class ReopenDay(UseCase):
+    """Take a closed day back out of the TDEE series; a decision, like closing it."""
+
     def execute(self, day: date) -> dto.DayView:
-        self.ctx.require(SCOPE_WRITE)
+        require_decision(self.ctx)
         with self._uow() as uow:
             d = _day_or_404(uow, day)
             d.status = DayStatus.OPEN.value

@@ -128,11 +128,17 @@ describe('ReportBlockView', () => {
     expect(fromWeightPanel.indexOf('Intake')).toBeLessThan(fromWeightPanel.indexOf('TDEE'));
     expect(fromWeightPanel).toContain('TDEE (14 d)');
     expect(fromWeightPanel).toContain('Protein 150 g');
+    // T-WEB-034: the trend and the reading on the scale are two different numbers
+    expect(fromWeightPanel).toContain('Weight (7-day avg.)');
+    expect(fromWeightPanel).toContain('89.4');
+    expect(fromWeightPanel).toContain('Weigh-in');
+    expect(fromWeightPanel).toContain('89.1');
 
     // a day without intake keeps the order and simply drops the missing lines
     const thin = fixture.componentInstance.timelineTooltip([{ axisValue: '2026-01-06' }]);
     expect(thin).toContain('not counted');
     expect(thin).not.toContain('Intake');
+    expect(thin).not.toContain('Weigh-in');  // no reading that day, only the trend
     expect(thin).toContain('TDEE');
   });
 

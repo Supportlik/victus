@@ -103,7 +103,12 @@ class AgentStatusOut(Out):
 
 class ProposalOut(Out):
     id: str
-    product_id: int
+    #: null while a ``new`` proposal is pending — the product does not exist yet
+    product_id: int | None = None
+    #: ``update`` (values of an existing product) or ``new`` (a product to be created)
+    kind: str = "update"
+    #: the one-off consumable a pending ``new`` proposal is logged against
+    consumable_id: int | None = None
     product_name: str | None = None
     capture_id: str | None = None
     run_id: str | None = None

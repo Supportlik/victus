@@ -9,7 +9,7 @@ from typing import Any
 from victus.application import dto
 from victus.application.errors import Conflict, NotFound, ValidationFailed
 from victus.application.tenant_context import SCOPE_READ, SCOPE_WRITE
-from victus.application.use_cases._base import UseCase
+from victus.application.use_cases._base import UseCase, require_decision
 from victus.application.use_cases._mappers import portion_view, product_view
 from victus.domain.services.matching import ConsumableIndex
 from victus.domain.services.units import UNITS
@@ -183,7 +183,7 @@ class NewProductVersion(UseCase):
     def execute(
         self, product_id: int, valid_from: date, changes: dict[str, Any] | None = None
     ) -> dto.ProductView:
-        self.ctx.require(SCOPE_WRITE)
+        require_decision(self.ctx)  # new values for a product are a person's call (R54)
         with self._uow() as uow:
             previous = uow.products.get(product_id)
             if previous is None:
@@ -324,8 +324,10 @@ class GetProductUsage(UseCase):
 
 
 class CreateProduct(UseCase):
+    """Write a catalogue entry. Needs ``approve``; without it use ``ProposeNewProduct``."""
+
     def execute(self, data: ProductInput) -> dto.ProductView:
-        self.ctx.require(SCOPE_WRITE)
+        require_decision(self.ctx)
         _validate_product(data)
         with self._uow() as uow:
             if uow.products.by_name(data.name) is not None:
@@ -343,8 +345,10 @@ class CreateProduct(UseCase):
 
 
 class UpdateProduct(UseCase):
+    """Write product values. Needs ``approve``; without it use ``ProposeProductChange``."""
+
     def execute(self, product_id: int, changes: dict[str, Any]) -> dto.ProductView:
-        self.ctx.require(SCOPE_WRITE)
+        require_decision(self.ctx)
         with self._uow() as uow:
             p = uow.products.get(product_id)
             if p is None:
@@ -378,7 +382,7 @@ class UpdateProduct(UseCase):
 
 class DeleteProduct(UseCase):
     def execute(self, product_id: int) -> None:
-        self.ctx.require(SCOPE_WRITE)
+        require_decision(self.ctx)
         with self._uow() as uow:
             p = uow.products.get(product_id)
             if p is None:
@@ -414,7 +418,7 @@ def _check_portion_unit(product: orm.Product, amount_unit: str) -> None:
 
 class AddPortion(UseCase):
     def execute(self, product_id: int, data: PortionInput) -> dto.PortionView:
-        self.ctx.require(SCOPE_WRITE)
+        require_decision(self.ctx)
         if data.unit_code not in UNITS:
             raise ValidationFailed(f"unknown unit '{data.unit_code}'")
         if data.amount <= 0 or data.amount_unit not in ("g", "ml"):
@@ -447,7 +451,7 @@ class AddPortion(UseCase):
 
 class UpdatePortion(UseCase):
     def execute(self, portion_id: int, changes: dict[str, Any]) -> dto.PortionView:
-        self.ctx.require(SCOPE_WRITE)
+        require_decision(self.ctx)
         with self._uow() as uow:
             portion = uow.products.get_portion(portion_id)
             if portion is None:
@@ -480,7 +484,7 @@ class UpdatePortion(UseCase):
 
 class DeletePortion(UseCase):
     def execute(self, portion_id: int) -> None:
-        self.ctx.require(SCOPE_WRITE)
+        require_decision(self.ctx)
         with self._uow() as uow:
             portion = uow.products.get_portion(portion_id)
             if portion is None:

@@ -59,11 +59,18 @@ HTTP responses: missing or invalid token → `401`; token lacks the tool's scope
 | `day_approve(date, corrections[], close)` | `approve` | `ApproveDay` | approved day + warnings |
 | `meal_update(meal_id, name?, time?)`, `meal_delete(meal_id)` | `write` | `UpdateMeal` / `DeleteMeal` | meal; delete fails while items remain |
 | `product_propose(product_id, changes, capture_id?, source?, rationale?)` | `agent:write` | `ProposeProductChange` | proposal awaiting a person's approval; the way to act on a product capture |
-| `product_update(product_id, …, source)` | `write` | `UpdateProduct` | direct product change (people and `write`-scope clients only) |
-| `product_version_create(id, valid_from, changes)` | `write` | `NewProductVersion` | changed values from a day on; days already logged keep their numbers (R70) |
-| `line_item_create / line_item_update / line_item_delete` | `write` | `AddLineItem` / `UpdateLineItem` / `DeleteLineItem` | line item |
-| `product_create(...)`, `portion_create(...)` | `write` | `CreateProduct` / `AddPortion` | product / portion |
+| `product_update(product_id, …, source)` | `write` (+ `approve` to apply) | `update_or_propose_product` | with `approve` the values are written; without it the same call becomes a proposal (R81) |
+| `product_version_create(id, valid_from, changes)` | `approve` | `NewProductVersion` | changed values from a day on; days already logged keep their numbers (R70) |
+| `line_item_create` | `write` | `AddLineItem` | the item; **without `approve` it is added as a draft** (R81) |
+| `line_item_update` | `write` (+ `approve` for approved items) | `UpdateLineItem` | changed item |
+| `line_item_delete` | `agent:write` for your own draft, `approve` for a fact | `DeleteLineItem` | `{deleted: id}` |
+| `product_create(..., portions?, capture_id?, rationale?)` | `write` (+ `approve` to write it) | `create_or_propose_product` | with `approve` the product; without it a pending `new` proposal plus `log_against_consumable_id` — log the day against that id now, the person approves the catalogue entry later and it is promoted in place, keeping the item (R81) |
+| `portion_create(...)` | `write` (+ `approve` to apply) | `add_or_propose_portion` | portion, or a proposal carrying it |
 | `weight_add(date, kg)` | `write` | `AddWeight` | weight row (`source=manual`) |
+
+**Scopes in one line (R81, ADR 0013): `write` proposes, `approve` decides.** A token without `approve` may read,
+draft, add items (as drafts), withdraw its own drafts and propose catalogue changes. It cannot change or remove what
+a person approved, close or reopen a day, set `reliable`, write the catalogue, or decide a proposal.
 
 Every write tool writes an `audit_log` row with the principal (token id or `stdio:<tenant>`). Tool errors are the
 application's typed errors (`LockHeldByOtherRun`, `RunNotActive`, `NotFound`, `ValidationFailed` with the failing schema
@@ -119,6 +126,7 @@ Claude Code prompt ("process my Victus captures, one chat per day, then send me 
 |---|---|
 | HTTP transport off by default | Nothing listens unless deliberately enabled |
 | Bearer tokens carry scopes and expire | A leaked read token cannot approve days |
+| `write` proposes, `approve` decides (R81) | A leaked write token can add drafts and proposals, never a fact: approved data, day status, `reliable` and the catalogue stay out of reach |
 | Source CIDR allow-list, enforced by the proxy and the application | Even with a token, only VPN clients reach `/mcp` |
 | Write tools need a lock | Two runners cannot draft the same day |
 | Tool errors are typed | `LockHeldByOtherRun`, `RunNotActive`, `ValidationFailed` map to MCP error results; never a stack trace |

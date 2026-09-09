@@ -352,7 +352,12 @@ export interface ReportSnapshot {
 /** A product change the agent read from a label photo or note; a person decides. */
 export interface ProductProposal {
   id: string;
-  product_id: number;
+  /** null while a `new` proposal is pending — the product does not exist yet. */
+  product_id?: number | null;
+  /** `update` corrects an existing product, `new` asks for one to be created. */
+  kind?: 'update' | 'new';
+  /** The one-off consumable a pending `new` proposal is logged against. */
+  consumable_id?: number | null;
   product_name?: string | null;
   capture_id?: string | null;
   run_id?: string | null;
@@ -704,7 +709,7 @@ export interface ThresholdMark {
   lower?: number | null;
   upper?: number | null;
   tone: 'ok' | 'watch' | 'warn' | 'bad' | string;
-  /** The same boundaries in kilograms, where the scale has a weight equivalent (R81). */
+  /** The same boundaries in kilograms, where the scale has a weight equivalent (R82). */
   lower_kg?: number | null;
   upper_kg?: number | null;
   /** Kilograms from the current weight to this class; null when already in it. */

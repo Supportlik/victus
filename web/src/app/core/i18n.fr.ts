@@ -281,6 +281,12 @@ export const FR: Record<string, string> = {
   'Nutrients per 100 g or 100 ml. A corrected label fixes every day that used it.':
     'Valeurs nutritionnelles pour 100 g ou 100 ml. Une étiquette corrigée rectifie chaque journée qui l’a utilisée.',
   'Review list': 'Liste de vérification',
+  'New products the agent met':
+    'Nouveaux produits rencontrés par l’agent',
+  'Already logged on the day it was eaten. Approve it to add it to your products; reject it and the meal keeps its values but nothing joins the catalogue.':
+    'Déjà enregistré le jour où il a été mangé. Approuvez-le pour l’ajouter à vos produits ; si vous le refusez, le repas garde ses valeurs mais le catalogue ne change pas.',
+  'per {amount}':
+    'par {amount}',
   'Waiting for your approval': 'En attente de ta validation',
   'product {id}': 'produit {id}',
   'All products (A–Z)': 'Tous les produits (A–Z)',

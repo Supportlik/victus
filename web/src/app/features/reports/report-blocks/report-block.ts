@@ -495,7 +495,10 @@ export class ReportBlockView {
     const line = (color: string, label: string, value: number | null | undefined, unit: string, digits = 0) =>
       value == null ? '' : `<div>${dot(color)}${label}: <b>${num(value, digits)}</b> ${unit}</div>`;
 
-    const weight = row.weight_ma ?? row.weight;
+    // The trend line answers "where am I heading", the reading on the scale "what did it
+    // say this morning" — a day that has both shows both, and never the same number twice.
+    const trend = row.weight_ma ?? row.weight;
+    const scale = row.weight != null && row.weight !== row.weight_ma ? row.weight : null;
     const grams = [
       ['Protein', row.protein],
       ['Carbs', row.carbs],
@@ -510,7 +513,8 @@ export class ReportBlockView {
 
     return [
       `<div style="margin-bottom:.25em"><b>${this.format.day(day ?? '')}</b>${flag}</div>`,
-      line(CHART_PALETTE[0], this.i18n.t('Weight'), weight, 'kg', 1),
+      line(CHART_PALETTE[0], this.i18n.t('Weight (7-day avg.)'), trend, 'kg', 1),
+      line(CHART_PALETTE[4], this.i18n.t('Weigh-in'), scale, 'kg', 1),
       line(CHART_PALETTE[1], this.i18n.t('Intake'), row.kcal, 'kcal'),
       line(CHART_PALETTE[2], this.tdeeSeries(this.timeline().tdee_window), row.tdee, 'kcal'),
       macros ? `<div style="margin-top:.25em;opacity:.8">${macros}</div>` : '',
