@@ -6,6 +6,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideEchartsCore } from 'ngx-echarts';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { FormatService } from '../../core/format.service';
+import { I18nService } from '../../core/i18n.service';
 import { WeightPage } from './weight-page';
 
 const WEIGHT = [
@@ -101,6 +102,23 @@ describe('WeightPage', () => {
       | { data: unknown[] }
       | undefined;
     expect(area?.data.length).toBe(6), 'one band per WHO class';
+    // T-WEB-047: the names are the domain's own (body.py::BMI_BANDS), so the dictionary
+    // has an entry for each. A second spelling, "obesity III", had none and stayed English.
+    const i18n = TestBed.inject(I18nService);
+    i18n.adopt('de');
+    withHeight.detectChanges();
+    const german = (withHeight.componentInstance.chart().series as { markArea?: unknown }[])[0]
+      .markArea as { data: unknown[] } | undefined;
+    const named = (german?.data ?? []).map((pair) => (pair as { name?: string }[])[0].name);
+    expect(named).toContain('Adipositas Grad III'), 'the German reader gets German';
+    expect(named).toEqual([
+      'underweight',
+      'normal weight',
+      'overweight',
+      'obesity class I',
+      'obesity class II',
+      'obesity class III',
+    ].map((key) => i18n.t(key)));
 
     // without a height there is nothing to draw, and the chart still renders
     TestBed.resetTestingModule();

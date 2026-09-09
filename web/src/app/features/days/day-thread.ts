@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, effect, inject, input, signal } from '@angular/core';
 import { ApiClient, Capture, DayMessage } from '../../api';
 import { BadgesService } from '../../core/badges.service';
+import { FormatService } from '../../core/format.service';
 import { I18nService } from '../../core/i18n.service';
 import { describeError } from '../../core/problem';
 import { CaptureCard } from '../../shared/capture-card';
@@ -27,13 +28,13 @@ import { MarkdownPipe } from '../../shared/markdown.pipe';
               <div class="meta">
                 <span class="who">{{ i18n.t(m.role === 'agent' ? 'Agent' : 'System') }}</span>
                 @if (m.kind !== 'text') { <span class="v-tag" [class]="'v-tag ' + kindClass(m.kind)">{{ i18n.t(m.kind) }}</span> }
-                <time [attr.datetime]="m.created_at">{{ m.created_at.slice(11, 16) }}</time>
+                <time [attr.datetime]="m.created_at">{{ format.clock(m.created_at) }}</time>
               </div>
               <div class="body v-md" [innerHTML]="m.content | markdown"></div>
             } @else if (m.capture_id) {
               <v-capture-card [capture]="asCapture(m)" [compact]="true" [showTarget]="false" (changed)="reload()" (deleted)="reload()" />
             } @else {
-              <div class="meta"><span class="who">{{ i18n.t('You') }}</span><time [attr.datetime]="m.created_at">{{ m.created_at.slice(11, 16) }}</time></div>
+              <div class="meta"><span class="who">{{ i18n.t('You') }}</span><time [attr.datetime]="m.created_at">{{ format.clock(m.created_at) }}</time></div>
               <div class="body">{{ m.content }}</div>
             }
           </li>
@@ -66,13 +67,17 @@ export class DayThread {
   private readonly api = inject(ApiClient);
   private readonly badges = inject(BadgesService);
   readonly i18n = inject(I18nService);
+  readonly format = inject(FormatService);
   readonly date = input.required<string>();
+  /** Bumped by the day when something outside the thread changed a capture. */
+  readonly revision = input(0);
   readonly messages = signal<DayMessage[]>([]);
   readonly error = signal<string | null>(null);
 
   constructor() {
     effect(() => {
       this.date();
+      this.revision();
       this.reload();
     });
   }

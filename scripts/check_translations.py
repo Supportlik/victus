@@ -40,11 +40,78 @@ DICTIONARIES = {
     "fr": WEB / "core" / "i18n.fr.ts",
 }
 
-#: i18n.t('...') or i18n.t("..."), the first argument only.
-CALL = re.compile(r"""i18n\.t\(\s*(['"])(?P<text>(?:\\.|(?!\1).)*)\1""")
+#: The start of a call; the first argument is then read as an expression.
+CALL = re.compile(r"i18n\.t\(")
+
+#: A single-quoted or double-quoted string literal.
+LITERAL = re.compile(r"""(['"])(?P<text>(?:\\.|(?!\1).)*)\1""")
 
 #: Keys in the dictionary: 'text': '...' or Bare: '...'
 ENTRY = re.compile(r"^\s*(?:(['\"])(?P<quoted>(?:\\.|(?!\1).)*)\1|(?P<bare>[A-Za-z_][\w]*))\s*:")
+
+
+def _skip_literal(text: str, i: int) -> int:
+    """The index just past the literal that starts at ``i``."""
+    quote = text[i]
+    i += 1
+    while i < len(text):
+        if text[i] == "\\":
+            i += 2
+            continue
+        if text[i] == quote:
+            return i + 1
+        i += 1
+    return i
+
+
+def _first_argument(text: str, start: int) -> str:
+    """The first argument of a call whose "(" has just been consumed.
+
+    Read to the comma that separates it from the parameters, or to the closing
+    parenthesis, ignoring anything nested — a key can be built by a ternary, and a
+    ternary contains both commas of its own and further calls. Strings are stepped over
+    whole: the comma in "Add to this day, or correct it" is part of the sentence.
+    """
+    depth = 0
+    i = start
+    while i < len(text):
+        ch = text[i]
+        if ch in "'\"`":
+            i = _skip_literal(text, i)
+            continue
+        if ch in "([{":
+            depth += 1
+        elif ch in ")]}":
+            if depth == 0:
+                return text[start:i]
+            depth -= 1
+        elif ch == "," and depth == 0:
+            return text[start:i]
+        i += 1
+    return text[start:]
+
+
+#: Where a value may begin: nothing before it, or a branch/fallback operator.
+VALUE_POSITION = ("?", ":", "??", "||", "=>")
+
+
+def _keys_in(text: str, start: int) -> list[str]:
+    """The string literals in the first argument that can become the key.
+
+    A literal after `===` is what the key is chosen *by*, and a literal inside brackets
+    belongs to a nested call (`kind.replace('_', ' ')`) — neither is a key.
+    """
+    argument = _first_argument(text, start)
+    keys: list[str] = []
+    for m in LITERAL.finditer(argument):
+        before = argument[: m.start()]
+        if before.count("(") > before.count(")") or before.count("[") > before.count("]"):
+            continue  # inside a nested call or index
+        head = before.rstrip()
+        if head and not head.endswith(VALUE_POSITION):
+            continue
+        keys.append(m.group("text").replace("\\'", "'").replace('\\"', '"'))
+    return keys
 
 
 def used_strings() -> dict[str, list[str]]:
@@ -55,8 +122,8 @@ def used_strings() -> dict[str, list[str]]:
             continue
         text = path.read_text(encoding="utf-8")
         for match in CALL.finditer(text):
-            key = match.group("text").replace("\\'", "'").replace('\\"', '"')
-            found.setdefault(key, []).append(str(path.relative_to(ROOT)))
+            for key in _keys_in(text, match.end()):
+                found.setdefault(key, []).append(str(path.relative_to(ROOT)))
     return found
 
 

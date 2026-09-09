@@ -906,4 +906,8 @@ export const FR: Record<string, string> = {
   'the resting rate has no equation for sex “{sex}”': 'aucune équation de dépense de repos pour le sexe « {sex} »',
   'expenditure is only {pal} times the resting rate, below bed rest: the intake is probably logged short, or too few days are countable': 'la dépense ne vaut que {pal} fois la dépense de repos, moins que l’alitement : l’apport est sans doute sous-enregistré, ou trop peu de jours comptent',
   'expenditure is {pal} times the resting rate, which is athlete territory: check the weigh-ins and the logged intake': 'la dépense vaut {pal} fois la dépense de repos, un niveau d’athlète : vérifie les pesées et l’apport enregistré',
+  'No model key is configured, so nothing would collect a run.': 'Aucune clé de modèle n’est configurée, donc personne ne prendrait une exécution.',
+  'The agent is switched off in the server configuration.': 'L’agent est désactivé dans la configuration du serveur.',
+  'Your own Claude already reaches Victus over MCP and can do the work instead.': 'Ton propre Claude atteint déjà Victus via MCP et peut faire le travail à sa place.',
+  '{from} to {to}, frozen {on}': '{from} au {to}, figé le {on}',
 };

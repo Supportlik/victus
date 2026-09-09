@@ -200,9 +200,11 @@ export class WeightPage {
       { name: 'underweight', from: null, to: 18.5, tone: 'warn' },
       { name: 'normal weight', from: 18.5, to: 25, tone: 'ok' },
       { name: 'overweight', from: 25, to: 30, tone: 'watch' },
-      { name: 'obesity I', from: 30, to: 35, tone: 'warn' },
-      { name: 'obesity II', from: 35, to: 40, tone: 'warn' },
-      { name: 'obesity III', from: 40, to: null, tone: 'bad' },
+      // the domain's own names (domain/services/body.py::BMI_BANDS), so the dictionary
+      // finds them; "obesity III" was a second spelling with no entry anywhere
+      { name: 'obesity class I', from: 30, to: 35, tone: 'warn' },
+      { name: 'obesity class II', from: 35, to: 40, tone: 'warn' },
+      { name: 'obesity class III', from: 40, to: null, tone: 'bad' },
     ];
     const colour: Record<string, string> = {
       ok: 'rgba(27, 175, 122, 0.10)',
@@ -218,7 +220,7 @@ export class WeightPage {
           [
             {
               ...(c.from == null ? {} : { yAxis: kg(c.from) }),
-              name: c.name,
+              name: this.i18n.t(c.name),
               itemStyle: { color: colour[c.tone] },
             },
             c.to == null ? {} : { yAxis: kg(c.to) },
@@ -292,8 +294,8 @@ export class WeightPage {
       xAxis: { type: 'time' },
       yAxis: { type: 'value', scale: true, axisLabel: { formatter: '{value} kg' } },
       series: [
-        { name: 'Weigh-in', type: 'scatter', symbolSize: 5, data: daily, itemStyle: { color: CHART_PALETTE[0], opacity: 0.6 }, markArea: this.bmiArea() },
-        { name: '7-day average', type: 'line', showSymbol: false, smooth: false, data: ma, lineStyle: { width: 2, color: CHART_PALETTE[1] }, itemStyle: { color: CHART_PALETTE[1] } },
+        { name: this.i18n.t('Weigh-in'), type: 'scatter', symbolSize: 5, data: daily, itemStyle: { color: CHART_PALETTE[0], opacity: 0.6 }, markArea: this.bmiArea() },
+        { name: this.i18n.t('7-day average'), type: 'line', showSymbol: false, smooth: false, data: ma, lineStyle: { width: 2, color: CHART_PALETTE[1] }, itemStyle: { color: CHART_PALETTE[1] } },
       ],
     };
   });

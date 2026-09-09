@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { AgentRun, AgentStatus, ApiClient, Capture, DraftListEntry, ReportSnapshot } from '../../api';
+import { FormatService } from '../../core/format.service';
 import { I18nService } from '../../core/i18n.service';
 import { BadgesService } from '../../core/badges.service';
 import { ClaudeHandoff } from '../../core/claude-handoff';
@@ -41,8 +42,8 @@ type Filter = 'open' | 'assigned' | 'processed' | 'discarded' | 'failed' | 'all'
       </header>
       @if (!runnerReady() && status()) {
         <p class="v-small v-muted">
-          {{ status()!.runner === 'no_key' ? 'No model key is configured, so nothing would collect a run.' : 'The agent is switched off in the server configuration.' }}
-          Your own Claude already reaches Victus over MCP and can do the work instead.
+          {{ i18n.t(status()!.runner === 'no_key' ? 'No model key is configured, so nothing would collect a run.' : 'The agent is switched off in the server configuration.') }}
+          {{ i18n.t('Your own Claude already reaches Victus over MCP and can do the work instead.') }}
         </p>
       }
       @if (error(); as e) { <div class="v-error">{{ e }}</div> }
@@ -76,7 +77,7 @@ type Filter = 'open' | 'assigned' | 'processed' | 'discarded' | 'failed' | 'all'
             <div class="snap">
               <div class="what">
                 <a routerLink="/reports">{{ snap.label || snap.title }}</a>
-                <span class="v-small v-muted">{{ snap.period_start }} to {{ snap.period_end }} · frozen {{ snap.created_at.slice(0, 10) }}</span>
+                <span class="v-small v-muted">{{ i18n.t('{from} to {to}, frozen {on}', { from: format.day(snap.period_start), to: format.day(snap.period_end), on: format.day(snap.created_at) }) }}</span>
               </div>
               <div class="v-actions">
                 @if (runnerReady()) {
@@ -144,6 +145,7 @@ type Filter = 'open' | 'assigned' | 'processed' | 'discarded' | 'failed' | 'all'
 export class InboxPage {
   readonly api = inject(ApiClient);
   readonly i18n = inject(I18nService);
+  readonly format = inject(FormatService);
   readonly handoff = inject(ClaudeHandoff);
   private readonly badges = inject(BadgesService);
   readonly captures = signal<Capture[]>([]);

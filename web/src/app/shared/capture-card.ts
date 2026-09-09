@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, input, output, si
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ApiClient, Capture } from '../api';
+import { FormatService } from '../core/format.service';
 import { I18nService } from '../core/i18n.service';
 import { describeError } from '../core/problem';
 
@@ -35,7 +36,7 @@ import { describeError } from '../core/problem';
       </div>
       <div class="body">
         <div class="meta">
-          <time [attr.datetime]="c().captured_at">{{ c().captured_at.replace('T', ' ').slice(0, 16) }}</time>
+          <time [attr.datetime]="c().captured_at">{{ format.moment(c().captured_at) }}</time>
           <span class="v-tag" [class]="'v-tag ' + tagClass()">{{ statusLabel() }}</span>
           @if (showTarget()) {
             @if (c().product_id) { <a class="target" [routerLink]="['/products', c().product_id]">{{ i18n.t('product') }}</a> }
@@ -107,6 +108,7 @@ import { describeError } from '../core/problem';
 export class CaptureCard {
   readonly api = inject(ApiClient);
   readonly i18n = inject(I18nService);
+  readonly format = inject(FormatService);
   readonly capture = input.required<Capture>();
   readonly compact = input(false);
   /** Show the day / product link in the header (off inside a day thread or product page). */

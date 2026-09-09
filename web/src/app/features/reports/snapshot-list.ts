@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, effect, inject, input, output, signal } from '@angular/core';
 import { ApiClient, ReportBlock, ReportSnapshot } from '../../api';
+import { FormatService } from '../../core/format.service';
 import { I18nService } from '../../core/i18n.service';
 import { describeError } from '../../core/problem';
 import { MarkdownPipe } from '../../shared/markdown.pipe';
@@ -33,7 +34,7 @@ import { ReportBlockView } from './report-blocks/report-block';
           <li [class.open]="open() === s.id" [attr.data-snapshot]="s.id">
             <button type="button" class="row" (click)="toggle(s)">
               <span class="when">{{ s.today }}</span>
-              <span class="what">{{ s.label || s.title }} <span class="v-small v-muted">{{ s.period_start }} → {{ s.period_end }}</span></span>
+              <span class="what">{{ s.label || s.title }} <span class="v-small v-muted">{{ format.day(s.period_start) }} → {{ format.day(s.period_end) }}</span></span>
               <span class="v-tag" [class]="'v-tag ' + (s.status === 'assessed' ? 'closed' : s.status === 'failed' ? 'bad' : 'warn')">{{ s.status === 'frozen' ? i18n.t('no assessment yet') : s.status }}</span>
               <span class="chev" aria-hidden="true">{{ open() === s.id ? '▾' : '▸' }}</span>
             </button>
@@ -103,6 +104,7 @@ import { ReportBlockView } from './report-blocks/report-block';
 export class SnapshotList {
   private readonly api = inject(ApiClient);
   readonly i18n = inject(I18nService);
+  readonly format = inject(FormatService);
   /** Which report the list belongs to, and which period a new snapshot freezes. */
   readonly report = input.required<string>();
   readonly from = input<string | null>(null);

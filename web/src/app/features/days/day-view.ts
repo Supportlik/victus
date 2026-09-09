@@ -153,7 +153,7 @@ import { DayThread } from './day-thread';
                             </optgroup>
                             @if (pending()!.portions?.length) {
                               <optgroup [attr.label]="i18n.t('Portions of this product')">
-                                @for (p of pending()!.portions ?? []; track p.id) { <option [value]="'portion:' + p.id">{{ p.label }} ({{ amountText(p.amount) }} {{ i18n.t(p.amount_unit) }})</option> }
+                                @for (p of pending()!.portions ?? []; track p.id) { <option [value]="'portion:' + p.id">{{ i18n.t(p.label) }} ({{ amountText(p.amount) }} {{ i18n.t(p.amount_unit) }})</option> }
                               </optgroup>
                             }
                             <optgroup [attr.label]="i18n.t('Needs a size once')">
@@ -229,7 +229,7 @@ import { DayThread } from './day-thread';
               <button type="submit" class="v-btn" [disabled]="!newMeal.trim()">{{ i18n.t('Add meal') }}</button>
             </form>
           </section>
-          <v-day-thread [date]="date()" />
+          <v-day-thread [date]="date()" [revision]="threadRevision()" />
         </div>
       } @else if (!error() && !missing()) {
         <p class="v-muted">{{ i18n.t('Loading…') }}</p>
@@ -328,6 +328,8 @@ export class DayView {
   /** True when GET /days/{date} answered 404: the day has not been created yet. */
   readonly missing = signal(false);
   readonly units = signal<Unit[]>([]);
+  /** Raised when an approval changed a capture, so the thread and the badges catch up. */
+  readonly threadRevision = signal(0);
   readonly adding = signal<number | null>(null);
   readonly pending = signal<Product | null>(null);
   readonly prev = computed(() => shiftDate(this.date(), -1));
@@ -465,16 +467,22 @@ export class DayView {
 
   acceptItem(it: LineItem): void {
     this.api.approveLineItem(it.id).subscribe({
-      next: () => this.reload(),
+      next: () => this.approved(),
       error: (e: unknown) => this.error.set(describeError(e)),
     });
   }
 
   acceptAll(): void {
     this.api.approveDraft(this.date(), { corrections: [], close: false }).subscribe({
-      next: () => this.reload(),
+      next: () => this.approved(),
       error: (e: unknown) => this.error.set(describeError(e)),
     });
+  }
+
+  /** An approval touches the day, the captures behind it and the inbox count. */
+  private approved(): void {
+    this.reload();
+    this.threadRevision.update((n) => n + 1);
   }
 
   addMeal(): void {
@@ -496,7 +504,9 @@ export class DayView {
     if (this.needsSize()) {
       if (!this.portionAmount) return;
       const code = this.unitCode();
-      const label = this.unitLabel();
+      // the unit's own word, not the translated one: a label is data and outlives the
+      // language it was typed in
+      const label = this.units().find((u) => u.code === code)?.singular ?? code;
       this.api
         .createPortion(p.id, {
           unit_code: code,

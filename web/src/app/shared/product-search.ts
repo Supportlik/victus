@@ -1,4 +1,13 @@
-import { ChangeDetectionStrategy, Component, inject, input, output } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  afterNextRender,
+  inject,
+  input,
+  output,
+  viewChild,
+} from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { catchError, debounceTime, distinctUntilChanged, filter, map, of, switchMap } from 'rxjs';
@@ -20,7 +29,7 @@ import { MacroLine } from './macro-line';
   template: `
     <label class="v-field">
       <span>{{ i18n.t('Search products') }}</span>
-      <input type="search" [formControl]="query" [placeholder]="i18n.t('Name or brand')" autocomplete="off" />
+      <input #field type="search" [formControl]="query" [placeholder]="i18n.t('Name or brand')" autocomplete="off" />
     </label>
     @if (results(); as answer) {
       @if (answer.list.length === 0 && term().length >= minLength) {
@@ -55,6 +64,14 @@ import { MacroLine } from './macro-line';
 export class ProductSearch {
   private readonly api = inject(ApiClient);
   readonly i18n = inject(I18nService);
+  private readonly field = viewChild<ElementRef<HTMLInputElement>>('field');
+
+  constructor() {
+    // The field exists only because someone chose to search, so it takes the caret. It is
+    // inserted after the click, which is too late for the `autofocus` attribute.
+    afterNextRender(() => this.field()?.nativeElement.focus());
+  }
+
   readonly minLength = 2;
   /** Day the food was eaten; decides which version of a product is offered. */
   readonly on = input<string | null>(null);

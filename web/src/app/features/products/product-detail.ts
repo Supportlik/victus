@@ -183,7 +183,7 @@ import { ProductForm } from './product-form';
               <tbody>
                 @for (po of p.portions ?? []; track po.id) {
                   <tr>
-                    <td>{{ po.label }}</td><td>{{ i18n.t(po.unit_code) }}</td><td class="num">{{ amountText(po.amount) }} {{ i18n.t(po.amount_unit) }}</td>
+                    <td>{{ i18n.t(po.label) }}</td><td>{{ i18n.t(po.unit_code) }}</td><td class="num">{{ amountText(po.amount) }} {{ i18n.t(po.amount_unit) }}</td>
                     <td>{{ po.is_default ? i18n.t('yes') : '' }}</td><td>{{ po.weight_source === 'weighed' ? i18n.t('yes') : po.weight_source === 'estimated' ? i18n.t('estimated') : '' }}</td>
                     <td class="num"><button type="button" class="v-btn quiet small danger" (click)="deletePortion(po)">{{ i18n.t('remove') }}</button></td>
                   </tr>
@@ -349,7 +349,9 @@ export class ProductDetail {
   /** The name follows the unit unless it was typed by hand. */
   onPortionUnit(code: string): void {
     const previous = this.units().find(
-      (u) => u.code !== code && this.i18n.t(u.singular) === this.np.label,
+      (u) =>
+        u.code !== code &&
+        (this.i18n.t(u.singular) === this.np.label || u.singular === this.np.label),
     );
     if (!this.np.label || previous) this.np.label = '';
     void code;

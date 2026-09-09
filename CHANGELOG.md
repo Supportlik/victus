@@ -192,6 +192,49 @@ All notable changes to Victus are documented here. The format follows
   the language beside the number format, which stays a separate choice.
 
 ### Fixed
+- A gap in a day means a macro nobody knows, not a macro nobody declared. The day check asked the
+  declared source macros and then the balance table — both of which only exist on a day imported from
+  the vault — and gave up, so every day logged in Victus itself reported "no value for kcal, protein,
+  carbs, fat, fiber, salt" while its line items added up perfectly. The items are what such a day
+  knows, and they are now the last source consulted before a gap is called.
+- The BMI class table in a Markdown report says which number is a BMI and which is a weight. It
+  printed `| normal weight | 18.5 kg | 25.0 kg |`: the class boundary carrying the kilogram suffix of
+  the weight it corresponds to, so neither number could be read as what it is. Both scales travel with
+  the mark (R82), so the table shows the BMI range, the kilogram range and the distance from here.
+- "You are here" marks the class the reader is actually in. The row was found by comparing the weight
+  against the *BMI* boundaries, and no weight is below 18.5 — so every class answered "not here"
+  except the open-ended top one, which then marked itself whatever the reader weighs. It was invisible
+  because the test fixture put kilograms in the BMI fields; the fixture now has the shape the server
+  sends.
+- Timestamps are shown on the clock the reader uses. The day thread and the capture card cut the hour
+  out of the stored ISO string, which is UTC: at ten past one in the morning in Berlin the thread said
+  23:12 and the card said the previous day. Both go through the tenant's zone now, like every other
+  time in the app.
+- A portion label no longer carries the language of whoever typed it. Declaring "1 Tüte = 500 g" in
+  the German app wrote the German word into the database, so the same portion read "Tüte (500 g)" in
+  the English app while one declared over MCP read "tub (150 g)" in the German one. The row keeps the
+  unit's own word — the key the table row already translates — and the list translates it on the way
+  out.
+- Four sentences reached a German reader in English: the two the inbox shows when the agent is off
+  were chosen by a ternary *inside* `i18n.t(...)`, and the frozen-report line joined two raw ISO dates
+  with a literal "to". The translation check now reads the whole first argument of a call, so a key a
+  ternary picks counts like any other — and it no longer mistakes the condition of that ternary, or a
+  nested call's arguments, for keys. It had also been cutting an argument at the first comma, sentence
+  or not, which hid 46 keys from the check.
+- The BMI bands in the weight chart are translated. The chart carried its own spelling of the scale
+  ("obesity III"), which is not the domain's name ("obesity class III") and so had no dictionary entry
+  to find; the shading, the weigh-in dots and the moving average now name themselves in the reader's
+  language.
+- Taking a draft over refreshes what it changed. Approving marks the capture processed and empties the
+  inbox, but only the meal tables were refetched, so the capture card kept its "in draft" badge and the
+  inbox its count until the page was reloaded by hand.
+- The product search takes the caret when it opens. It appears only because someone chose to search,
+  and it is inserted after the click — too late for the `autofocus` attribute to do anything.
+- Revision 0010 checks for its constraints the way it checks for its columns. Revision 0001 builds the
+  schema from the mapped models, so a fresh database arrives already carrying `kind`, `consumable_id`,
+  their CHECK and their foreign key; creating the two named constraints unconditionally failed every
+  PostgreSQL run with `constraint "ck_product_proposal_kind" ... already exists`, invisible on SQLite
+  because that dialect never reaches the branch.
 - A KPI note in a rendered Markdown report is a sentence again. Since the server started sending
   keys and parameters instead of prose (R78), the Markdown renderer printed the object itself —
   `Message(key='{n}-day moving average', params={'n': 7})` — in every report an agent or the CLI

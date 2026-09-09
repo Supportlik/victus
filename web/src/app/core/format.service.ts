@@ -100,6 +100,17 @@ export class FormatService {
     return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(this.locale(), { timeZone: 'UTC' });
   }
 
+  /** The time of day of a stored UTC timestamp, on the tenant's clock. */
+  clock(iso: string): string {
+    const at = new Date(iso);
+    if (Number.isNaN(at.getTime())) return iso;
+    return at.toLocaleTimeString(this.locale(), {
+      timeZone: this.timezone(),
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }
+
   /** A stored UTC timestamp, shown as the wall clock of the tenant's zone. */
   moment(iso: string): string {
     const at = new Date(iso);

@@ -4,6 +4,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
 import { DayLog } from '../../api';
+import { FormatService } from '../../core/format.service';
 import { DayView } from './day-view';
 
 const band = { min: 105, opt_min: 150, opt_max: 185, target: 165, max: 200, stretch: 185 };
@@ -129,6 +130,34 @@ describe('DayView', () => {
 
   // T-WEB-041: a count unit without a portion used to be offered and then rejected on save
   // with "no portion for unit". It now asks for the size once and keeps it (R73).
+  // T-WEB-046: a timestamp is stored in UTC and read on the tenant's clock. Cutting the
+  // hour out of the ISO string told a Berlin reader 23:12 at ten past one in the morning.
+  it('writes thread times on the clock of the tenant, not of the server', async () => {
+    TestBed.inject(FormatService).adopt('de-DE', 'Europe/Berlin');
+    const fixture = TestBed.createComponent(DayView);
+    fixture.componentRef.setInput('date', '2026-01-02');
+    await fixture.whenStable();
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/units').flush(UNITS);
+    http.expectOne('/api/v1/days/2026-01-02').flush(day);
+    await fixture.whenStable();
+    http.expectOne('/api/v1/days/2026-01-02/messages').flush([
+      {
+        id: 3,
+        role: 'agent',
+        kind: 'note',
+        content: 'Fibre is the weak one.',
+        created_at: '2026-01-02T22:12:00Z',
+      },
+    ]);
+    await fixture.whenStable();
+
+    const time = (fixture.nativeElement as HTMLElement).querySelector('.thread time');
+    expect(time?.textContent?.trim()).toBe('23:12'), 'CET is an hour ahead of UTC';
+    expect(time?.getAttribute('datetime')).toBe('2026-01-02T22:12:00Z'), 'the stored value is UTC';
+    http.match(() => true).forEach((r) => r.flush([]));
+  });
+
   it('asks what an undeclared unit holds and saves it with the product', async () => {
     const fixture = await render();
     const http = TestBed.inject(HttpTestingController);
@@ -161,6 +190,10 @@ describe('DayView', () => {
     // the portion is declared first...
     const portion = http.expectOne('/api/v1/products/42/portions');
     expect(portion.request.body).toMatchObject({ unit_code: 'bag', amount: 500, amount_unit: 'g', is_default: true });
+    // T-WEB-045: the label is the unit's own word, whatever language declared it. Storing
+    // the translated one wrote "Tüte" into the database, and the English app then showed
+    // "Tüte (500 g)" while one declared over MCP showed "tub" in the German app.
+    expect(portion.request.body).toMatchObject({ label: 'bag' });
     portion.flush({ id: 7, product_id: 42, unit_code: 'bag', label: 'bag', amount: 500, amount_unit: 'g', is_default: true });
 
     // ...then the item is added against it, so nothing is rejected
