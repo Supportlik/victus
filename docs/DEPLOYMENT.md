@@ -123,6 +123,9 @@ docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.override.ex
 ```
 
 Without Docker: `uv sync && uv run victus serve --reload` and `cd web && npm start`.
+The dev server proxies `/api` and `/mcp` to `127.0.0.1:8000`; when something else already holds
+that port, start the API elsewhere and point the proxy at it with
+`VICTUS_API_PORT=8010 npm start` (see `web/proxy.conf.js`).
 
 ## PostgreSQL profile
 
