@@ -289,6 +289,8 @@ export interface DayMessage {
   /** Every file of this capture, in order; the first one is `attachment_id`. */
   attachments?: AttachmentRef[];
   transcript?: string | null;
+  /** One entry per recording, so the thread can show a length without playing it. */
+  transcripts?: Transcript[];
 }
 
 /** One of your own instructions for the agent. */
@@ -364,7 +366,7 @@ export interface ProductProposal {
   /** null while a `new` proposal is pending — the product does not exist yet. */
   product_id?: number | null;
   /** `update` corrects an existing product, `new` asks for one to be created. */
-  kind?: 'update' | 'new';
+  kind?: 'update' | 'new' | 'version';
   /** The one-off consumable a pending `new` proposal is logged against. */
   consumable_id?: number | null;
   product_name?: string | null;

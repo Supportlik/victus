@@ -925,4 +925,6 @@ export const ES: Record<string, string> = {
   'The day in short': 'El día en breve',
   'Nutrition values estimated': 'Valores nutricionales estimados',
   'Amount estimated': 'Cantidad estimada',
+  'Opens a new version from {day}. Every day before it keeps what it counted.': 'Crea una versión nueva a partir del {day}. Cada día anterior conserva lo que contó.',
+  'Open the version': 'Crear la versión',
 };

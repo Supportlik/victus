@@ -931,4 +931,6 @@ export const FR: Record<string, string> = {
   'The day in short': 'La journée en bref',
   'Nutrition values estimated': 'Valeurs nutritionnelles estimées',
   'Amount estimated': 'Quantité estimée',
+  'Opens a new version from {day}. Every day before it keeps what it counted.': 'Ouvre une nouvelle version à partir du {day}. Chaque jour antérieur garde ce qu’il a compté.',
+  'Open the version': 'Ouvrir la version',
 };

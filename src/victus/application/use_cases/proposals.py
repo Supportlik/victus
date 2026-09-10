@@ -15,10 +15,16 @@ each naming what it does: ``add``, ``update`` or ``delete``. Anything a person m
 decide about a portion is therefore something an actor can draft, which is what ADR
 0013 asks for — before, only adding could be proposed, so correcting a wrong unit or
 removing a duplicate needed the ``approve`` scope the review gate exists to withhold.
+
+A recipe that changed takes the third road (``kind='version'``): ``changes`` carries a
+``valid_from`` and the new values, and approving opens a version from that day, leaving
+the days before it counted as they were eaten. Proposing a plain correction instead
+would rewrite them (R70).
 """
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 
 from victus.application import dto
@@ -37,12 +43,14 @@ from victus.application.use_cases.products import (
     AddPortion,
     CreateProduct,
     DeletePortion,
+    NewProductVersion,
     PortionInput,
     ProductInput,
     UpdatePortion,
     UpdateProduct,
     _resolve_category,
     _validate_product,
+    check_new_version,
 )
 from victus.domain.values import CaptureStatus
 from victus.infrastructure.db import orm
@@ -53,7 +61,15 @@ PROPOSABLE_FIELDS: frozenset[str] = frozenset(
     {*PRODUCT_FIELDS, "name", "brand", "ean", "note", "verified", "portions"}
 ) - {"category_id", "checked_at"}
 PENDING, APPROVED, REJECTED = "pending", "approved", "rejected"
-UPDATE, NEW = "update", "new"
+UPDATE, NEW, VERSION = "update", "new", "version"
+
+#: What a ``version`` proposal may carry. ``valid_from`` is the day the new values start
+#: on, so a person can move the date while approving. ``portions`` cannot travel with one:
+#: the rows it could name belong to the version being replaced, and approving copies them
+#: onto a version whose portions do not exist while the proposal is pending.
+VERSION_FIELDS: frozenset[str] = frozenset({*PROPOSABLE_FIELDS, "category", "valid_from"}) - {
+    "portions"
+}
 
 #: What one entry of ``changes['portions']`` does. An entry **without** ``op`` adds:
 #: proposals filed before the other two operations existed are stored that way and
@@ -91,6 +107,27 @@ def _product_of(uow: UnitOfWork, pr: orm.ProductProposal) -> orm.Product | None:
 
 def _op_of(entry: dict[str, Any]) -> str:
     return str(entry.get("op") or PORTION_ADD)
+
+
+def _version_day(value: Any) -> date:
+    """``valid_from`` travels as an ISO day, because ``changes`` is stored as JSON."""
+    if isinstance(value, date):
+        return value
+    try:
+        return date.fromisoformat(str(value))
+    except (TypeError, ValueError):
+        raise ValidationFailed("valid_from must be a day, as YYYY-MM-DD") from None
+
+
+def _assign_capture(cap: orm.Capture | None, run_id: str | None) -> None:
+    """A capture a proposal was read from is no longer waiting for an actor to pick up."""
+    if cap is None or cap.status not in (
+        CaptureStatus.NEW.value,
+        CaptureStatus.IN_PROGRESS.value,
+    ):
+        return
+    cap.status = CaptureStatus.ASSIGNED.value
+    cap.agent_run_id = run_id or cap.agent_run_id
 
 
 def _validated_portions(entries: Any, *, adds_only: bool = False) -> list[dict[str, Any]]:
@@ -281,12 +318,7 @@ class ProposeProductChange(UseCase):
                     status=PENDING,
                 )
             )
-            if cap is not None and cap.status in (
-                CaptureStatus.NEW.value,
-                CaptureStatus.IN_PROGRESS.value,
-            ):
-                cap.status = CaptureStatus.ASSIGNED.value
-                cap.agent_run_id = run_id or cap.agent_run_id
+            _assign_capture(cap, run_id)
             uow.audit.record(
                 "product.propose", "product", str(p.id), {"proposal": pr.id, "changes": clean}
             )
@@ -381,12 +413,7 @@ class ProposeNewProduct(UseCase):
                     status=PENDING,
                 )
             )
-            if cap is not None and cap.status in (
-                CaptureStatus.NEW.value,
-                CaptureStatus.IN_PROGRESS.value,
-            ):
-                cap.status = CaptureStatus.ASSIGNED.value
-                cap.agent_run_id = run_id or cap.agent_run_id
+            _assign_capture(cap, run_id)
             uow.audit.record(
                 "product.propose_new",
                 "consumable",
@@ -395,6 +422,70 @@ class ProposeNewProduct(UseCase):
             )
             uow.flush()
             view = proposal_view(pr, None, _plan_of(uow, pr))
+            uow.commit()
+            return view
+
+
+class ProposeProductVersion(UseCase):
+    """Draft "the values changed from this day on"; requires ``agent:write`` (or ``write``).
+
+    An actor that reads a new label can only correct the current version, and that
+    rewrites what the days before the change already counted. Approving this instead runs
+    ``NewProductVersion``: the version it was drafted against keeps its numbers and its
+    days, and the new one starts on ``valid_from`` (R70, R81).
+    """
+
+    def execute(
+        self,
+        product_id: int,
+        valid_from: date,
+        changes: dict[str, Any],
+        *,
+        rationale: str | None = None,
+        source: str | None = None,
+        capture_id: str | None = None,
+        run_id: str | None = None,
+    ) -> dto.ProductProposalView:
+        if not (self.ctx.has_scope(SCOPE_AGENT_WRITE) or self.ctx.has_scope(SCOPE_WRITE)):
+            self.ctx.require(SCOPE_AGENT_WRITE)
+        # the day is the argument, so it is not one of the fields that changed
+        clean = {k: v for k, v in changes.items() if v is not None and k != "valid_from"}
+        unknown = sorted(set(clean) - VERSION_FIELDS)
+        if unknown:
+            raise ValidationFailed(f"fields cannot be proposed: {', '.join(unknown)}")
+        if not clean:
+            raise ValidationFailed("a new version needs at least one changed field")
+        day = _version_day(valid_from)
+        with self._uow() as uow:
+            previous = uow.products.get(product_id)
+            if previous is None:
+                raise NotFound(f"product {product_id} not found")
+            check_new_version(uow, previous, day)
+            cap = uow.captures.get(capture_id) if capture_id else None
+            if capture_id and cap is None:
+                raise NotFound(f"capture {capture_id} not found")
+            pr = uow.proposals.add(
+                orm.ProductProposal(
+                    tenant_id=self.ctx.tenant_id,
+                    product_id=previous.id,
+                    kind=VERSION,
+                    capture_id=cap.id if cap else None,
+                    run_id=run_id,
+                    changes={**clean, "valid_from": day.isoformat()},
+                    rationale=rationale,
+                    source=source,
+                    status=PENDING,
+                )
+            )
+            _assign_capture(cap, run_id)
+            uow.audit.record(
+                "product.propose_version",
+                "product",
+                str(previous.id),
+                {"proposal": pr.id, "valid_from": day.isoformat(), "changes": clean},
+            )
+            uow.flush()
+            view = proposal_view(pr, previous, _plan_of(uow, pr))
             uow.commit()
             return view
 
@@ -449,8 +540,15 @@ class DecideProposal(UseCase):
                     raise ValidationFailed(f"not part of this proposal: {', '.join(unknown)}")
                 if not fields:
                     raise ValidationFailed("select at least one field, or reject the proposal")
-                applied = {k: v for k, v in applied.items() if k in fields}
-            allowed = NEW_PRODUCT_FIELDS if pr.kind == NEW else PROPOSABLE_FIELDS
+                keep = set(fields)
+                if pr.kind == VERSION:
+                    # ``valid_from`` is the day the version starts, not one of the values
+                    # under review, so a reviewer picking values does not have to name it.
+                    keep.add("valid_from")
+                applied = {k: v for k, v in applied.items() if k in keep}
+            allowed = {NEW: NEW_PRODUCT_FIELDS, VERSION: VERSION_FIELDS}.get(
+                pr.kind, PROPOSABLE_FIELDS
+            )
             if changes:
                 unknown = sorted(set(changes) - allowed)
                 if unknown:
@@ -468,6 +566,12 @@ class DecideProposal(UseCase):
                 if refused:
                     # Nothing is applied yet, so the proposal stays pending and decidable.
                     raise Conflict("; ".join(refused))
+            if approve and pr.kind == VERSION:
+                previous = _product_of(uow, pr)
+                if previous is None:
+                    raise NotFound(f"product {pr.product_id} not found")
+                # Read while drafting too; the catalogue may have moved on since then.
+                check_new_version(uow, previous, _version_day(applied.get("valid_from")))
             pr.status = APPROVED if approve else REJECTED
             pr.decided_at = now()
             pr.decided_by = self.ctx.actor_id
@@ -481,8 +585,8 @@ class DecideProposal(UseCase):
                 cap.processed_at = pr.decided_at
             uow.audit.record(
                 "product.proposal.decide",
-                "product" if pr.kind == UPDATE else "consumable",
-                str(pr.product_id if pr.kind == UPDATE else pr.consumable_id),
+                "consumable" if pr.kind == NEW else "product",
+                str(pr.consumable_id if pr.kind == NEW else pr.product_id),
                 {
                     "proposal": pr.id,
                     "kind": pr.kind,
@@ -494,6 +598,7 @@ class DecideProposal(UseCase):
             kind, product_id, consumable_id = pr.kind, pr.product_id, pr.consumable_id
             source = pr.source
             uow.commit()
+        opened: int | None = None  # the version an approved ``version`` proposal created
         if approve:
             apply = dict(applied)
             if source and "source" not in apply:
@@ -502,6 +607,13 @@ class DecideProposal(UseCase):
             if kind == NEW:
                 assert consumable_id is not None
                 product_id = self._promote(consumable_id, apply)
+            elif kind == VERSION:
+                assert product_id is not None
+                day = _version_day(apply.pop("valid_from", None))
+                fresh_version = NewProductVersion(self.uow_factory, self.ctx).execute(
+                    product_id, day, apply
+                )
+                opened = fresh_version.id
             else:
                 assert product_id is not None
                 portions = apply.pop("portions", None) or []
@@ -512,6 +624,18 @@ class DecideProposal(UseCase):
             assert fresh is not None
             if approve and kind == NEW and fresh.product_id is None:
                 fresh.product_id = product_id  # the entry it created, for the review history
+                uow.flush()
+                uow.commit()
+            elif opened is not None:
+                # ``product.new_version`` names the row it supersedes, not the proposal that
+                # asked for it, so without this the decision and the version it opened are
+                # two audit entries with nothing in common.
+                uow.audit.record(
+                    "product.proposal.version",
+                    "product",
+                    str(opened),
+                    {"proposal": proposal_id, "supersedes": product_id},
+                )
                 uow.flush()
                 uow.commit()
             return proposal_view(fresh, _product_of(uow, fresh), _plan_of(uow, fresh))
@@ -665,6 +789,36 @@ def add_or_propose_portion(
         product_id,
         {"portions": [{**portion, "op": PORTION_ADD}]},
         rationale=rationale,
+        capture_id=capture_id,
+        run_id=run_id,
+    )
+
+
+def version_or_propose_product_version(
+    uow_factory: Any,
+    ctx: Any,
+    product_id: int,
+    valid_from: date,
+    changes: dict[str, Any],
+    *,
+    rationale: str | None = None,
+    capture_id: str | None = None,
+    run_id: str | None = None,
+) -> dto.ProductView | dto.ProductProposalView:
+    """Open a new version, or propose one — "the recipe changed on this date".
+
+    Correcting the current version instead is not the same thing: it rewrites what every
+    day before the change already counted. That the drafting had no road here while the
+    deciding did is exactly what ADR 0013 warns about.
+    """
+    if ctx.has_scope(SCOPE_APPROVE):
+        return NewProductVersion(uow_factory, ctx).execute(product_id, valid_from, changes)
+    return ProposeProductVersion(uow_factory, ctx).execute(
+        product_id,
+        valid_from,
+        changes,
+        rationale=rationale,
+        source=changes.get("source"),
         capture_id=capture_id,
         run_id=run_id,
     )

@@ -863,6 +863,8 @@ class ProductProposal(Base):
     ``kind='new'`` proposes a product that does not exist yet: the values live on the
     one-off consumable in ``consumable_id``, so a day can already log the food while
     the catalogue entry waits for a person (R54, R81).
+    ``kind='version'`` carries a ``valid_from`` in ``changes`` and says the values of
+    ``product_id`` changed from that day on, leaving the days before it as they were.
     """
 
     __tablename__ = "product_proposal"
@@ -870,7 +872,7 @@ class ProductProposal(Base):
         CheckConstraint(
             "status IN ('pending','approved','rejected')", name="ck_product_proposal_status"
         ),
-        CheckConstraint("kind IN ('update','new')", name="ck_product_proposal_kind"),
+        CheckConstraint("kind IN ('update','new','version')", name="ck_product_proposal_kind"),
         Index("ix_product_proposal_tenant_status", "tenant_id", "status"),
         Index("ix_product_proposal_product", "product_id"),
     )

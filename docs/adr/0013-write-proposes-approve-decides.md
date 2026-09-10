@@ -65,6 +65,9 @@ person dictated, not an inference about it, and there is no draft state for a me
 - The drafting surface has to be as wide as the deciding one, or the difference gets filled by handing out
   `approve`. Portions showed that: only *adding* one could be proposed, so a wrong unit or a duplicate row
   was cleaned up with a short-lived `approve` token instead. A proposal's `portions` list now carries one
-  operation per entry (`add`, `update`, `delete`) and says what each would do to the catalogue.
+  operation per entry (`add`, `update`, `delete`) and says what each would do to the catalogue. A new product
+  version is the same story: proposing a correction to the current version was the only road, and it rewrites
+  what the days before the change already counted, so `kind='version'` carries `valid_from` and the decision
+  stays a person's.
 - A promoted consumable changes `consumable.kind`, so the subtype row is deleted before the supertype is updated —
   the composite foreign key `(id, kind)` would otherwise refuse.

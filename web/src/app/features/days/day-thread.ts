@@ -112,6 +112,7 @@ export class DayThread {
       attachment_id: m.attachment_id ?? null,
       attachment_mime: m.attachment_mime ?? null,
       attachments: m.attachments ?? [],
+      transcripts: m.transcripts ?? [],
     };
   }
 

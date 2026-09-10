@@ -259,6 +259,8 @@ class DayMessageOut(Out):
     #: Every file of the capture; `attachment_id` is only the first one (R65).
     attachments: list[AttachmentRefOut] = Field(default_factory=list)
     transcript: str | None = None
+    #: One entry per recording, so a length can be shown without playing the audio.
+    transcripts: list[TranscriptOut] = Field(default_factory=list)
 
 
 class WeightEntryOut(Out):

@@ -65,6 +65,9 @@ function unitOf(field: string, referenceUnit: string): string {
                 @if (pr.source) { <span class="v-muted v-small">{{ pr.source }}</span> }
                 <time class="v-muted v-small" [attr.datetime]="pr.created_at">{{ format.moment(pr.created_at) }}</time>
               </div>
+              @if (pr.kind === 'version') {
+                <p class="from v-small">{{ i18n.t('Opens a new version from {day}. Every day before it keeps what it counted.', { day: format.day(versionDay(pr)) }) }}</p>
+              }
               <ul class="changes">
                 @for (c of changes(pr); track c.field) {
                   <li><span class="v-muted">{{ c.label }}</span> <span class="before">{{ c.before }}</span> → <strong>{{ c.after }}</strong>@if (c.unit) { <span class="v-muted"> {{ c.unit }}</span> }</li>
@@ -74,9 +77,11 @@ function unitOf(field: string, referenceUnit: string): string {
               <p class="v-small v-muted">{{ countText(pr) }}</p>
               @if (pr.rationale) { <p class="v-small">{{ pr.rationale }}</p> }
               <div class="v-actions">
-                <button type="button" class="v-btn primary" (click)="decide(pr, true)" [disabled]="deciding()">{{ i18n.t('Approve all') }}</button>
+                <button type="button" class="v-btn primary" (click)="decide(pr, true)" [disabled]="deciding()">{{ i18n.t(pr.kind === 'version' ? 'Open the version' : 'Approve all') }}</button>
                 <button type="button" class="v-btn" (click)="decide(pr, false)" [disabled]="deciding()">{{ i18n.t('Reject') }}</button>
-                <a class="v-btn quiet" [routerLink]="['/products', pr.product_id]" [fragment]="'proposal-' + pr.id">{{ i18n.t('Decide field by field…') }}</a>
+                @if (pr.kind !== 'version') {
+                  <a class="v-btn quiet" [routerLink]="['/products', pr.product_id]" [fragment]="'proposal-' + pr.id">{{ i18n.t('Decide field by field…') }}</a>
+                }
               </div>
             </div>
           }
@@ -224,6 +229,11 @@ export class ProductsPage {
   loadMore(): void {
     this.load(this.recent().length);
   }
+  /** The day a version proposal would start on. */
+  versionDay(pr: ProductProposal): string {
+    return String(pr.changes?.['valid_from'] ?? '');
+  }
+
   /** Proposals that change a product that already exists. */
   corrections(): ProductProposal[] {
     return this.proposals().filter((pr) => pr.kind !== 'new');
@@ -293,13 +303,17 @@ export class ProductsPage {
   /** The fields a correction changes, each with the value it replaces. */
   changes(pr: ProductProposal): Change[] {
     const unit = String(this.valuesOf(pr)['reference_unit'] ?? 'g');
-    return Object.keys(pr.changes).map((field) => ({
-      field,
-      label: this.i18n.t(field),
-      before: this.text(pr.current[field]),
-      after: this.text(pr.changes[field]),
-      unit: unitOf(field, unit),
-    }));
+    // `valid_from` is when a version starts, not a value under review; it is stated above
+    // the list, so listing it again as a changed field would read as one
+    return Object.keys(pr.changes)
+      .filter((field) => field !== 'valid_from')
+      .map((field) => ({
+        field,
+        label: this.i18n.t(field),
+        before: this.text(pr.current[field]),
+        after: this.text(pr.changes[field]),
+        unit: unitOf(field, unit),
+      }));
   }
   usageOf(pr: ProductProposal): ProductUsage | null {
     return this.usage().get(pr.id) ?? null;

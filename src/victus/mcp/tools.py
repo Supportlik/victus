@@ -202,6 +202,13 @@ class ProductVersionCreateIn(_In):
             "else is copied from the version being replaced, portions included."
         )
     )
+    rationale: str | None = Field(
+        default=None,
+        description=(
+            "Where the new values come from — the new label, a note from the maker. "
+            "Without the approve scope this is what the person deciding reads."
+        ),
+    )
 
 
 class RecipeGetIn(_In):
@@ -667,10 +674,19 @@ def _product_versions(tc: ToolContext, inp: ProductVersionsIn) -> ToolResult:
 
 
 def _product_version_create(tc: ToolContext, inp: ProductVersionCreateIn) -> ToolResult:
-    fresh = product_uc.NewProductVersion(tc.uow_factory, tc.ctx).execute(
-        inp.id, inp.valid_from, inp.changes
+    view = proposal_uc.version_or_propose_product_version(
+        tc.uow_factory,
+        tc.ctx,
+        inp.id,
+        inp.valid_from,
+        inp.changes,
+        rationale=inp.rationale,
+        run_id=tc.run_id,
     )
-    return cast(ToolResult, jsonable(fresh))
+    out = cast(dict[str, Any], jsonable(view))
+    if isinstance(view, dto.ProductProposalView):
+        out["pending_review"] = True
+    return out
 
 
 def _product_get(tc: ToolContext, inp: ProductGetIn) -> ToolResult:
@@ -1136,7 +1152,9 @@ TOOLS: tuple[ToolSpec, ...] = (
         "Record that a product's values changed from a day on. The previous version keeps its "
         "numbers and is closed the day before, so days already logged are untouched; the new "
         "one starts open ended. Use this instead of product_update when the food itself "
-        "changed, for example a reformulated recipe or a different supplier.",
+        "changed, for example a reformulated recipe or a different supplier — correcting the "
+        "current version would rewrite what those earlier days counted. Without the approve "
+        "scope it becomes a proposal a person decides.",
         SCOPE_WRITE,
         ProductVersionCreateIn,
         _product_version_create,

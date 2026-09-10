@@ -61,7 +61,7 @@ HTTP responses: missing or invalid token → `401`; token lacks the tool's scope
 | `meal_update(meal_id, name?, time?)`, `meal_delete(meal_id)` | `write` | `UpdateMeal` / `DeleteMeal` | meal; delete fails while items remain |
 | `product_propose(product_id, changes, capture_id?, source?, rationale?)` | `agent:write` | `ProposeProductChange` | proposal awaiting a person's approval; the way to act on a product capture. `changes.portions` is a list of operations — `{op: 'add'|'update'|'delete', …}`, an entry without `op` adds — and the proposal comes back with a `portion_plan` saying what each line would do to the catalogue and what would refuse it |
 | `product_update(product_id, …, source)` | `write` (+ `approve` to apply) | `update_or_propose_product` | with `approve` the values are written; without it the same call becomes a proposal (R81) |
-| `product_version_create(id, valid_from, changes)` | `approve` | `NewProductVersion` | changed values from a day on; days already logged keep their numbers (R70) |
+| `product_version_create(id, valid_from, changes, rationale?)` | `write` (+ `approve` to apply) | `version_or_propose_product_version` | changed values from a day on; days already logged keep their numbers (R70). Without `approve` the same call becomes a pending `kind='version'` proposal carrying `valid_from` — the honest form of “the recipe changed on this date”, which a correction to the current version is not |
 | `line_item_create` | `write` | `AddLineItem` | the item; **without `approve` it is added as a draft** (R81) |
 | `line_item_update` | `write` (+ `approve` for approved items) | `UpdateLineItem` | changed item |
 | `line_item_delete` | `agent:write` for your own draft, `approve` for a fact | `DeleteLineItem` | `{deleted: id}` |

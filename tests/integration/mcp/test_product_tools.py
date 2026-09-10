@@ -1,4 +1,4 @@
-"""T-MCP-008/009/013: captures_open scope, product_update and portion tools via the registry."""
+"""T-MCP-008/009/013/014: captures_open scope, product_update, portion and version tools."""
 
 from __future__ import annotations
 
@@ -98,3 +98,50 @@ def test_t_mcp_013_portion_update_and_delete_propose_without_approve(
     assert dispatch(tool_ctx, "portion_delete", {"portion_id": piece["id"], "reason": "twin"}) == {
         "deleted": piece["id"]
     }
+
+
+def test_t_mcp_014_product_version_create_proposes_without_approve(
+    tool_ctx: ToolContext, skyr: int
+) -> None:
+    """T-MCP-014: reading a changed label is drafting, so the tool degrades like the rest.
+
+    Correcting the current version instead would rewrite what the days before the change
+    already counted, which is why this had no honest form without `approve` at all.
+    """
+    writer = dataclasses.replace(
+        tool_ctx,
+        ctx=dataclasses.replace(
+            tool_ctx.ctx, token_id="tok_write", scopes=frozenset({SCOPE_READ, SCOPE_WRITE})
+        ),
+    )
+    proposed = cast(
+        dict[str, Any],
+        dispatch(
+            writer,
+            "product_version_create",
+            {
+                "id": skyr,
+                "valid_from": "2026-06-01",
+                "changes": {"kcal": 66},
+                "rationale": "the new label says 66",
+            },
+        ),
+    )
+    assert proposed["pending_review"] is True and proposed["status"] == "pending"
+    assert proposed["kind"] == "version" and proposed["product_id"] == skyr
+    assert proposed["changes"] == {"kcal": 66, "valid_from": "2026-06-01"}
+    assert proposed["rationale"] == "the new label says 66"
+    assert cast(dict[str, Any], dispatch(tool_ctx, "product_get", {"id": skyr}))["kcal"] == 63
+
+    # The same call with `approve` opens the version, as a person's own edit does.
+    opened = cast(
+        dict[str, Any],
+        dispatch(
+            tool_ctx,
+            "product_version_create",
+            {"id": skyr, "valid_from": "2026-06-01", "changes": {"kcal": 66}},
+        ),
+    )
+    assert "pending_review" not in opened and opened["valid_from"] == "2026-06-01"
+    versions = cast(dict[str, Any], dispatch(tool_ctx, "product_versions", {"id": skyr}))
+    assert [v["kcal"] for v in versions["versions"]] == [63, 66]

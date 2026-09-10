@@ -50,6 +50,20 @@ const NEW_PRODUCT = {
   created_at: '2026-09-09T20:00:00Z',
 } as unknown as ProductProposal;
 
+/** "The recipe changed on this date": approving opens a version, it does not rewrite one. */
+const VERSION = {
+  id: 'pr-3',
+  product_id: 7,
+  kind: 'version',
+  product_name: 'Chia seeds',
+  changes: { valid_from: '2026-09-01', kcal: 470 },
+  current: { kcal: 486 },
+  rationale: 'the new packaging declares 470 kcal',
+  source: 'label photo',
+  status: 'pending',
+  created_at: '2026-09-09T19:00:00Z',
+} as unknown as ProductProposal;
+
 const CHIA = {
   id: 7,
   name: 'Chia seeds',
@@ -209,6 +223,36 @@ describe('ProductsPage', () => {
     expect(proposal.querySelectorAll('button')).toHaveLength(2);
     const deeper = Array.from(proposal.querySelectorAll('a')).map((a) => a.getAttribute('href'));
     expect(deeper).toContain('/products/7#proposal-pr-1');
+    http.verify();
+  });
+
+  // T-WEB-063: approving a version keeps every earlier day as it was; approving a
+  // correction rewrites them. Both used to render as a list of changed fields, with the
+  // date sitting among the values as though the day were one of them.
+  it('says a version proposal opens a version, and does not list the date as a value', async () => {
+    const f = TestBed.createComponent(ProductsPage);
+    f.detectChanges();
+    http.expectOne((r) => r.url === '/api/v1/products').flush([CHIA]);
+    http.expectOne((r) => r.url === '/api/v1/proposals').flush([VERSION]);
+    http.expectOne((r) => r.url === '/api/v1/products/7').flush(CHIA);
+    http.expectOne((r) => r.url === '/api/v1/products/7/usage').flush(usage(7, [], 12));
+    f.detectChanges();
+    await f.whenStable();
+
+    const proposal = (f.nativeElement as HTMLElement).querySelector('.proposal')!;
+    expect(flat(proposal.querySelector('.from'))).toContain('Opens a new version from');
+    expect(flat(proposal.querySelector('.from'))).toContain('keeps what it counted');
+
+    // the values still read as values; the day is not one of them
+    const changes = Array.from(proposal.querySelectorAll('.changes li')).map(flat);
+    expect(changes.some((c) => /486\s*→\s*470/.test(c))).toBe(true);
+    expect(changes.some((c) => c.includes('valid_from') || c.includes('2026-09-01'))).toBe(false);
+
+    // and the button says what it will do, with no field-by-field link: a version is one act
+    const labels = Array.from(proposal.querySelectorAll('button')).map((b) => flat(b));
+    expect(labels).toContain('Open the version');
+    expect(labels).not.toContain('Approve all');
+    expect(proposal.querySelectorAll('a.v-btn')).toHaveLength(0);
     http.verify();
   });
 

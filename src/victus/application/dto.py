@@ -230,6 +230,9 @@ class DayMessageView:
     #: and `attachment_id` names only whichever arrived first.
     attachments: list[AttachmentRef] = field(default_factory=list)
     transcript: str | None = None
+    #: One entry per recording, so the thread can say how long each is and which text came
+    #: from which. `transcript` is all of them joined and stays the field to read for text.
+    transcripts: list[TranscriptRef] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)

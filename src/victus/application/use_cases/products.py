@@ -200,6 +200,28 @@ class ProductVersions(UseCase):
             return [_view(uow, p, names) for p in uow.products.versions_of(product_id)]
 
 
+def check_new_version(uow: Any, previous: orm.Product, valid_from: date) -> None:
+    """Refuse a version that would start too early or fork the history (R70).
+
+    A proposed version is checked twice against this: once as it is drafted, and again
+    before the approval marks it decided. The catalogue can gain a version in between,
+    and a decision that fails afterwards leaves a proposal nobody can decide again.
+    """
+    if previous.valid_from is not None and valid_from <= previous.valid_from:
+        raise ValidationFailed(
+            f"the new version must start after {previous.valid_from.isoformat()}, "
+            "when the one it replaces began"
+        )
+    chain = list(uow.products.versions_of(previous.id))
+    successor = next((p for p in chain if p.supersedes_id == previous.id), None)
+    if successor is not None:
+        # the history stays a line, not a tree: continue from the newest version
+        raise Conflict(
+            f"product {previous.id} was already replaced by {successor.id}; "
+            "create the new version from that one"
+        )
+
+
 class NewProductVersion(UseCase):
     """Record that a product's values changed from a given day.
 
@@ -216,19 +238,7 @@ class NewProductVersion(UseCase):
             previous = uow.products.get(product_id)
             if previous is None:
                 raise NotFound(f"product {product_id} not found")
-            if previous.valid_from is not None and valid_from <= previous.valid_from:
-                raise ValidationFailed(
-                    f"the new version must start after {previous.valid_from.isoformat()}, "
-                    "when the one it replaces began"
-                )
-            chain = list(uow.products.versions_of(product_id))
-            successor = next((p for p in chain if p.supersedes_id == previous.id), None)
-            if successor is not None:
-                # the history stays a line, not a tree: continue from the newest version
-                raise Conflict(
-                    f"product {previous.id} was already replaced by {successor.id}; "
-                    "create the new version from that one"
-                )
+            check_new_version(uow, previous, valid_from)
 
             fields = {k: getattr(previous, k) for k in PRODUCT_FIELDS if k != "name"}
             fields["category_id"] = previous.category_id

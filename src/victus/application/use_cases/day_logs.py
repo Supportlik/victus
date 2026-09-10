@@ -552,6 +552,15 @@ def _attachment_refs(uow: UnitOfWork, capture: orm.Capture | None) -> list[dto.A
     ]
 
 
+def _recordings(uow: UnitOfWork, capture: orm.Capture | None) -> list[dto.TranscriptRef]:
+    """What each recording of a capture says, and how long it is."""
+    if capture is None:
+        return []
+    return transcript_refs(
+        uow.captures.transcripts_for(capture.id), uow.captures.attachments_of(capture.id)
+    )
+
+
 def _spoken(uow: UnitOfWork, capture: orm.Capture | None) -> str | None:
     """Everything said in a capture, joined in the order it was recorded.
 
@@ -572,6 +581,7 @@ def _message_view(
     capture: orm.Capture | None,
     transcript: str | None = None,
     attachments: list[dto.AttachmentRef] | None = None,
+    recordings: list[dto.TranscriptRef] | None = None,
 ) -> dto.DayMessageView:
     return dto.DayMessageView(
         id=str(m.id),
@@ -590,6 +600,7 @@ def _message_view(
         ),
         attachments=attachments or [],
         transcript=transcript,
+        transcripts=recordings or [],
     )
 
 
@@ -602,7 +613,15 @@ class GetDayThread(UseCase):
             out: list[dto.DayMessageView] = []
             for m in messages:
                 cap = uow.captures.get(m.capture_id) if m.capture_id else None
-                out.append(_message_view(m, cap, _spoken(uow, cap), _attachment_refs(uow, cap)))
+                out.append(
+                    _message_view(
+                        m,
+                        cap,
+                        _spoken(uow, cap),
+                        _attachment_refs(uow, cap),
+                        _recordings(uow, cap),
+                    )
+                )
             # captures that arrived without a thread message (uploads, voice notes)
             for cap in uow.captures.list(target_date=day):
                 if cap.id in linked or cap.product_id is not None:
@@ -623,6 +642,7 @@ class GetDayThread(UseCase):
                         attachment_mime=cap.attachment.mime if cap.attachment else None,
                         attachments=_attachment_refs(uow, cap),
                         transcript=spoken,
+                        transcripts=_recordings(uow, cap),
                     )
                 )
             out.sort(key=lambda m: m.created_at)

@@ -6,6 +6,38 @@ All notable changes to Victus are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-09-10
+
+### Added
+- **"The recipe changed on this date" is something an actor can draft.** A new product version
+  required `approve`, which was right about the decision and wrong about the drafting: an actor
+  reading a changed label could only propose a correction to the *current* version, and that
+  silently rewrites what every day before the change already counted. A proposal now takes a third
+  kind, `version`, carrying `valid_from` beside the new values; approving it runs the same
+  `NewProductVersion` a person would, so the version it revises keeps its numbers, its days and its
+  portions. `product_version_create` degrades to that proposal without `approve`, exactly as the
+  portion tools do, and takes an optional rationale — without the scope it is the only thing the
+  person deciding gets to read. With this the drafting surface finally matches the deciding one for
+  the whole catalogue, which is what ADR 0013 asks for; the gap in between was being filled by
+  handing out `approve`. The review list says which promise it is looking at, because approving a
+  version and approving a correction are opposite ones, and states the day above the values instead
+  of listing it among them.
+  Migration `0012` widens `ck_product_proposal_kind` to include `version`. SQLite cannot alter a
+  CHECK, so the table is rebuilt from a spelled-out definition rather than from reflection:
+  reflection recovers a CHECK by parsing the stored `CREATE TABLE`, and the day that stops matching
+  it would drop `ck_product_proposal_status` without a word. Every step reads what is there first —
+  a database created at this revision already has the wide constraint, because revision 0001 builds
+  the schema from the models, and a SQLite database older than revision 0010 has the `kind` column
+  with no constraint at all.
+- A message in a day's thread carries its recordings, so the length of each shows there as it
+  already did in the inbox. The thread had only the texts joined together, which is the right field
+  to read for what was said and has nothing to say about how long it took.
+
+### Fixed
+- Deciding a proposal field by field would have dropped `valid_from` from a version proposal, because
+  the filter kept only the fields named — and the day a version starts on is not a value under
+  review. Picking values in the app would have answered with a validation error.
+
 ## [1.2.1] - 2026-09-10
 
 ### Fixed

@@ -926,4 +926,6 @@ export const DE: Record<string, string> = {
   'The day in short': 'Der Tag in Kürze',
   'Nutrition values estimated': 'Nährwerte geschätzt',
   'Amount estimated': 'Menge geschätzt',
+  'Opens a new version from {day}. Every day before it keeps what it counted.': 'Legt ab {day} eine neue Version an. Jeder Tag davor behält, was er gezählt hat.',
+  'Open the version': 'Version anlegen',
 };
