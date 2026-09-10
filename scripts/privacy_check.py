@@ -95,8 +95,10 @@ BODY_METRIC = re.compile(
 EXAMPLE_FILES = {"examples", "docs", "tests"}
 
 # Where the maintainer's name belongs: it is the copyright holder's name, and the
-# licence is worth nothing without it. Anywhere else it is a leak.
-NAME_ALLOWED = {"LICENSE", "README.md", "CONTRIBUTING.md", "pyproject.toml"}
+# licence is worth nothing without it. A security policy needs the same thing for a
+# different reason — an address nobody can reach is not a way to report anything.
+# Anywhere else it is a leak.
+NAME_ALLOWED = {"LICENSE", "README.md", "CONTRIBUTING.md", "SECURITY.md", "pyproject.toml"}
 
 
 def iter_files(paths: list[Path]):

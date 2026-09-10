@@ -6,6 +6,24 @@ All notable changes to Victus are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-09-10
+
+### Added
+- A security policy ([`SECURITY.md`](SECURITY.md)): where to send something exploitable, what
+  happens then, and what is in scope — authentication, tenant isolation, the REST and MCP
+  surfaces, the agent path, the shipped Compose defaults — as against a deployment that changed
+  the configuration or a scanner report with no reachable path. The privacy check allows the
+  maintainer's address there for the same reason it allows it in the licence: a policy with no
+  address nobody can reach is not a way to report anything.
+
+### Fixed
+- Three claims in the showcase that the pictures do not support: the colour scheme follows the
+  device and there are six palettes to pin instead of one dark mode; the catalogue's source
+  column is a badge (label or estimate) *and* the text of where the number came from, not a
+  single field; and the check-up does print a reference TDEE — what it adds is which window that
+  came from and how far each of the others can be trusted. A tour that overstates what a picture
+  shows is worse than no tour.
+
 ## [1.5.1] - 2026-09-10
 
 ### Fixed

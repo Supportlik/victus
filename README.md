@@ -163,3 +163,6 @@ authors chose.
 Contributions are welcome under the agreement in [CONTRIBUTING.md](CONTRIBUTING.md): you keep
 your copyright and also grant the maintainer the right to license your contribution
 commercially. Without that the arrangement breaks at the first outside line of code.
+
+Found a way past the passkeys, the token scopes or the tenant boundary? [`SECURITY.md`](SECURITY.md)
+says where to send it and what happens then — please not to a public issue.

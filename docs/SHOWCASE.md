@@ -18,7 +18,8 @@ every day that used it — while the amounts are frozen at the moment of logging
 The thread on the right is how the day talks back. Text, a voice note or a photograph each
 become a capture; the agent reads them on its next run and answers here.
 
-The same day in the dark scheme, which follows the operating system unless you pick one:
+The same day in the dark scheme. Light and dark follow the device unless a person pins one,
+and there are six palettes to pin them in — the choice is per browser, not per account:
 
 ![The same day in the dark scheme](media/day-dark.jpg)
 
@@ -42,9 +43,10 @@ one of them weighs, saves it with the product, and the unit works from then on.
 
 ## The catalogue
 
-Products carry nutrients per 100 g or 100 ml and nothing else — no per-portion nutrition, no
-duplicate rows per size. The source column says where the numbers came from, which is the
-difference between a label you photographed and a value somebody estimated.
+A product's nutrients are stated per 100 g or 100 ml, once — there is no per-portion nutrition
+and no second row for a second size. The source column carries both halves of where a number
+stands: a badge saying whether it came off a label or is still an estimate, and the text of
+where it came from.
 
 ![The product catalogue, nutrients per 100 g and where each came from](media/products.jpg)
 
@@ -62,8 +64,9 @@ unit can be the default, which decides what "2 piece" means when a day does not 
 
 "Am I on track?" is a report, not a hard-coded page: a YAML document rendered to JSON for the
 web, Markdown for a chat, or SVG. Weight, intake, the rolling TDEE and the macros share one
-time axis, and the TDEE table says how much each window can be trusted rather than printing a
-single confident number.
+time axis. The reference TDEE says which window it was taken from, and the table below grades
+every window beside it — 7 to 90 days, with the coverage each is based on — so a number resting
+on 38 % of a quarter is marked as such instead of being read as a measurement.
 
 ![The check-up: weight, intake, TDEE windows and how reliable each is](media/reports-checkup.jpg)
 
