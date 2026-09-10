@@ -42,6 +42,4 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 
-# Claude Code: agent instructions and local settings stay out of the public repo
-CLAUDE.md
 .claude/
