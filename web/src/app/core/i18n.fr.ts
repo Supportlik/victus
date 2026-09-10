@@ -933,4 +933,21 @@ export const FR: Record<string, string> = {
   'Amount estimated': 'Quantité estimée',
   'Opens a new version from {day}. Every day before it keeps what it counted.': 'Ouvre une nouvelle version à partir du {day}. Chaque jour antérieur garde ce qu’il a compté.',
   'Open the version': 'Ouvrir la version',
+  'Density g/ml': 'Densité g/ml',
+  'What one millilitre of this weighs in grams — 1.32 for syrup, 0.92 for oil. Not a nutrition value: it is what lets grams and millilitres be converted, so an amount may be given in the unit the values above are not stated per. Empty means only that unit is accepted.':
+    'Ce que pèse un millilitre en grammes : 1,32 pour le sirop, 0,92 pour l’huile. Ce n’est pas une valeur nutritionnelle : c’est ce qui permet de convertir grammes et millilitres, pour qu’une quantité puisse être donnée dans l’unité dans laquelle les valeurs ci-dessus ne sont pas exprimées. Vide signifie que seule cette unité est acceptée.',
+  'Density {value} g/ml': 'Densité {value} g/ml',
+  'An amount in the other unit is converted with it, so grams and millilitres of this product can both be logged.':
+    'Une quantité dans l’autre unité est convertie avec elle, ce produit peut donc être enregistré en grammes comme en millilitres.',
+  'No density, so this product is measured in {unit} only. A density says what one millilitre weighs and lets the other unit be converted.':
+    'Pas de densité : ce produit se mesure uniquement en {unit}. Une densité indique ce que pèse un millilitre et permet de convertir l’autre unité.',
+  'A portion of this product has to be measured in {unit}, because that is what its values are stated per. A density relates the two units and lets the other one be used.':
+    'Une portion de ce produit doit être mesurée en {unit}, car c’est l’unité de ses valeurs. Une densité relie les deux unités et permet d’utiliser l’autre.',
+  'Set a density': 'Définir une densité',
+  density_g_per_ml: 'densité (g/ml)',
+  'portion add': 'nouvelle portion',
+  'portion update': 'modifier la portion',
+  'portion delete': 'supprimer la portion',
+  '{n} logged items use it': '{n} entrées l’utilisent',
+  'cannot be approved: {why}': 'ne peut pas être approuvé : {why}',
 };

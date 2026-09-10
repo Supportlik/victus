@@ -38,6 +38,7 @@ def product_view(
         category=category_name,
         reference_amount=p.reference_amount,
         reference_unit=p.reference_unit,
+        density_g_per_ml=p.density_g_per_ml,
         kcal=p.kcal,
         protein=p.protein,
         carbs=p.carbs,

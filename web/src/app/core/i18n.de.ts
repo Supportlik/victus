@@ -928,4 +928,21 @@ export const DE: Record<string, string> = {
   'Amount estimated': 'Menge geschätzt',
   'Opens a new version from {day}. Every day before it keeps what it counted.': 'Legt ab {day} eine neue Version an. Jeder Tag davor behält, was er gezählt hat.',
   'Open the version': 'Version anlegen',
+  'Density g/ml': 'Dichte g/ml',
+  'What one millilitre of this weighs in grams — 1.32 for syrup, 0.92 for oil. Not a nutrition value: it is what lets grams and millilitres be converted, so an amount may be given in the unit the values above are not stated per. Empty means only that unit is accepted.':
+    'Was ein Milliliter davon in Gramm wiegt – 1,32 bei Sirup, 0,92 bei Öl. Kein Nährwert: Damit lassen sich Gramm und Milliliter umrechnen, sodass du eine Menge auch in der Einheit angeben kannst, auf die sich die Werte oben nicht beziehen. Leer heißt: nur diese eine Einheit ist erlaubt.',
+  'Density {value} g/ml': 'Dichte {value} g/ml',
+  'An amount in the other unit is converted with it, so grams and millilitres of this product can both be logged.':
+    'Eine Menge in der anderen Einheit wird damit umgerechnet, deshalb kannst du dieses Produkt in Gramm und in Millilitern erfassen.',
+  'No density, so this product is measured in {unit} only. A density says what one millilitre weighs and lets the other unit be converted.':
+    'Keine Dichte, dieses Produkt wird nur in {unit} gemessen. Eine Dichte sagt, was ein Milliliter wiegt, und erlaubt dir die andere Einheit.',
+  'A portion of this product has to be measured in {unit}, because that is what its values are stated per. A density relates the two units and lets the other one be used.':
+    'Eine Portion dieses Produkts muss in {unit} gemessen werden, denn darauf beziehen sich seine Werte. Eine Dichte verbindet die beiden Einheiten und erlaubt die andere.',
+  'Set a density': 'Dichte setzen',
+  density_g_per_ml: 'Dichte (g/ml)',
+  'portion add': 'Portion neu',
+  'portion update': 'Portion ändern',
+  'portion delete': 'Portion löschen',
+  '{n} logged items use it': '{n} erfasste Posten verwenden sie',
+  'cannot be approved: {why}': 'nicht freigebbar: {why}',
 };

@@ -22,3 +22,14 @@ export function describeError(err: unknown): string {
   }
   return err instanceof Error ? err.message : 'Something went wrong.';
 }
+
+/**
+ * Whether a refusal named this field as what it is about. The API points at the field in
+ * `errors`, which is what lets a page offer that field instead of printing a sentence
+ * about one and leaving the reader to go looking for it.
+ */
+export function namesField(err: unknown, field: string): boolean {
+  if (!(err instanceof HttpErrorResponse)) return false;
+  const p = err.error as Problem | null;
+  return !!p && typeof p === 'object' && !!p.errors?.some((e) => e.field === field);
+}

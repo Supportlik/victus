@@ -2,10 +2,19 @@ import { ChangeDetectionStrategy, Component, computed, effect, inject, input, si
 import { DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { ApiClient, Capture, Portion, Product, ProductProposal, ProductUsage, Unit } from '../../api';
+import {
+  ApiClient,
+  Capture,
+  PortionOperation,
+  Portion,
+  Product,
+  ProductProposal,
+  ProductUsage,
+  Unit,
+} from '../../api';
 import { FormatService, todayLocal } from '../../core/format.service';
 import { I18nService } from '../../core/i18n.service';
-import { describeError } from '../../core/problem';
+import { describeError, namesField } from '../../core/problem';
 import { CaptureCard } from '../../shared/capture-card';
 import { CaptureInput } from '../../shared/capture-input';
 import { MacroPipe } from '../../shared/format';
@@ -29,14 +38,14 @@ import { ProductForm } from './product-form';
             }
           </div>
           <div class="v-actions">
-            <button type="button" class="v-btn" (click)="editing.set(!editing())">{{ editing() ? i18n.t('Close editor') : i18n.t('Edit') }}</button>
+            <button type="button" class="v-btn" (click)="editing() ? closeEditor() : openEditor()">{{ editing() ? i18n.t('Close editor') : i18n.t('Edit') }}</button>
             <button type="button" class="v-btn" (click)="startVersion(p)">{{ i18n.t('Values changed…') }}</button>
             <button type="button" class="v-btn danger" (click)="remove()">{{ i18n.t('Delete') }}</button>
           </div>
         </header>
 
         @if (editing()) {
-          <div class="v-panel"><v-product-form [product]="p" (saved)="onSaved($event)" (cancelled)="editing.set(false)" /></div>
+          <div class="v-panel"><v-product-form [product]="p" [focusField]="focusField()" (saved)="onSaved($event)" (cancelled)="closeEditor()" /></div>
         } @else {
           <section class="facts v-panel">
             <h3>{{ i18n.t('Per {amount} {unit}', { amount: p.reference_amount, unit: p.reference_unit }) }}</h3>
@@ -48,6 +57,11 @@ import { ProductForm } from './product-form';
               <div><dt>{{ i18n.t('Fiber') }}</dt><dd>{{ p.fiber | macro: 'fiber' }} g</dd></div>
               <div><dt>{{ i18n.t('Salt') }}</dt><dd>{{ p.salt | macro: 'salt' }} g</dd></div>
             </dl>
+            @if (p.density_g_per_ml; as d) {
+              <p class="v-small v-muted density">{{ i18n.t('Density {value} g/ml', { value: densityText(d) }) }} · {{ i18n.t('An amount in the other unit is converted with it, so grams and millilitres of this product can both be logged.') }}</p>
+            } @else {
+              <p class="v-small v-muted density">{{ i18n.t('No density, so this product is measured in {unit} only. A density says what one millilitre weighs and lets the other unit be converted.', { unit: p.reference_unit }) }}</p>
+            }
             @if (p.source) { <p class="v-small v-muted">{{ i18n.t('Source') }}: {{ p.source }}</p> }
             @if (p.note) { <p class="v-small">{{ p.note }}</p> }
           </section>
@@ -122,10 +136,27 @@ import { ProductForm } from './product-form';
                     </tbody>
                   </table>
                 </div>
+                @if (portionPlan(pr).length) {
+                  <ul class="plan">
+                    @for (line of portionPlan(pr); track $index) {
+                      <li [class.blocked]="!!line.blocked">
+                        <span class="op">{{ opLabel(line) }}</span>
+                        <span>{{ portionText(line) }}</span>
+                        @if (line.used_by) {
+                          <span class="v-small v-muted">{{ i18n.t('{n} logged items use it', { n: line.used_by }) }}</span>
+                        }
+                        @if (line.reason) { <span class="v-small v-muted">{{ line.reason }}</span> }
+                        @if (line.blocked; as why) {
+                          <span class="v-small why">{{ i18n.t('cannot be approved: {why}', { why: why }) }}</span>
+                        }
+                      </li>
+                    }
+                  </ul>
+                }
                 @if (pr.rationale) { <p class="v-small">{{ pr.rationale }}</p> }
                 <p class="v-small v-muted">{{ pr.source }} · <time [attr.datetime]="pr.created_at">{{ format.moment(pr.created_at) }}</time></p>
                 <div class="v-actions">
-                  <button type="button" class="v-btn primary" (click)="decide(pr, true)" [disabled]="deciding() || !selectedCount(pr)">
+                  <button type="button" class="v-btn primary" (click)="decide(pr, true)" [disabled]="deciding() || !selectedCount(pr) || blockedCount(pr) > 0">
                     {{ selectedCount(pr) === keys(pr).length ? i18n.t('Apply all') : i18n.t('Apply {n} of {total}', { n: selectedCount(pr), total: keys(pr).length }) }}
                   </button>
                   <button type="button" class="v-btn" (click)="decide(pr, false)" [disabled]="deciding()">{{ i18n.t('Reject') }}</button>
@@ -219,6 +250,12 @@ import { ProductForm } from './product-form';
             </p>
             <button type="submit" class="v-btn" [disabled]="!np.unit_code || !np.amount">{{ i18n.t('Add portion') }}</button>
           </form>
+          @if (portionNeedsDensity()) {
+            <div class="v-error needs-density">
+              <p>{{ i18n.t('A portion of this product has to be measured in {unit}, because that is what its values are stated per. A density relates the two units and lets the other one be used.', { unit: p.reference_unit }) }}</p>
+              <button type="button" class="v-btn" (click)="openDensity()">{{ i18n.t('Set a density') }}</button>
+            </div>
+          }
         </section>
       }
     </div>
@@ -226,6 +263,12 @@ import { ProductForm } from './product-form';
   styles: `
     dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr)); gap: 0.75rem; margin: 0.5rem 0; }
     dt { font-size: var(--v-fs-xs); color: var(--v-ink-3); } dd { margin: 0; font-size: var(--v-fs-l); font-weight: 560; }
+    .plan { list-style: none; margin: 0.3rem 0 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.2rem; }
+    .plan li { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: baseline; }
+    .plan .op { font-variant: all-small-caps; letter-spacing: 0.03em; color: var(--v-ink-2); }
+    /* a line nobody can approve is marked at its edge, not filled: the reason is the point */
+    .plan li.blocked { box-shadow: inset 3px 0 0 var(--v-bad); padding-left: 0.5rem; }
+    .plan .why { color: var(--v-bad-ink); }
     .portions { margin-top: 1.5rem; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.6rem; }
     .portions h3 { font-size: var(--v-fs-l); }
     .portions p { margin: 0; }
@@ -245,6 +288,8 @@ import { ProductForm } from './product-form';
     .pair .fixed { color: var(--v-ink-2); font-size: var(--v-fs-s); }
     .pair input { flex: 1 1 4rem; min-width: 0; }
     .add .hint { grid-column: 1 / -1; margin: 0; }
+    .needs-density { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; justify-content: space-between; }
+    .needs-density p { margin: 0; flex: 1 1 16rem; }
   `,
 })
 export class ProductDetail {
@@ -257,10 +302,18 @@ export class ProductDetail {
     if (value == null) return '–';
     return this.format.number(value, Number.isInteger(value) ? 0 : 1);
   }
+  /** A density keeps two places: at 1.32 the second one is a per cent of the amount. */
+  densityText(value: number): string {
+    return this.format.number(value, Number.isInteger(value) ? 0 : 2);
+  }
   private readonly router = inject(Router);
   readonly id = input.required<string>();
   readonly product = signal<Product | null>(null);
   readonly editing = signal(false);
+  /** Which field the editor should open on; set when a refusal named one. */
+  readonly focusField = signal<'density' | null>(null);
+  /** A portion was refused for its unit, and only a density can settle it (R75). */
+  readonly portionNeedsDensity = signal(false);
   readonly error = signal<string | null>(null);
   readonly captures = signal<Capture[]>([]);
   readonly proposals = signal<ProductProposal[]>([]);
@@ -383,6 +436,38 @@ export class ProductDetail {
       return next;
     });
   }
+  /** The lines of a portion proposal, as the server read them against the catalogue. */
+  portionPlan(pr: ProductProposal): PortionOperation[] {
+    return pr.portion_plan ?? [];
+  }
+
+  /** What a line does, as a word. Spelled out rather than built from `op`, so the
+   * translation check can see the three keys instead of a concatenation it cannot verify. */
+  opLabel(line: PortionOperation): string {
+    if (line.op === 'update') return this.i18n.t('portion update');
+    if (line.op === 'delete') return this.i18n.t('portion delete');
+    return this.i18n.t('portion add');
+  }
+
+  /** How many lines would be refused. While any is, approving is refused as a whole. */
+  blockedCount(pr: ProductProposal): number {
+    return this.portionPlan(pr).filter((line) => !!line.blocked).length;
+  }
+
+  /** A portion line in words: what it holds, and what it holds today. */
+  portionText(line: PortionOperation): string {
+    const values = line.values ?? {};
+    const label = String(values['label'] ?? values['unit_code'] ?? line.current?.label ?? '');
+    const amount = values['amount'] ?? line.current?.amount;
+    const unit = String(values['amount_unit'] ?? line.current?.amount_unit ?? 'g');
+    const size = amount == null ? '' : ` = ${this.format.number(Number(amount), 0)} ${unit}`;
+    if (line.op === 'update' && line.current) {
+      const was = `${line.current.label} = ${this.format.number(line.current.amount, 0)} ${line.current.amount_unit}`;
+      return `${was} → ${label}${size}`;
+    }
+    return `${label}${size}`;
+  }
+
   selectedCount(pr: ProductProposal): number {
     return this.keys(pr).filter((k) => this.isSelected(pr, k)).length;
   }
@@ -403,9 +488,23 @@ export class ProductDetail {
       },
     });
   }
+  openEditor(): void {
+    this.focusField.set(null);
+    this.editing.set(true);
+  }
+  closeEditor(): void {
+    this.focusField.set(null);
+    this.editing.set(false);
+  }
+  /** The way out the refusal named: the editor, opened on the field it named. */
+  openDensity(): void {
+    this.portionNeedsDensity.set(false);
+    this.focusField.set('density');
+    this.editing.set(true);
+  }
   onSaved(p: Product): void {
     this.product.set({ ...p, portions: this.product()?.portions ?? p.portions });
-    this.editing.set(false);
+    this.closeEditor();
   }
   addPortion(): void {
     const p = this.product();
@@ -415,9 +514,16 @@ export class ProductDetail {
     this.api.createPortion(p.id, body).subscribe({
       next: () => {
         this.np = { label: '', unit_code: 'piece', amount: 0, amount_unit: 'g', is_default: false, weight_source: 'weighed' };
+        this.portionNeedsDensity.set(false);
         this.load(p.id);
       },
-      error: (e: unknown) => this.error.set(describeError(e)),
+      // R75 refuses a portion in the other unit and names the density as the way out. The
+      // sentence alone would send the reader looking for a field, so the offer replaces it.
+      error: (e: unknown) => {
+        const density = namesField(e, 'density_g_per_ml');
+        this.portionNeedsDensity.set(density);
+        this.error.set(density ? null : describeError(e));
+      },
     });
   }
   deletePortion(po: Portion): void {

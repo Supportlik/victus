@@ -24,6 +24,8 @@ would rewrite them (R70).
 
 from __future__ import annotations
 
+import difflib
+from dataclasses import dataclass, replace
 from datetime import date
 from typing import Any
 
@@ -51,7 +53,9 @@ from victus.application.use_cases.products import (
     _resolve_category,
     _validate_product,
     check_new_version,
+    portion_unit_problem,
 )
+from victus.domain.services.units import UNITS
 from victus.domain.values import CaptureStatus
 from victus.infrastructure.db import orm
 
@@ -167,15 +171,131 @@ def _validated_portions(entries: Any, *, adds_only: bool = False) -> list[dict[s
     return out
 
 
+#: What a portion's weight may be stated in. ``unit_code`` — what it is a portion *of* —
+#: comes from the ``unit`` table instead, which is the confusion issue #25 was made of.
+AMOUNT_UNITS = ("g", "ml")
+
+
+@dataclass(frozen=True, slots=True)
+class PortionReference:
+    """The values a portion's ``amount_unit`` has to agree with (R75).
+
+    They are not simply the product's: a ``new`` proposal has no product row yet, and an
+    ``update`` is applied to the product's own fields before its portions, so a proposal
+    that moves the reference unit and adds a portion measured in the new one is one change.
+    """
+
+    reference_amount: float = 100.0
+    reference_unit: str = "g"
+    density_g_per_ml: float | None = None
+
+
+REFERENCE_FIELDS = ("reference_amount", "reference_unit", "density_g_per_ml")
+
+
+def _reference_of(product: orm.Product | None, changes: dict[str, Any]) -> PortionReference:
+    """What the reference values will be once this proposal has been applied."""
+    base = (
+        PortionReference(
+            reference_amount=product.reference_amount,
+            reference_unit=product.reference_unit,
+            density_g_per_ml=product.density_g_per_ml,
+        )
+        if product is not None
+        else PortionReference()
+    )
+    proposed = {k: changes[k] for k in REFERENCE_FIELDS if changes.get(k) is not None}
+    return replace(base, **proposed) if proposed else base
+
+
+def _unit_problem(code: Any) -> str | None:
+    """Why ``unit_code`` names no unit, or ``None`` — what ``AddPortion`` refuses first.
+
+    The refusal this exists for arrived over MCP as ``piece_s`` … ``piece_xl``: the size of
+    an egg written where the unit belongs. Naming the nearest real code turns the reason
+    into the fix, since the size itself has a home in the label.
+    """
+    unit = str(code)
+    if unit in UNITS:
+        return None
+    near = difflib.get_close_matches(unit, UNITS, n=1)
+    hint = f"; did you mean '{near[0]}'?" if near else ""
+    return f"there is no unit '{unit}'; a size belongs in the portion's label{hint}"
+
+
+def _amount_problem(value: Any) -> str | None:
+    try:
+        amount = float(value)
+    except (TypeError, ValueError):
+        return f"'{value}' is not an amount; a portion needs a positive number"
+    return None if amount > 0 else "a portion needs a positive amount"
+
+
+def _measure_problem(amount_unit: str, reference: PortionReference) -> str | None:
+    if amount_unit not in AMOUNT_UNITS:
+        return f"a portion's amount is in g or ml, not '{amount_unit}'"
+    return portion_unit_problem(
+        amount_unit,
+        reference_amount=reference.reference_amount,
+        reference_unit=reference.reference_unit,
+        density_g_per_ml=reference.density_g_per_ml,
+    )
+
+
+def _add_problem(values: dict[str, Any], reference: PortionReference) -> str | None:
+    """Everything ``AddPortion`` refuses before the database sees the row, in its order."""
+    if not values.get("unit_code"):
+        return "a portion to add needs a unit_code"
+    return (
+        _unit_problem(values["unit_code"])
+        or _amount_problem(values.get("amount"))
+        or _measure_problem(str(values.get("amount_unit") or "g"), reference)
+    )
+
+
+def _update_problem(
+    values: dict[str, Any], current: orm.Portion, reference: PortionReference
+) -> str | None:
+    """The same refusals, for the fields an update carries.
+
+    ``UpdatePortion`` skips a field given as ``None`` and keeps what the row holds, so the
+    unit R75 is read against is the one the row would end up with, not the one given here.
+    """
+    if not values:
+        return f"an update needs at least one of: {', '.join(PORTION_FIELDS)}"
+    code, amount = values.get("unit_code"), values.get("amount")
+    return (
+        (_unit_problem(code) if code is not None else None)
+        or (_amount_problem(amount) if amount is not None else None)
+        or _measure_problem(str(values.get("amount_unit") or current.amount_unit), reference)
+    )
+
+
+def _missing_portion(uow: UnitOfWork, portion_id: int) -> str:
+    """A ``portion_id`` this product does not own: removed since, or somebody else's row."""
+    other = uow.products.get_portion(portion_id)
+    if other is not None:
+        return f"portion {portion_id} belongs to product {other.product_id}, not to this one"
+    return f"portion {portion_id} no longer exists"
+
+
 def portion_plan(
-    uow: UnitOfWork, product_id: int | None, entries: Any
+    uow: UnitOfWork,
+    product_id: int | None,
+    entries: Any,
+    *,
+    reference: PortionReference | None = None,
 ) -> list[dto.PortionOperationView]:
     """Read each portion entry against the catalogue as it stands (R81).
 
-    The reviewer sees the proposal, not the product, so the two refusals the database
-    would produce — a twin under the unique ``(product, unit, label)``, and the
-    ``RESTRICT`` on a portion days already point at — are resolved here and named in
-    the view. Approving then fails before it changes anything, not halfway through.
+    The reviewer sees the proposal, not the product, so every refusal approving would run
+    into is resolved here and named in the view: a unit that is not a unit, an amount that
+    is not one, a unit R75 will not allow, a portion that has since gone or was never this
+    product's, a twin under the unique ``(product, unit, label)``, and the ``RESTRICT`` on
+    a portion days already point at. Approving then fails before it changes anything —
+    or, where the plan is clean, does not fail at all. A line that says nothing is wrong
+    is the one a reviewer clicks, so a refusal this does not model is a refusal they meet
+    afterwards, which is what the plan exists to prevent.
 
     The entries are read in the order they will be applied, and ``taken`` follows along:
     a proposal that removes the wrong-unit twin and adds the right portion is a swap, not
@@ -184,6 +304,8 @@ def portion_plan(
     if not isinstance(entries, list):
         return []
     existing = {p.id: p for p in uow.products.portions_for(product_id)} if product_id else {}
+    if reference is None:
+        reference = _reference_of(uow.products.get(product_id) if product_id else None, {})
     taken = {p.id: (p.unit_code, p.label) for p in existing.values()}
     queued: set[tuple[str, str]] = set()  # pairs this proposal adds itself
     rows: list[dto.PortionOperationView] = []
@@ -196,18 +318,27 @@ def portion_plan(
         portion_id = raw_id if isinstance(raw_id, int) else None
         current = existing.get(portion_id) if portion_id is not None else None
         used_by, blocked = 0, None
-        if op == PORTION_ADD:
+        if op not in PORTION_OPS:
+            blocked = f"there is no portion operation '{op}'; use one of {', '.join(PORTION_OPS)}"
+        elif op != PORTION_ADD and product_id is None:
+            blocked = f"a product that does not exist yet has no portion to {op}"
+        elif op == PORTION_ADD:
             unit = str(values.get("unit_code") or "")
             wanted = (unit, str(values.get("label") or unit))
             twin = next((pid for pid, pair in taken.items() if pair == wanted), None)
-            if wanted in queued:
+            blocked = _add_problem(values, reference)
+            if blocked is not None:
+                pass  # what the values say is wrong comes before what the catalogue holds
+            elif wanted in queued:
                 blocked = f"this proposal already adds '{wanted[1]}' in {wanted[0]}"
             elif twin is not None:
                 blocked = f"portion {twin} already carries '{wanted[1]}' in {wanted[0]}"
             else:
                 queued.add(wanted)
+        elif portion_id is None:
+            blocked = f"a portion to {op} needs its portion_id"
         elif current is None:
-            blocked = f"portion {raw_id} is not a portion of this product"
+            blocked = _missing_portion(uow, portion_id)
         elif op == PORTION_UPDATE:
             wanted = (
                 str(values.get("unit_code") or current.unit_code),
@@ -217,7 +348,10 @@ def portion_plan(
                 (pid for pid, pair in taken.items() if pair == wanted and pid != current.id), None
             )
             used_by = uow.products.portion_usage(current.id)
-            if twin is not None:
+            blocked = _update_problem(values, current, reference)
+            if blocked is not None:
+                pass  # what the values say is wrong comes before what the catalogue holds
+            elif twin is not None:
                 blocked = f"portion {twin} already carries '{wanted[1]}' in {wanted[0]}"
             else:
                 taken[current.id] = wanted
@@ -244,10 +378,16 @@ def portion_plan(
 
 def _plan_of(uow: UnitOfWork, pr: orm.ProductProposal) -> list[dto.PortionOperationView]:
     """Only a pending proposal has a plan: a decided one has already been applied."""
-    entries = (pr.changes or {}).get("portions")
+    changes = pr.changes or {}
+    entries = changes.get("portions")
     if not entries or pr.status != PENDING:
         return []
-    return portion_plan(uow, pr.product_id, entries)
+    return portion_plan(
+        uow,
+        pr.product_id,
+        entries,
+        reference=_reference_of(_product_of(uow, pr), changes),
+    )
 
 
 def proposal_view(
@@ -560,7 +700,13 @@ class DecideProposal(UseCase):
                 )
                 refused = [
                     f"{row.op} {row.portion_id or row.values.get('unit_code', '')}: {row.blocked}"
-                    for row in portion_plan(uow, pr.product_id, applied["portions"])
+                    for row in portion_plan(
+                        uow,
+                        pr.product_id,
+                        applied["portions"],
+                        # the values being approved, which may not be the ones proposed
+                        reference=_reference_of(_product_of(uow, pr), applied),
+                    )
                     if row.blocked
                 ]
                 if refused:

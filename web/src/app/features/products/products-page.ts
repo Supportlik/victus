@@ -36,6 +36,7 @@ interface Fact {
 /** The unit a field is stated in; the field name already says "kcal". */
 function unitOf(field: string, referenceUnit: string): string {
   if ((MACROS as readonly string[]).includes(field)) return field === 'kcal' ? '' : 'g';
+  if (field === 'density_g_per_ml') return 'g/ml';
   return field === 'reference_amount' ? referenceUnit : '';
 }
 

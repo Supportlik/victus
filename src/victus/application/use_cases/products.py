@@ -442,22 +442,56 @@ class DeleteProduct(UseCase):
                 raise Conflict("product is referenced by line items or recipes") from exc
 
 
+def portion_unit_problem(
+    amount_unit: str,
+    *,
+    reference_amount: float,
+    reference_unit: str,
+    density_g_per_ml: float | None,
+) -> str | None:
+    """Why a portion cannot be stated in ``amount_unit`` for these values (R75), or ``None``.
+
+    The reference values travel as arguments rather than as a product, because a proposal
+    is read before there is a row to read it from: a ``new`` proposal carries the values
+    the product will have, and an ``update`` may move the reference unit in the same breath
+    as it adds a portion measured in it.
+    """
+    if amount_unit == reference_unit or density_g_per_ml:
+        return None
+    return (
+        f"this product's values are per {reference_amount:g} "
+        f"{reference_unit}, so a portion must be in {reference_unit}. "
+        f"Set a density to allow {amount_unit}."
+    )
+
+
 def _check_portion_unit(product: orm.Product, amount_unit: str) -> None:
     """A portion must be measured the way the product's nutrients are (R75).
 
     Nutrients are stated per reference amount in grams or millilitres. A portion given in
     the other unit cannot be converted without a density, so the numbers it produces would
     be wrong rather than merely imprecise.
+
+    The refusal names the field that settles it twice over: in the sentence, and in
+    ``errors``, so a client can offer that field rather than leave the reader to look for
+    it. A way out nobody can find is not a way out.
     """
-    if amount_unit == product.reference_unit:
-        return
-    if product.density_g_per_ml:
-        return
-    raise ValidationFailed(
-        f"this product's values are per {product.reference_amount:g} "
-        f"{product.reference_unit}, so a portion must be in {product.reference_unit}. "
-        f"Set a density to allow {amount_unit}."
+    problem = portion_unit_problem(
+        amount_unit,
+        reference_amount=product.reference_amount,
+        reference_unit=product.reference_unit,
+        density_g_per_ml=product.density_g_per_ml,
     )
+    if problem is not None:
+        raise ValidationFailed(
+            problem,
+            errors=[
+                {
+                    "field": "density_g_per_ml",
+                    "message": f"set it to convert {amount_unit} into {product.reference_unit}",
+                }
+            ],
+        )
 
 
 def in_product_unit(product: orm.Product, amount: float, unit: str) -> tuple[float, str]:

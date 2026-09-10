@@ -104,6 +104,8 @@ export interface Product extends Macros {
   category?: string | null;
   reference_amount: number;
   reference_unit: 'g' | 'ml';
+  /** Grams per millilitre; without one, an amount in the other unit is refused (R75). */
+  density_g_per_ml?: number | null;
   source?: string | null;
   verified: boolean;
   ean?: string | null;
@@ -361,6 +363,22 @@ export interface ReportSnapshot {
 }
 
 /** A product change the agent read from a label photo or note; a person decides. */
+/** One line of a proposal's `portions` list, read against the catalogue as it stands. */
+export interface PortionOperation {
+  op: 'add' | 'update' | 'delete';
+  portion_id?: number | null;
+  /** The fields this line would write. */
+  values: Record<string, unknown>;
+  /** The row it changes or removes, as it stands; null for an add. */
+  current?: Portion | null;
+  /** Line items and recipe ingredients pointing at that row. */
+  used_by: number;
+  /** Why approving this line would be refused, or null when it would apply. */
+  blocked?: string | null;
+  /** The actor's reason, mainly for a delete. */
+  reason?: string | null;
+}
+
 export interface ProductProposal {
   id: string;
   /** null while a `new` proposal is pending — the product does not exist yet. */
@@ -374,6 +392,8 @@ export interface ProductProposal {
   run_id?: string | null;
   changes: Record<string, unknown>;
   current: Record<string, unknown>;
+  /** What each line of `changes.portions` would do; empty once the proposal is decided. */
+  portion_plan?: PortionOperation[];
   rationale?: string | null;
   source?: string | null;
   status: 'pending' | 'approved' | 'rejected';

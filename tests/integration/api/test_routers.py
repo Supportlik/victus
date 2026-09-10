@@ -317,3 +317,61 @@ def test_products_page_and_rank_over_http(client: TestClient, alice_token: dict[
     # every one of these names contains "ei"; the one that is "Ei" comes first
     ranked = client.get("/api/v1/products", params={"q": "Ei", "limit": 3}, headers=alice_token)
     assert [p["name"] for p in ranked.json()] == ["Ei", "Eiweißmilch", "Bäckerei Brötchen"]
+
+
+def test_density_over_http(client: TestClient, alice_token: dict[str, str]) -> None:
+    """T-API-075: the density can be read back, and a refusal points at it.
+
+    It was writable from the first release and returned by nothing, so every client that
+    was not composing its own PATCH bodies could neither show it nor propose a change to it.
+    """
+    created = client.post(
+        "/api/v1/products",
+        json={"name": "Maple syrup", "reference_unit": "ml", "kcal": 260, "density_g_per_ml": 1.32},
+        headers=alice_token,
+    )
+    assert created.status_code == 201, created.text
+    product = created.json()
+    assert product["density_g_per_ml"] == 1.32
+    assert (
+        client.get(f"/api/v1/products/{product['id']}", headers=alice_token).json()[
+            "density_g_per_ml"
+        ]
+        == 1.32
+    )
+    listed = client.get("/api/v1/products", params={"q": "syrup"}, headers=alice_token).json()
+    assert [p["density_g_per_ml"] for p in listed] == [1.32]
+
+    plain = client.post(
+        "/api/v1/products",
+        json={"name": "Apple juice", "reference_unit": "ml", "kcal": 46},
+        headers=alice_token,
+    ).json()
+    assert plain["density_g_per_ml"] is None, (
+        "a product without one says so rather than omitting it"
+    )
+
+    refused = client.post(
+        f"/api/v1/products/{plain['id']}/portions",
+        json={"unit_code": "glass", "label": "glass", "amount": 250, "amount_unit": "g"},
+        headers=alice_token,
+    )
+    assert refused.status_code == 422
+    body = refused.json()
+    assert "Set a density" in body["detail"]
+    assert body["errors"] == [
+        {"field": "density_g_per_ml", "message": "set it to convert g into ml"}
+    ], "the field is named in the problem, so a client can offer it"
+
+    patched = client.patch(
+        f"/api/v1/products/{plain['id']}",
+        json={"density_g_per_ml": 1.05},
+        headers=alice_token,
+    )
+    assert patched.json()["density_g_per_ml"] == 1.05
+    accepted = client.post(
+        f"/api/v1/products/{plain['id']}/portions",
+        json={"unit_code": "glass", "label": "glass", "amount": 250, "amount_unit": "g"},
+        headers=alice_token,
+    )
+    assert accepted.status_code == 201, "with a density the same portion goes through"

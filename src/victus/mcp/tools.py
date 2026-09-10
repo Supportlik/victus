@@ -590,6 +590,9 @@ def _compact_product(p: Any) -> dict[str, Any]:
         "kcal_per_100": p.kcal,
         "protein_per_100": p.protein,
         "reference_unit": p.reference_unit,
+        # whether an amount in the other unit can be converted at all, which no other
+        # field here says: null means grams of a product stated per millilitre are refused
+        "density_g_per_ml": p.density_g_per_ml,
         "portions": [
             {
                 "id": po.id,

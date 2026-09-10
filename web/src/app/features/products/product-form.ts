@@ -1,4 +1,14 @@
-import { ChangeDetectionStrategy, Component, inject, input, output, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  afterNextRender,
+  inject,
+  input,
+  output,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiClient, Category, Product, ProductInput } from '../../api';
@@ -37,6 +47,12 @@ const ICON_CHOICES = ['🍽', '🥩', '🍗', '🐟', '🧀', '🥛', '🥚', '�
           <select name="ref" [(ngModel)]="model.reference_unit"><option value="g">{{ i18n.t('per 100 g') }}</option><option value="ml">{{ i18n.t('per 100 ml') }}</option></select>
         </label>
       </div>
+      <!-- beside the reference unit rather than among the six: a density is not a value of
+           the food, it is what decides whether the other unit can be converted at all -->
+      <div class="v-form-row measure">
+        <label class="v-field"><span>{{ i18n.t('Density g/ml') }}</span><input #density name="density_g_per_ml" type="number" step="any" min="0" [(ngModel)]="model.density_g_per_ml" [placeholder]="i18n.t('none')" /></label>
+        <p class="v-small v-muted hint">{{ i18n.t('What one millilitre of this weighs in grams — 1.32 for syrup, 0.92 for oil. Not a nutrition value: it is what lets grams and millilitres be converted, so an amount may be given in the unit the values above are not stated per. Empty means only that unit is accepted.') }}</p>
+      </div>
       <div class="v-form-row">
         <label class="v-field"><span>kcal</span><input name="kcal" type="number" step="any" min="0" [(ngModel)]="model.kcal" required /></label>
         <label class="v-field"><span>{{ i18n.t('Protein g') }}</span><input name="protein" type="number" step="any" min="0" [(ngModel)]="model.protein" /></label>
@@ -74,6 +90,8 @@ const ICON_CHOICES = ['🍽', '🥩', '🍗', '🐟', '🧀', '🥛', '🥚', '�
     .icon input { width: 3rem; text-align: center; }
     .preview { font-size: 1.2rem; }
     .check { grid-template-columns: 1fr auto; align-items: center; }
+    .measure { grid-template-columns: minmax(7rem, 1fr) minmax(0, 3fr); align-items: center; }
+    .measure .hint { margin: 0; }
     .suggest { display: flex; gap: 0.3rem; flex-wrap: wrap; align-items: center; }
     .glyph { border: 1px solid var(--v-line-strong); background: var(--v-surface); border-radius: var(--v-radius); width: 2rem; height: 2rem; cursor: pointer; font-size: 1rem; line-height: 1; }
     .glyph.auto { width: auto; padding: 0 0.5rem; font-size: var(--v-fs-xs); }
@@ -86,6 +104,9 @@ export class ProductForm {
   readonly i18n = inject(I18nService);
   private readonly router = inject(Router);
   readonly product = input<Product | null>(null);
+  /** The field the caret goes to, when the editor was opened to fill one in particular. */
+  readonly focusField = input<'density' | null>(null);
+  private readonly density = viewChild<ElementRef<HTMLInputElement>>('density');
   readonly saved = output<Product>();
   readonly cancelled = output<void>();
   readonly categories = signal<Category[]>([]);
@@ -97,10 +118,15 @@ export class ProductForm {
   }
   readonly busy = signal(false);
   readonly error = signal<string | null>(null);
-  model: ProductInput = { name: '', icon: null, reference_amount: 100, reference_unit: 'g', verified: false, kcal: null, protein: null, carbs: null, fat: null, fiber: null, salt: null, category_id: null, brand: '', source: '', ean: '', note: '' };
+  model: ProductInput = { name: '', icon: null, reference_amount: 100, reference_unit: 'g', density_g_per_ml: null, verified: false, kcal: null, protein: null, carbs: null, fat: null, fiber: null, salt: null, category_id: null, brand: '', source: '', ean: '', note: '' };
 
   constructor() {
     this.api.categories().subscribe({ next: (c) => this.categories.set(c), error: () => this.categories.set([]) });
+    // The editor is opened by a refusal that named this field, and the field sits below
+    // the fold: reaching it is the whole point of that offer, so the caret goes there.
+    afterNextRender(() => {
+      if (this.focusField() === 'density') this.density()?.nativeElement.focus();
+    });
   }
 
   ngOnInit(): void {

@@ -1,4 +1,4 @@
-"""T-MCP-008/009/013/014: captures_open scope, product_update, portion and version tools."""
+"""T-MCP-008/009/013/014/015/016: captures_open, product_update, portions, versions, density."""
 
 from __future__ import annotations
 
@@ -7,6 +7,8 @@ from typing import Any, cast
 
 from victus.application.tenant_context import SCOPE_READ, SCOPE_WRITE, TenantContext
 from victus.application.use_cases import captures as capture_uc
+from victus.application.use_cases import products as products_uc
+from victus.application.use_cases import proposals as prop_uc
 from victus.application.use_cases._base import UowFactory
 from victus.infrastructure.storage.memory import InMemoryBlobStorage
 from victus.mcp.tools import ToolContext, dispatch
@@ -145,3 +147,88 @@ def test_t_mcp_014_product_version_create_proposes_without_approve(
     assert "pending_review" not in opened and opened["valid_from"] == "2026-06-01"
     versions = cast(dict[str, Any], dispatch(tool_ctx, "product_versions", {"id": skyr}))
     assert [v["kcal"] for v in versions["versions"]] == [63, 66]
+
+
+def test_t_mcp_015_a_portion_proposal_for_a_unit_that_is_not_one_says_so(
+    tool_ctx: ToolContext, factory: UowFactory, alice: TenantContext, skyr: int
+) -> None:
+    """T-MCP-015: the incident of issue #25, at the surface it arrived on.
+
+    Four calls asked for `piece_s`…`piece_xl` — the size of an egg written where the unit
+    belongs. They came back pending with nothing wrong, and every approval then failed.
+    """
+    writer = dataclasses.replace(
+        tool_ctx,
+        ctx=dataclasses.replace(
+            tool_ctx.ctx, token_id="tok_write", scopes=frozenset({SCOPE_READ, SCOPE_WRITE})
+        ),
+    )
+    proposed = cast(
+        dict[str, Any],
+        dispatch(
+            writer,
+            "portion_create",
+            {"product_id": skyr, "unit_code": "piece_s", "label": "S (48 g)", "amount": 48},
+        ),
+    )
+    assert proposed["pending_review"] is True and proposed["status"] == "pending"
+    blocked = proposed["portion_plan"][0]["blocked"]
+    assert "there is no unit 'piece_s'" in blocked
+    assert "a size belongs in the portion's label" in blocked and "'piece'" in blocked
+
+    # The unit the code was invented for, with the size where it belongs, is applicable.
+    ok = cast(
+        dict[str, Any],
+        dispatch(
+            writer,
+            "portion_create",
+            {"product_id": skyr, "unit_code": "piece", "label": "S (48 g)", "amount": 48},
+        ),
+    )
+    assert ok["portion_plan"][0]["blocked"] is None
+    prop_uc.DecideProposal(factory, alice).execute(ok["id"], approve=True)
+    portions = cast(dict[str, Any], dispatch(tool_ctx, "product_get", {"id": skyr}))["portions"]
+    assert [(p["unit_code"], p["label"]) for p in portions] == [
+        ("tub", "tub"),
+        ("piece", "S (48 g)"),
+    ]
+
+
+def test_t_mcp_016_a_density_is_visible_to_the_agent(
+    tool_ctx: ToolContext, factory: UowFactory, alice: TenantContext, skyr: int
+) -> None:
+    """T-MCP-016: the agent reads products here, so a density it cannot see does not exist.
+
+    Without it there is no way to tell a product whose grams-to-millilitres conversion is
+    safe from one whose is not, and no current value to hold a proposed one against.
+    """
+    syrup = products_uc.CreateProduct(factory, alice).execute(
+        products_uc.ProductInput(
+            name="Maple syrup", reference_unit="ml", density_g_per_ml=1.32, kcal=260
+        )
+    )
+    fetched = cast(dict[str, Any], dispatch(tool_ctx, "product_get", {"id": syrup.id}))
+    assert fetched["density_g_per_ml"] == 1.32
+    assert (
+        cast(dict[str, Any], dispatch(tool_ctx, "product_get", {"id": skyr}))["density_g_per_ml"]
+        is None
+    ), "and a product without one says so, rather than leaving it out"
+
+    found = cast(dict[str, Any], dispatch(tool_ctx, "product_search", {"q": "syrup"}))
+    hit = next(p for p in found["products"] if p["id"] == syrup.id)
+    assert (hit["reference_unit"], hit["density_g_per_ml"]) == ("ml", 1.32)
+
+    proposed = cast(
+        dict[str, Any],
+        dispatch(
+            tool_ctx,
+            "product_propose",
+            {
+                "product_id": skyr,
+                "changes": {"density_g_per_ml": 1.04},
+                "source": "label photo",
+            },
+        ),
+    )
+    assert proposed["changes"] == {"density_g_per_ml": 1.04}
+    assert proposed["current"] == {"density_g_per_ml": None}, "what the reader compares against"

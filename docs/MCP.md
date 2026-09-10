@@ -27,8 +27,8 @@ HTTP responses: missing or invalid token → `401`; token lacks the tool's scope
 
 | Tool | Scope | Use case | Returns |
 |---|---|---|---|
-| `product_search(q, limit=10, on?)` | `read` | `SearchProducts` | candidates `{id, name, kind, tier, score, kcal_per_100}`; `on` picks the version that applied on that day (R70) |
-| `product_get(id)` | `read` | `GetProduct` | product with portions and nutrients |
+| `product_search(q, limit=10, on?)` | `read` | `SearchProducts` | candidates `{id, name, kind, tier, score, kcal_per_100}` and matching products with `reference_unit` and `density_g_per_ml`; `on` picks the version that applied on that day (R70) |
+| `product_get(id)` | `read` | `GetProduct` | product with portions, nutrients and `density_g_per_ml`, which is null unless the product carries one: without it an amount in the other unit cannot be converted (R75) |
 | `rules_list(scope?)` | `read` | `ListRules` | the user's own instructions (when → then) |
 | `rule_upsert(when, then, name?, scope?, enabled?, priority?)` | `write` | `UpsertRule` | a rule the user just gave you, written down |
 | `rule_delete(name)` | `write` | `DeleteRule` | removed |

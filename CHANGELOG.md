@@ -6,6 +6,46 @@ All notable changes to Victus are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-09-10
+
+### Added
+- **A density is a field of the product, not a secret of the API.** Since 1.2.0 a density
+  actually converts an amount in the other unit before it is frozen, but `density_g_per_ml` was
+  returned by nothing: missing from the product view, it reached neither the REST response nor a
+  single MCP tool. It could be written and read nowhere, which left the one way out of R75 open
+  only to whoever held a REST client. The product page now prints it with its unit and what it
+  converts — beside the reference amount, not among the six nutrients, because it is not a value
+  of the food — and says so when there is none, which is why grams of a syrup stated per
+  millilitre get refused. The editor has the field. And the refusal that named it, *"set a
+  density to allow g"*, names it in the problem's `errors` as well as in the sentence, so the
+  portion form answers with an offer that opens the editor on that field instead of a sentence
+  about a field the reader cannot find. The agent, which reads products only over MCP, can
+  finally tell a product whose grams-to-millilitres conversion is safe from one whose is not.
+- A pending portion proposal shows what each of its lines would do, and says when a line cannot
+  be approved. The plan has been computed since 1.2.0 and rendered nowhere, so such a proposal
+  appeared as one row holding a raw list of objects, with an approve button and no reason.
+
+### Fixed
+- **A portion proposal naming a `unit_code` that is not a unit read as ready to approve and then
+  failed on the click.** Four arrived as `piece_s`, `piece_m`, `piece_l` and `piece_xl` — the
+  sizes of an egg written where the unit belongs — and each was listed for review with nothing
+  marked wrong. A proposal's plan now names every refusal the portion operations can raise, not
+  only the two the database produces: a unit that does not exist (pointing at the closest one
+  that does, and saying that a size belongs in the label), an amount that is not a positive
+  number, an amount unit the product's reference values do not allow without a density, a
+  `portion_id` that has been removed or belongs to another product, and an entry in a shape no
+  operation accepts. The unit is read against the reference values the proposal *will* have
+  applied, so moving a product to millilitres and adding a millilitre portion in one proposal is
+  no longer half-refused, and a proposed new product's portions are read against its own values
+  rather than a default of 100 g. And approving such a proposal is refused before anything is
+  written: it used to mark the proposal approved, apply the product's other fields, and only then
+  fail on the portion — a decision half applied.
+
+### Changed
+- `scripts/demo_seed.py` fills a tenant with invented food, weights and body measurements, so the
+  app can be shown without showing anyone (R48). Every picture under `docs/media/` comes from it,
+  which is what makes them retakeable when the interface changes instead of left to rot.
+
 ## [1.3.0] - 2026-09-10
 
 ### Added

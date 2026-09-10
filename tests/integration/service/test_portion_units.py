@@ -1,4 +1,4 @@
-"""T-SVC-083/084/086: an amount in the other unit is converted through the density (R75)."""
+"""T-SVC-083/084/086/109: an amount in the other unit is converted through the density (R75)."""
 
 from __future__ import annotations
 
@@ -142,3 +142,35 @@ def test_t_svc_084_without_a_density_such_a_portion_is_still_refused(
     assert heavy.amount_unit == "g", "the portion keeps the unit it was measured in"
     item = _log(factory, alice, juice.id, 1, "cup")
     assert (item.base_amount, item.base_unit) == (pytest.approx(200.0), "ml")
+
+
+def test_t_svc_109_the_view_carries_the_density_and_the_refusal_names_it(
+    factory: UowFactory, alice: TenantContext
+) -> None:
+    """T-SVC-109: R75's way out is only a way out if a reader can see it and reach it.
+
+    The value was writable and readable nowhere, so a page could not say whether a product
+    had one, and the sentence that refuses a portion named a field nobody could find.
+    """
+    juice = products_uc.CreateProduct(factory, alice).execute(
+        products_uc.ProductInput(name="Apple juice", reference_unit="ml", kcal=46)
+    )
+    assert juice.density_g_per_ml is None, "nothing relates g and ml for this one yet"
+
+    with pytest.raises(ValidationFailed) as refused:
+        products_uc.AddPortion(factory, alice).execute(
+            juice.id,
+            products_uc.PortionInput(unit_code="glass", label="glass", amount=250, amount_unit="g"),
+        )
+    assert refused.value.errors == [
+        {"field": "density_g_per_ml", "message": "set it to convert g into ml"}
+    ], "the field is named where a client can act on it, not only in the sentence"
+
+    updated = products_uc.UpdateProduct(factory, alice).execute(
+        juice.id, {"density_g_per_ml": 1.05}
+    )
+    assert updated.density_g_per_ml == pytest.approx(1.05)
+    fetched = products_uc.GetProduct(factory, alice).execute(juice.id)
+    assert fetched.density_g_per_ml == pytest.approx(1.05), (
+        "and reading it back shows it, which is what a page compares a proposal against"
+    )

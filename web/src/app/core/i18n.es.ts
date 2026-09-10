@@ -927,4 +927,21 @@ export const ES: Record<string, string> = {
   'Amount estimated': 'Cantidad estimada',
   'Opens a new version from {day}. Every day before it keeps what it counted.': 'Crea una versión nueva a partir del {day}. Cada día anterior conserva lo que contó.',
   'Open the version': 'Crear la versión',
+  'Density g/ml': 'Densidad g/ml',
+  'What one millilitre of this weighs in grams — 1.32 for syrup, 0.92 for oil. Not a nutrition value: it is what lets grams and millilitres be converted, so an amount may be given in the unit the values above are not stated per. Empty means only that unit is accepted.':
+    'Lo que pesa un mililitro en gramos: 1,32 para el sirope, 0,92 para el aceite. No es un valor nutricional: es lo que permite convertir gramos y mililitros, de modo que una cantidad se pueda indicar en la unidad en la que no están expresados los valores de arriba. Vacío significa que solo se acepta esa unidad.',
+  'Density {value} g/ml': 'Densidad {value} g/ml',
+  'An amount in the other unit is converted with it, so grams and millilitres of this product can both be logged.':
+    'Una cantidad en la otra unidad se convierte con ella, así que este producto se puede registrar en gramos y en mililitros.',
+  'No density, so this product is measured in {unit} only. A density says what one millilitre weighs and lets the other unit be converted.':
+    'Sin densidad: este producto se mide solo en {unit}. Una densidad dice lo que pesa un mililitro y permite convertir la otra unidad.',
+  'A portion of this product has to be measured in {unit}, because that is what its values are stated per. A density relates the two units and lets the other one be used.':
+    'Una porción de este producto tiene que medirse en {unit}, porque es la unidad de sus valores. Una densidad relaciona las dos unidades y permite usar la otra.',
+  'Set a density': 'Definir una densidad',
+  density_g_per_ml: 'densidad (g/ml)',
+  'portion add': 'porción nueva',
+  'portion update': 'cambiar porción',
+  'portion delete': 'borrar porción',
+  '{n} logged items use it': '{n} registros la usan',
+  'cannot be approved: {why}': 'no se puede aprobar: {why}',
 };

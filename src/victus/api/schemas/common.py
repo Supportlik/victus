@@ -165,6 +165,9 @@ class ProductOut(MacrosOut):
     category: str | None = None
     reference_amount: float
     reference_unit: Literal["g", "ml"]
+    #: How many grams one millilitre of this weighs. Not a nutrient: it is what allows an
+    #: amount in the other unit to be converted, and null means such an amount is refused (R75).
+    density_g_per_ml: float | None = None
     source: str | None = None
     verified: bool
     ean: str | None = None

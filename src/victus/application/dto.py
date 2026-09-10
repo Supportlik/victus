@@ -53,6 +53,10 @@ class ProductView:
     category: str | None
     reference_amount: float
     reference_unit: str
+    #: What relates grams and millilitres for this product, where it has one. It is not a
+    #: nutrient: it decides whether an amount in the other unit can be converted at all, so
+    #: a reader who is refused a portion has to be able to see whether one is set (R75).
+    density_g_per_ml: float | None
     kcal: float | None
     protein: float | None
     carbs: float | None
