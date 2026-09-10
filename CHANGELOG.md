@@ -6,6 +6,23 @@ All notable changes to Victus are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-09-10
+
+### Fixed
+- **A silent recording was stored as the vocabulary prompt: seventy words of exercise and
+  food names, presented as something that was said.** The guard against that has existed
+  since the transcription was built, and it gave up above forty words — so the one case it
+  is for, the model returning the *whole* prompt, was the case it let through. Found in the
+  browser: a three-second recording in a day's thread read as a list of lifts and foods.
+  The length of what comes back says nothing about whether it is speech, so the cap is gone;
+  and because a prompt echoed alongside a few real words dilutes the ratio below any
+  threshold, twelve of the prompt's words in the prompt's own order now count as an echo on
+  their own. A long genuine note that names known foods is still a note.
+- Six recordings of a capture with nine parts had no transcript at all: the capture was
+  processed before 1.3.0 taught the transcription to read every part, and nothing went back
+  for the ones it had skipped. They have been transcribed, and the transcripts that were the
+  prompt rather than speech were blanked by the corrected rule.
+
 ## [1.5.0] - 2026-09-10
 
 ### Added

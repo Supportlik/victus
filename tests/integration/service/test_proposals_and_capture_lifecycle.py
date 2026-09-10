@@ -162,6 +162,31 @@ def test_prompt_echo_transcripts_mark_the_capture_failed(
     assert looks_like_prompt_echo("", vocab)
     assert looks_like_prompt_echo("Hackenschmidt Hack Squat", vocab)
     assert not looks_like_prompt_echo("heute Mittag 300 g Hähnchen und Reis", vocab)
+
+    # T-SVC-054: what a silent recording actually returned — the whole prompt. The rule
+    # stopped looking above forty words, so the one case it exists for went through and
+    # a three-second recording was stored as seventy words of exercise and food names.
+    long_vocab = (
+        "Krafttraining nach GZCLP: Hackenschmidt, Hack Squat, Sumo Deadlift, Romanian "
+        "Deadlift, Lat Pulldown, Shoulder Press, Flat Bench Press, Incline Bench, Chest "
+        "Flyes, Lateral Raises, Hip Thrusts, Seated Row, Bent Over Row, Ab Machine, "
+        "Assisted Pullup, AMRAP, T1, T2, T3, Satz, Wiederholungen, Kilogramm. "
+        "Ernährung: Skyr, Haferflocken, Chiasamen, Magerquark, Proteinshake, "
+        "Kaisergemüse, Kokosmilch, Soba, Rinderhack, Kalorien, Eiweiß, Ballaststoffe."
+    )
+    assert looks_like_prompt_echo(long_vocab, long_vocab)
+    # and the same prompt with a few real words in front no longer dilutes its way past
+    # the ratio: a run of the prompt in the prompt's own order is an echo either way
+    assert looks_like_prompt_echo(
+        "ich habe heute nichts gesagt aber hier kommt es trotzdem " + long_vocab, long_vocab
+    )
+    # a long genuine note stays a note, even when it names things from the list
+    note = (
+        "Zum Frühstück hatte ich Skyr mit Haferflocken und Beeren, dazu einen Kaffee. "
+        "Mittags gab es Rinderhack mit Reis und Kaisergemüse, ungefähr 400 Gramm, und "
+        "abends nur zwei Scheiben Brot mit Käse, weil ich keinen Hunger mehr hatte."
+    )
+    assert not looks_like_prompt_echo(note, long_vocab)
     blobs = InMemoryBlobStorage()
     cap = uc.UploadCapture(factory, alice, blobs).execute(
         uc.UploadInput(data=b"RIFF....WAVEfmt silence", filename="v.wav", mime="audio/wav")

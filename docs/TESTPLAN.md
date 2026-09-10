@@ -297,7 +297,7 @@ need nothing but files.
 | T-SVC-051 | Proposal reject | pending proposal | `DecideProposal(approve=False)` | product unchanged, capture discarded; foreign tenant 404; non-proposable field 422 | service | yes | 3 |
 | T-SVC-052 | Capture delete | image capture | `DeleteCapture` | capture and orphan blob gone; an assigned capture gives 409 | service | yes | 3 |
 | T-SVC-053 | Discard retention | capture discarded 2 days ago | `ListCaptures` | purged automatically; still listed inside the retention window | service | yes | 3 |
-| T-SVC-054 | Prompt echo | transcript empty or all vocabulary words | `TranscribeCapture` | transcript stored empty, capture `failed`, audit entry | service | yes | 3 |
+| T-SVC-054 | Prompt echo | transcript empty, made of vocabulary words, or repeating twelve of the prompt's words in the prompt's order — of any length, including the whole prompt | `TranscribeCapture`, `looks_like_prompt_echo` | transcript stored empty, capture `failed`, audit entry; a long genuine note that names known foods is not an echo | service | yes | 3 |
 | T-API-026 | Proposal endpoints | product + product capture | list, approve with correction | 200 with diff, product verified, capture processed, re-decide 409 | api | yes | 3 |
 | T-API-027 | Proposal isolation | Alice's proposal | Bob lists / unknown id | empty list / 404 | api | yes | 3 |
 | T-API-070 | API | `GET /agent/status` | Toggle `agent.enabled` and the model key | Reports `disabled`, `no_key` and `ready`; the model name appears only when ready, never a key | `test_agent_api.py` | automated |

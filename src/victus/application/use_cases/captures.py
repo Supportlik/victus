@@ -532,22 +532,42 @@ def transcription_settings(uow: UnitOfWork) -> tuple[str | None, str | None]:
 _WORD = re.compile(r"[\w'-]+", re.UNICODE)
 
 
+#: How many of the prompt's words in the prompt's own order make a transcript an echo.
+#: Nobody recites twelve terms of a word list in the order the list happens to have.
+_ECHO_RUN = 12
+
+
+def _repeats_a_run(words: Sequence[str], prompt_words: Sequence[str], length: int) -> bool:
+    """Whether ``words`` contains ``length`` of the prompt's words in the prompt's order."""
+    if len(words) < length or len(prompt_words) < length:
+        return False
+    runs = {tuple(prompt_words[i : i + length]) for i in range(len(prompt_words) - length + 1)}
+    return any(tuple(words[i : i + length]) in runs for i in range(len(words) - length + 1))
+
+
 def looks_like_prompt_echo(text: str, vocabulary_prompt: str | None) -> bool:
     """Speech models return the vocabulary prompt (or nothing) for silent audio.
 
-    True when the transcript is empty, or short and made almost entirely of words
-    that occur in the vocabulary prompt.
+    True when the transcript is empty, made almost entirely of words that occur in the
+    vocabulary prompt, or repeating a long run of the prompt in the prompt's own order.
+
+    The length of what came back says nothing about whether it is speech. A three-second
+    recording with nothing audible in it returned the entire prompt — seventy words of
+    exercise and food names — and the rule used to stop looking above forty, so the one
+    case it exists for was the one it let through. The run check covers the other half of
+    that: a prompt echoed *alongside* a few real words dilutes the ratio below any
+    threshold, and is still a prompt the agent must never read as something eaten.
     """
     words = [w.lower() for w in _WORD.findall(text or "")]
     if not words:
         return True
     if not vocabulary_prompt:
         return False
-    vocab = {w.lower() for w in _WORD.findall(vocabulary_prompt)}
-    if len(words) > 40:
-        return False
-    hits = sum(1 for w in words if w in vocab)
-    return hits / len(words) >= 0.8
+    prompt_words = [w.lower() for w in _WORD.findall(vocabulary_prompt)]
+    hits = sum(1 for w in words if w in set(prompt_words))
+    if hits / len(words) >= 0.8:
+        return True
+    return _repeats_a_run(words, prompt_words, _ECHO_RUN)
 
 
 def _audio_parts(uow: UnitOfWork, cap: orm.Capture) -> list[orm.Attachment]:
