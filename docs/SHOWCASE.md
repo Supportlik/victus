@@ -23,7 +23,8 @@ and there are six palettes to pin them in — the choice is per browser, not per
 
 ![The same day in the dark scheme](media/day-dark.jpg)
 
-And at phone width, where the rail becomes a bottom bar and the thread moves below the meals:
+And at phone width, where the rail becomes a bottom bar and the two columns stack — the day's
+own controls, then the bands, then the meals, and the thread last:
 
 ![The day at phone width](media/day-phone.jpg)
 

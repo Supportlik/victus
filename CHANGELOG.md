@@ -6,6 +6,18 @@ All notable changes to Victus are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-09-10
+
+### Fixed
+- **The showcase's catalogue picture was the sign-in form.** The demo session expired during the
+  shoot, the app redirected to `/login`, and that frame became the committed JPEG; the retake was
+  never converted over it. The check that followed confirmed only that every image loaded, which
+  proves a file is an image and nothing about what is in it. The catalogue is reshot from the same
+  seed, with the source column in frame, and `docs/media/README.md` now opens the shooting notes
+  with the step that was missing: look at the file you are about to commit.
+- The phone paragraph promised a thread the picture does not reach: the columns do stack at that
+  width, but what the frame shows is the top of the stack. It now says what it shows.
+
 ## [1.6.0] - 2026-09-10
 
 ### Added

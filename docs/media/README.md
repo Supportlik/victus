@@ -45,6 +45,17 @@ Sessions are short by design, so a long shoot will end mid-way with `401`s and a
 the sign-in page. Sign in again and run the same `UPDATE` — it patches whatever session is
 current.
 
+## Before committing a frame
+
+Open every file that is about to be committed and look at it. Not the tool's output, not the
+list of files, the picture.
+
+This is not advice. `products.jpg` was committed as the login page: the demo session had
+expired mid-shoot, the app redirected to `/login`, and the screenshot was converted to the
+committed JPEG before the retake — which was then never converted. The check afterwards
+confirmed that every image *loaded*, which proves that a file is an image and nothing about
+what is in it. A caption promising a catalogue sat above a sign-in form until a reader said so.
+
 ## What each frame shows
 
 | File | Route | Notes |
