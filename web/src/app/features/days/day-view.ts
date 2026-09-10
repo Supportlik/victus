@@ -47,8 +47,9 @@ import { DayThread } from './day-thread';
         @if (day(); as d) {
           <div class="v-actions">
             <label class="v-field"><span>{{ i18n.t('Training') }}</span>
-              <select [ngModel]="d.training_type ?? ''" (ngModelChange)="setTraining($event)">
-                <option value="">{{ i18n.t('none / rest') }}</option><option value="rest">{{ i18n.t('rest') }}</option><option value="strength">{{ i18n.t('strength') }}</option><option value="martial_arts">{{ i18n.t('martial arts') }}</option>
+              <!-- a day carrying no type is judged as a rest day, so it reads as one here -->
+              <select [ngModel]="d.training_type ?? 'rest'" (ngModelChange)="setTraining($event)">
+                <option value="rest">{{ i18n.t('rest') }}</option><option value="strength">{{ i18n.t('strength') }}</option><option value="martial_arts">{{ i18n.t('martial arts') }}</option>
               </select>
             </label>
             <label class="v-field"><span>{{ i18n.t('Reliable') }}</span>
@@ -80,7 +81,7 @@ import { DayThread } from './day-thread';
             </label>
             <label class="v-field"><span>{{ i18n.t('Training') }}</span>
               <select name="tt" [(ngModel)]="newTraining">
-                <option value="">{{ i18n.t('none / rest') }}</option><option value="rest">{{ i18n.t('rest') }}</option><option value="strength">{{ i18n.t('strength') }}</option><option value="martial_arts">{{ i18n.t('martial arts') }}</option>
+                <option value="rest">{{ i18n.t('rest') }}</option><option value="strength">{{ i18n.t('strength') }}</option><option value="martial_arts">{{ i18n.t('martial arts') }}</option>
               </select>
             </label>
             <button type="submit" class="v-btn primary">{{ i18n.t('Create this day') }}</button>
@@ -379,7 +380,7 @@ export class DayView {
   mealName = '';
   mealTime = '';
   newReliable = 'true';
-  newTraining = '';
+  newTraining = 'rest';
 
   constructor() {
     this.api.units().subscribe({ next: (u) => this.units.set(u), error: () => this.units.set([{ code: 'g', singular: 'g', plural: 'g', unit_type: 'mass' }, { code: 'ml', singular: 'ml', plural: 'ml', unit_type: 'volume' }]) });

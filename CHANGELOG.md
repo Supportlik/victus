@@ -6,6 +6,30 @@ All notable changes to Victus are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-09-10
+
+### Fixed
+- A day nobody classified had no target band, so it showed no gauges and every macro of it
+  went unrated in the reports. There are three kinds of day — rest, strength, martial arts —
+  and the day form offered a fourth option, labelled "none / rest", whose value was no type
+  at all. Until the generic band expired such a day was still covered; from the day the three
+  typed bands replaced it, nothing matched. It was the default option, so it happened by not
+  choosing. The rule the label already promised is now the rule: **no training is rest.** A
+  band for any day still wins over the rest band for such a day, and a type that was actually
+  asked for is never traded for another — a martial arts day with no martial arts band still
+  answers "no band" rather than quietly measuring itself against a resting standard. A new day
+  starts as a rest day, and the form offers the three kinds and no empty fourth.
+
+### Changed
+- The test plan carries the rule that automated levels cannot cover: **every area a change
+  touched, and every area downstream of it, is opened in a browser and looked at before the
+  change is done.** Every fault that reached a reader — a timestamp in the wrong zone, an
+  English sentence on a German page, a recording showing 0:00, a day without a band — passed a
+  green suite and was obvious on the page.
+- `CONTRIBUTING.md` states the versioning rules: which surfaces the version covers, which part
+  a change raises, and the ordered list a release goes through. A default that changes is a fix
+  as long as the old value stays accepted; when in doubt, take the higher part.
+
 ## [1.0.0] - 2026-09-10
 
 ### Added

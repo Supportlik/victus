@@ -22,6 +22,28 @@ the code is the source of truth for *how*.
 The pyramid is deliberate: most cases are `T-DOM`/`T-SVC`; E2E covers the two flows a user cannot live without
 (login, approving a draft).
 
+### Look at what you changed
+
+**Every area a change touched, and every area that follows from it, is opened in a browser and looked at before
+the change is called done.** Not instead of the automated levels — after them.
+
+This is a rule because the suite cannot see the class of fault that reaches people. A timestamp cut out of a
+stored ISO string passed every test and told a reader in Berlin the wrong hour and, after midnight, the wrong
+day. Two English sentences sat on a German page because a ternary chose them inside the call the translation
+check reads. A recording showed 0:00 because the player was told to preload nothing. A day left on the default
+training option had no target band at all, so its gauges were missing and its macros went unrated. None of these
+is subtle. All of them are invisible to a passing assertion and obvious on the page.
+
+Follow the change through, not just to it: a band is checked on the day **and** in the report that rates days; a
+portion is checked on the product page **and** in the add-item list that offers it; a translation is checked in
+the language that lacks it, not in English.
+
+For widths, use the browser's device emulation. Resizing a maximised window silently does nothing, and a layout
+claimed rather than seen is worth nothing.
+
+And when something could not be checked, say so. An unverified area reported as verified is worse than an
+unverified area reported as unverified.
+
 ## Conventions
 
 | Item | Rule |
@@ -31,6 +53,7 @@ The pyramid is deliberate: most cases are `T-DOM`/`T-SVC`; E2E covers the two fl
 | DB matrix | `--db sqlite` (default) and `--db postgres` (service container in CI) for `T-SVC`, `T-API`, `T-MIG` |
 | Fixtures | Synthetic or anonymised; no real personal or health data (SPEC R48) |
 | Tolerances | kcal ±1, macros ±0.1 g, salt ±0.01 g, weight ±0.01 kg, TDEE ±1 kcal unless stated |
+| Manual check | Every area a change touched, and every area downstream of it, opened in a browser and looked at before the change is done (see *Look at what you changed*) |
 
 ## Domain (`T-DOM`)
 

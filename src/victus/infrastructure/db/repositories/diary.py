@@ -331,8 +331,21 @@ class TargetBandRepo(Repo):
         ).all()
 
     def for_date(self, day: date, training_type: TrainingType | None) -> orm.TargetBand | None:
-        """Most specific band valid on ``day``: matching training type first, then generic."""
-        tt = training_type.value if training_type else None
+        """Most specific band valid on ``day``: matching training type, then generic, then rest.
+
+        A day with no training type is judged as a rest day. That is what the day form has
+        always called it — "none / rest" — and without the fallback such a day had no band
+        at all once the generic band was replaced by the three typed ones, so its targets
+        disappeared from the page and its macros went unrated in every report.
+
+        A generic band still wins over the rest band for such a day, because a band that
+        applies to any day is a deliberate statement about days like this one. And a type
+        that was actually given is never traded for another: asking for a martial arts day
+        when no martial arts band exists answers nothing, rather than quietly measuring it
+        against a resting standard.
+        """
+        requested = training_type.value if training_type else None
+        tt = requested or TrainingType.REST.value
         stmt = self.scoped(
             select(orm.TargetBand).where(
                 orm.TargetBand.valid_from <= day,
@@ -344,10 +357,16 @@ class TargetBandRepo(Repo):
         candidates = self.session.scalars(stmt).all()
         if not candidates:
             return None
-        candidates = sorted(
-            candidates, key=lambda b: (b.training_type is None, -b.valid_from.toordinal())
-        )
-        return candidates[0]
+
+        def rank(band: orm.TargetBand) -> tuple[int, int]:
+            if requested is None:
+                # nothing was asked for: a band for any day first, the rest band as stand-in
+                tier = 0 if band.training_type is None else 1
+            else:
+                tier = 0 if band.training_type == tt else 1
+            return tier, -band.valid_from.toordinal()
+
+        return sorted(candidates, key=rank)[0]
 
 
 class SettingsRepo(Repo):

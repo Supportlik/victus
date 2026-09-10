@@ -8,4 +8,4 @@ The package is organised in hexagonal layers (see ``docs/ARCHITECTURE.md``):
 * ``victus.api`` / ``victus.mcp`` / ``victus.cli`` / ``victus.agent`` — primary adapters
 """
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"

@@ -230,7 +230,9 @@ class CreateDay(UseCase):
                     weekday=weekday_name(day),
                     reliable=reliable,
                     status=DayStatus.OPEN.value,
-                    training_type=_training(training_type),
+                    # A new day is a rest day until it says otherwise: that is the default
+                    # the day form offers, and the band it is judged against (R59).
+                    training_type=_training(training_type) or TrainingType.REST.value,
                     training_note=notes,
                     created_by_kind="user",
                 )

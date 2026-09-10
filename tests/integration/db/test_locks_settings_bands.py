@@ -88,5 +88,19 @@ def test_target_band_for_date_prefers_specific_and_latest(uow: SqlAlchemyUnitOfW
         assert later is not None and later.name == "strength"
         rest = u.target_bands.for_date(date(2026, 9, 1), TrainingType.REST)
         assert rest is not None and rest.name == "rest"
-        # martial arts has no own profile after 08-18 and the generic one has expired
+        # martial arts has no own profile after 08-18 and the generic one has expired.
+        # A type that was asked for is never traded for another one: answering with the
+        # resting standard would measure a training day against the wrong band.
         assert u.target_bands.for_date(date(2026, 9, 1), TrainingType.MARTIAL_ARTS) is None
+
+        # A day nobody classified is a rest day. Until 08-17 the generic band covers it;
+        # after that only the three typed bands exist, and without this the day had no
+        # band at all - no targets on the page, every macro unrated in the report.
+        unclassified_now = u.target_bands.for_date(date(2026, 9, 1), None)
+        assert unclassified_now is not None and unclassified_now.name == "rest"
+
+        # ...but a band that applies to any day is the more deliberate statement, so it
+        # wins over the rest band standing in for a missing choice.
+        unclassified_then = u.target_bands.for_date(date(2026, 5, 1), None)
+        assert unclassified_then is not None
+        assert unclassified_then.name == "generic (no salt target)"

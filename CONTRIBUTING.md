@@ -37,6 +37,65 @@ By submitting a contribution you confirm that:
 No signature or form is needed. Saying so in the pull request, or simply opening one after
 reading this, is enough.
 
+## Versioning
+
+Victus follows [Semantic Versioning](https://semver.org/). The version lives in exactly one
+place, `src/victus/__init__.py`, and `tests/test_version.py` fails if the package metadata drifts
+from it.
+
+**What the number covers.** These are the public surfaces; a change that forces someone to adapt
+is breaking:
+
+- the REST API under `/api/v1` and the JSON schemas in `schemas/`,
+- the MCP tools: their names, their inputs and the shape of what they return,
+- the CLI: command names, options and exit codes,
+- configuration: `victus.yaml` keys and `VICTUS_*` environment variables,
+- the database: a migration that cannot be applied to an existing database, or that loses data.
+
+The web app's markup, the internal module layout and anything under `tests/` are not public.
+Changing a component's CSS class is not a breaking change; changing what `day_get` returns is.
+
+**Which part to raise.**
+
+| Part | When | Examples |
+|---|---|---|
+| **MAJOR** | A public surface changes in a way that breaks an existing caller, or a migration is not reversible without loss | Removing an MCP tool or one of its fields, renaming a config key, `/api/v1` behaviour a client depended on, dropping a column that held data |
+| **MINOR** | Something is added, and everything that worked still works | A new MCP tool, a new endpoint, a new report block, a new optional field, a new language, a new setting with a default that keeps today's behaviour |
+| **PATCH** | A defect is fixed and nothing new is offered | Wrong arithmetic, a wrong unit, an untranslated string, a layout fault, a value that was resolved incorrectly — including when the fix changes what the software *does*, because doing the wrong thing was never the contract |
+
+Two rules that settle most arguments:
+
+1. **A default that changes is a fix, not a feature** — as long as the old value stays accepted.
+   A new day now starting as a rest day is PATCH: the API still takes any training type, and a day
+   with none was a defect.
+2. **When in doubt, take the higher part.** A release that turns out to break someone is worse than
+   a version number that was cautious.
+
+**Every release, in order.** Nothing here is optional, and it is the same list for a patch as for
+a major:
+
+1. `ruff check .`, `ruff format --check .`, `mypy src`, `pytest -q`, `npm test`,
+   `scripts/check_translations.py --strict`, `scripts/privacy_check.py` — all green.
+2. Run the suite against PostgreSQL as well, not only SQLite. Dialect-specific migration faults are
+   invisible on SQLite and stop every PostgreSQL deployment.
+3. The affected areas opened in a browser and looked at (see [the test plan](docs/TESTPLAN.md)).
+4. `CHANGELOG.md`: the entries move from `[Unreleased]` into a new `## [x.y.z] - YYYY-MM-DD`
+   heading, under Added / Changed / Fixed. An entry says what was wrong and what it did to the
+   reader, not which files moved.
+5. `__version__` raised in `src/victus/__init__.py`.
+6. One commit for the release, then an annotated, signed tag `vX.Y.Z` whose message says what the
+   release is for. The tag is what publishes: pushing it builds the tagged images and the GitHub
+   release from the changelog.
+7. Deploy, then check the running version (`victus version`) and the migration head against what
+   was tagged.
+
+**Issues carry their part.** When an issue is picked up, its fix is labelled with the part it will
+raise, so a release can be assembled from labels instead of by reading diffs. An issue that would
+break a public surface says so in its body — that is what decides whether it waits for a major.
+
+**Before 1.0** the project used `0.1.0.dev0` and no tags. From 1.0.0 on, every deployed state has a
+tag, and a deployment that is not on a tag is a debugging session, not a release.
+
 ## What makes a contribution easy to accept
 
 - **One concern per pull request.** A fix and a refactor in one branch take three times as long

@@ -89,6 +89,22 @@ describe('DayView', () => {
     expect(protein.querySelector('.strip')?.getAttribute('aria-label')).toContain('in the optimal range');
   });
 
+  // T-WEB-048: there are three kinds of day. A fourth option labelled "none / rest" wrote
+  // no type at all, and from the day the generic band was replaced by the three typed ones
+  // such a day had no band: no gauges, and every macro of it unrated in the report.
+  it('offers the three kinds of day and no empty option', async () => {
+    const fixture = await render();
+    const el = fixture.nativeElement as HTMLElement;
+    const select = el.querySelector('select') as HTMLSelectElement;
+    const values = [...select.options].map((o) => o.value);
+    expect(values).toEqual(['rest', 'strength', 'martial_arts']);
+    expect(values).not.toContain(''), 'an unclassified day is a rest day, not a fourth state';
+    // a day the server returns without a type reads as the rest day it is judged as
+    fixture.componentInstance.day.update((d) => (d ? { ...d, training_type: null } : d));
+    fixture.detectChanges();
+    expect((el.querySelector('select') as HTMLSelectElement).value).toBe('rest');
+  });
+
   it('shows "Create this day" on 404 and posts reliable + training_type', async () => {
     const fixture = TestBed.createComponent(DayView);
     fixture.componentRef.setInput('date', '2026-01-03');
