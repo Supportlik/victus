@@ -55,6 +55,10 @@ is breaking:
 The web app's markup, the internal module layout and anything under `tests/` are not public.
 Changing a component's CSS class is not a breaking change; changing what `day_get` returns is.
 
+Documentation is not a public surface, but it follows the same table: a document that did not
+exist is an addition (MINOR), a document that said something wrong is a fix (PATCH). Reshooting
+the pictures in `docs/media/` because the interface moved on is a fix — nothing was added.
+
 **Which part to raise.**
 
 | Part | When | Examples |

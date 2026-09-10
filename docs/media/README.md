@@ -41,18 +41,35 @@ That marker is the whole mechanism: `is_recovery_session()` reads it off the use
 this on a demo database and nowhere else. The proper answer is the virtual authenticator the
 test plan describes for `T-E2E-001`, which is not written yet.
 
+Sessions are short by design, so a long shoot will end mid-way with `401`s and a jump back to
+the sign-in page. Sign in again and run the same `UPDATE` — it patches whatever session is
+current.
+
 ## What each frame shows
 
 | File | Route | Notes |
 |---|---|---|
 | `day-light.jpg` | `/days/<a closed strength day>` | Bands, three meals, the thread beside them |
 | `day-dark.jpg` | the same day | The same page in the dark scheme |
+| `day-phone.jpg` | the same day at 400 px | The day and its navigation at phone width |
+| `products.jpg` | `/products` | The catalogue, nutrients per 100 g, the source of each |
+| `product.jpg` | `/products/<the egg>` | Values, the density sentence, label captures, where it was eaten |
+| `portions.jpg` | the same page, scrolled to Portions | The four piece weights, one of them the default |
 | `reports-checkup.jpg` | `/reports`, period 14 days | Tiles, the one time axis, the TDEE windows |
 | `reports-body.jpg` | `/reports`, scrolled to Body | The BMI scale with its classes as kilograms |
-| `products.jpg` | `/products` | The catalogue and a proposal waiting to be decided |
-| `day-phone.jpg` | `/days/<the same day>` at 420 px | The day and its navigation at phone width |
 | `log-item.gif` | `/days/<an open day>` | Search a product, pick a portion, the item lands |
 | `size-question.gif` | the same day | A unit the product has no portion for, asked once |
+
+The phone frame is not a narrower window: a desktop Chrome cannot be resized below about
+1278 px, so the app is rendered in a same-origin 400 px `<iframe>` and the frame is cropped
+out afterwards. What that proves is the layout at 400 px, not the device.
+
+Recordings are exported without the recorder's watermark and re-encoded before they are
+committed — 820 px wide, 64 colours, 1.25 frames per second:
+
+```sh
+ffmpeg -i raw.gif -filter_complex   "fps=1.25,scale=820:-1:flags=lanczos,split[a][b];   [a]palettegen=max_colors=64:stats_mode=diff[p];[b][p]paletteuse=dither=none:diff_mode=rectangle"   -loop 0 docs/media/log-item.gif
+```
 
 Screenshots come out of the browser as JPEG, which is why they are not PNG. Recordings are
 kept to the seconds that carry the point; a recording that shows a static screen should have

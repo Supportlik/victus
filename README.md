@@ -42,6 +42,25 @@ voice notes, photos and free text into day-log drafts you approve with one comma
 * **Multi-tenant, token-authenticated, backed up.** Every row belongs to a tenant; passkeys for
   people, scoped bearer tokens for scripts and agents; backups are plain JSONL you can read.
 
+## Showcase
+
+The day: target bands above, the meals below, and the thread the agent answers in.
+
+![The day: bands above, meals below, the thread beside them](docs/media/day-light.jpg)
+
+Searching a product and picking a portion — "1 piece (M)" is logged without weighing anything.
+
+![Searching a product, picking a portion, the item lands in the meal](docs/media/log-item.gif)
+
+The check-up puts weight, intake, the rolling TDEE and the macros on one time axis, and says how
+much each TDEE window can be trusted.
+
+![The check-up: weight, intake, TDEE windows and how reliable each is](docs/media/reports-checkup.jpg)
+
+The full tour — catalogue, product page, portions, the body block, the dark scheme and phone
+width — is in [`docs/SHOWCASE.md`](docs/SHOWCASE.md). Every picture comes from a demo tenant of
+invented data; [`docs/media/README.md`](docs/media/README.md) says how the set is reproduced.
+
 ## Installation
 
 Victus ships as a Docker Compose stack (`deploy/`). Requirements: Docker with Compose v2, an
@@ -101,6 +120,7 @@ scopes, `/mcp` is meant for your VPN only. Details: [`docs/MCP.md`](docs/MCP.md)
 
 | Document | Content |
 |---|---|
+| [`docs/SHOWCASE.md`](docs/SHOWCASE.md) | The web app screen by screen, from a demo tenant |
 | [`docs/SPEC.md`](docs/SPEC.md) | Requirements R1…Rn and design decisions D1…Dn |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Hexagonal layers, package layout, sequence diagrams |
 | [`docs/API.md`](docs/API.md) · [`docs/MCP.md`](docs/MCP.md) | REST resources, MCP tools and scopes |

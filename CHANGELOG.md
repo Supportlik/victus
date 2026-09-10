@@ -6,6 +6,27 @@ All notable changes to Victus are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-09-10
+
+### Added
+- **A showcase: the app is now visible without installing it.** The README opened on a prose
+  description and an ASCII diagram, so the only way to find out what Victus looks like was to
+  deploy it. [`docs/SHOWCASE.md`](docs/SHOWCASE.md) walks through the day with its bands and its
+  thread, the catalogue, a product page with its density and its portions, the check-up and the
+  body block — plus two short recordings: logging an item through a portion, and the question the
+  app asks once when a unit has no portion yet. Three of them lead the README.
+- `scripts/demo_seed.py` fills a throwaway tenant with a month of invented days, weights, body
+  measurements and 17 products, which is what makes the pictures retakeable: when the interface
+  moves on, the set is reshot from the same seed instead of being left to rot. Nothing in it is
+  real, and no photograph or voice note of a person is used (SPEC R48).
+  [`docs/media/README.md`](docs/media/README.md) records the seed, the one thing that has to be
+  done by hand — signing in without a passkey — and the encoding the recordings are committed at.
+
+### Changed
+- The versioning rules say where documentation sits: a document that did not exist is an
+  addition, one that said something wrong is a fix, and reshooting the pictures because the
+  interface moved on is a fix rather than a feature.
+
 ## [1.4.0] - 2026-09-10
 
 ### Added
