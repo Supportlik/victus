@@ -69,6 +69,40 @@ describe('DayView', () => {
     expect(el.querySelector('tr.total')?.textContent).toContain('252');
   });
 
+  // T-WEB-049: one unit can have several portions - a piece of egg is S, M, L or XL - so
+  // the unit alone would read "1 Stück" for anything between 43 and 65 g.
+  it('names the portion beside the unit, unless the label only repeats the unit', async () => {
+    const fixture = await render();
+    const base = day.meals[0].line_items[0];
+    fixture.componentInstance.day.update((d) =>
+      d
+        ? {
+            ...d,
+            meals: [
+              {
+                ...d.meals[0],
+                line_items: [
+                  ...d.meals[0].line_items,
+                  { ...base, id: 13, position: 3, consumable_name: 'Egg', amount: 2, unit_code: 'piece', portion_id: 9, portion_label: 'L', base_amount: 112 },
+                  { ...base, id: 14, position: 4, consumable_name: 'Roll', amount: 1, unit_code: 'piece', portion_id: 10, portion_label: 'piece', base_amount: 70 },
+                ],
+              },
+            ],
+          }
+        : d,
+    );
+    fixture.detectChanges();
+    const rows = [...(fixture.nativeElement as HTMLElement).querySelectorAll('tbody tr')];
+    const cell = (name: string) =>
+      rows.find((r) => r.textContent?.includes(name))?.querySelectorAll('td.num')[0]?.textContent?.trim();
+
+    expect(cell('Egg')).toBe('2 piece (L)');
+    // a label that is only the unit's own word would read "1 piece (piece)"
+    expect(cell('Roll')).toBe('1 piece');
+    // and an item logged in grams has no portion at all
+    expect(cell('Skyr natural')).toBe('400 g');
+  });
+
   it('marks estimated items with ⚠️ and drafts with a tag', async () => {
     const el = (await render()).nativeElement as HTMLElement;
     const rows = el.querySelectorAll('.meal tbody tr');

@@ -55,6 +55,8 @@ def draft_markdown(view: dto.DayView) -> str:
         for li in meal.line_items:
             amount = _fmt(li.amount, 1) if li.amount is not None else _fmt(li.base_amount)
             qty = f"{amount} {li.unit_code or li.base_unit}"
+            if li.portion_label:
+                qty += f" ({li.portion_label})"
             if li.estimated or li.amount_estimated:
                 qty += " ⚠️"
             conf = f"{li.confidence:.2f}" if li.confidence is not None else "–"
@@ -280,7 +282,10 @@ class ApproveLineItem(UseCase):
             category, icon = uow.products.display_hints_for([li.consumable_id]).get(
                 li.consumable_id, (None, None)
             )
-            view = line_item_view(li, macros, li.consumable, category, icon)
+            label = uow.products.portion_labels_for([li.portion_id] if li.portion_id else []).get(
+                li.portion_id or -1
+            )
+            view = line_item_view(li, macros, li.consumable, category, icon, label)
             uow.commit()
             return view
 

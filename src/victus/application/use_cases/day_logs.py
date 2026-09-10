@@ -107,6 +107,9 @@ def build_day_view(uow: UnitOfWork, d: orm.DayLog) -> dto.DayView:
     hints = uow.products.display_hints_for(
         [li.consumable_id for m in d.meals for li in m.line_items]
     )
+    labels = uow.products.portion_labels_for(
+        [li.portion_id for m in d.meals for li in m.line_items if li.portion_id is not None]
+    )
     meals: list[dto.MealView] = []
     has_drafts = d.status == DayStatus.DRAFT.value
     for meal in d.meals:
@@ -114,7 +117,11 @@ def build_day_view(uow: UnitOfWork, d: orm.DayLog) -> dto.DayView:
         for li in meal.line_items:
             m = item_macros.get(li.id)
             category, icon = hints.get(li.consumable_id, (None, None))
-            items.append(line_item_view(li, m, li.consumable, category, icon))
+            items.append(
+                line_item_view(
+                    li, m, li.consumable, category, icon, labels.get(li.portion_id or -1)
+                )
+            )
             has_drafts = has_drafts or bool(li.is_draft)
         totals = sum_macros(item_macros[li.id] for li in meal.line_items if li.id in item_macros)
         meals.append(
@@ -340,7 +347,10 @@ def _item_view(uow: UnitOfWork, li: orm.LineItem, day: date) -> dto.LineItemView
     category, icon = uow.products.display_hints_for([li.consumable_id]).get(
         li.consumable_id, (None, None)
     )
-    return line_item_view(li, macros, li.consumable, category, icon)
+    label = uow.products.portion_labels_for([li.portion_id] if li.portion_id else []).get(
+        li.portion_id or -1
+    )
+    return line_item_view(li, macros, li.consumable, category, icon, label)
 
 
 class AddLineItem(UseCase):

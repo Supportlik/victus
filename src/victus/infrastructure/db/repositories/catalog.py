@@ -206,6 +206,18 @@ class ProductRepo(Repo):
         self.session.flush()
 
     # ── categories ──
+    def portion_labels_for(self, portion_ids: Sequence[int]) -> dict[int, str]:
+        """{portion id: label} for the given portions, in one query."""
+        wanted = [p for p in portion_ids if p is not None]
+        if not wanted:
+            return {}
+        stmt = (
+            select(orm.Portion.id, orm.Portion.label)
+            .join(orm.Consumable, orm.Consumable.id == orm.Portion.product_id)
+            .where(orm.Consumable.tenant_id == self.tenant_id, orm.Portion.id.in_(wanted))
+        )
+        return {int(i): str(label) for i, label in self.session.execute(stmt).all()}
+
     def display_hints_for(
         self, product_ids: Sequence[int]
     ) -> dict[int, tuple[str | None, str | None]]:

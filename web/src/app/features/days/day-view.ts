@@ -195,7 +195,7 @@ import { DayThread } from './day-thread';
                             @if (it.estimated || it.amount_estimated) { <span class="warn-mark" [title]="i18n.t('estimated')">⚠️</span> }
                             @if (it.consumable_kind === 'ad_hoc') { <span class="v-tag">{{ i18n.t('unmatched') }}</span> }
                           </td>
-                          <td class="num">{{ amountText(it.amount ?? it.base_amount) }} {{ i18n.t(it.unit_code ?? it.base_unit) }}</td>
+                          <td class="num">{{ amountText(it.amount ?? it.base_amount) }} {{ unitOf(it) }}</td>
                           <td class="num">{{ it.kcal | macro: 'kcal' }}</td>
                           <td class="num">{{ it.protein | macro: 'protein' }}</td>
                           <td class="num v-hide-m">{{ it.carbs | macro: 'carbs' }}</td>
@@ -359,6 +359,18 @@ export class DayView {
   readonly unitLabel = computed(() =>
     this.i18n.t(this.units().find((u) => u.code === this.unitCode())?.singular ?? this.unitCode()),
   );
+
+  /** The unit an item was logged in, with the portion when the unit alone is ambiguous.
+   *
+   * One unit can have several portions — a piece of egg is S, M, L or XL — so "1 Stück"
+   * would stand for anything between 43 and 65 g.
+   */
+  unitOf(it: LineItem): string {
+    const unit = this.i18n.t(it.unit_code ?? it.base_unit);
+    // a label that only repeats the unit's own word would read "1 Stück (Stück)"
+    const named = it.portion_label && it.portion_label !== it.unit_code;
+    return named ? `${unit} (${this.i18n.t(it.portion_label!)})` : unit;
+  }
 
   /** An amount as it is written here: a whole number stays whole, a fraction keeps one place. */
   amountText(value: number | null | undefined): string {
@@ -559,7 +571,7 @@ export class DayView {
     const v = window.prompt(
       this.i18n.t('Amount for {name} ({unit})', {
         name: it.consumable_name,
-        unit: this.i18n.t(it.unit_code ?? it.base_unit),
+        unit: this.unitOf(it),
       }),
       String(it.amount ?? it.base_amount),
     );

@@ -173,6 +173,7 @@ def line_item_view(
     consumable: orm.Consumable | None,
     category: str | None = None,
     icon: str | None = None,
+    portion_label: str | None = None,
 ) -> dto.LineItemView:
     m = macros or Macros()
     return dto.LineItemView(
@@ -184,6 +185,10 @@ def line_item_view(
         consumable_kind=consumable.kind if consumable else "product",
         amount=li.amount,
         unit_code=li.unit_code,
+        portion_id=li.portion_id,
+        # a label that only repeats the unit's own word says nothing: every portion made
+        # before labels were used has label == unit_code, and "1 Stück (Stück)" is noise
+        portion_label=portion_label if portion_label != li.unit_code else None,
         base_amount=li.base_amount,
         base_unit=li.base_unit,
         estimated=bool(li.estimated),

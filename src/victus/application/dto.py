@@ -121,6 +121,10 @@ class LineItemView:
     consumable_kind: str
     amount: float | None
     unit_code: str | None
+    #: The portion this amount was resolved through, and its label — one unit can have
+    #: several (a piece of egg is S, M, L or XL), and the unit alone cannot say which.
+    portion_id: int | None
+    portion_label: str | None
     base_amount: float
     base_unit: str
     estimated: bool

@@ -6,7 +6,15 @@ All notable changes to Victus are documented here. The format follows
 
 ## [Unreleased]
 
-## [1.0.1] - 2026-09-10
+## [1.1.0] - 2026-09-10
+
+### Added
+- A logged item names the portion it was resolved through, not only its unit. One unit can hold
+  several portions — an egg is `piece` in the four German trade classes, 43 to 65 g — and the day
+  table read "1 Stück" for all of them, a difference of 34 kcal the page could not show. The item
+  now carries `portion_id` and `portion_label`, the day table and the Markdown export print
+  `2 Stück (L)`, and a label that only repeats the unit's own word is left off, because
+  "1 Stück (Stück)" says nothing and is what every portion created before labels looks like.
 
 ### Fixed
 - A day nobody classified had no target band, so it showed no gauges and every macro of it

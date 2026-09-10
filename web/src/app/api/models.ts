@@ -164,6 +164,9 @@ export interface LineItem extends Macros {
   consumable_kind: ConsumableKind;
   amount?: number | null;
   unit_code?: string | null;
+  /** The portion the amount was resolved through; one unit can have several. */
+  portion_id?: number | null;
+  portion_label?: string | null;
   base_amount: number;
   base_unit: 'g' | 'ml';
   estimated: boolean;

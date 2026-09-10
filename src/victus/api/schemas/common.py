@@ -178,6 +178,9 @@ class LineItemOut(MacrosOut):
     consumable_kind: str
     amount: float | None
     unit_code: str | None
+    #: The portion the amount was resolved through; the unit alone cannot say which (R75).
+    portion_id: int | None = None
+    portion_label: str | None = None
     base_amount: float
     base_unit: str
     estimated: bool

@@ -74,6 +74,46 @@ def test_count_unit_uses_the_portion(factory: UowFactory, alice: TenantContext, 
         )
 
 
+def test_t_svc_009_an_item_names_the_portion_it_was_logged_with(
+    factory: UowFactory, alice: TenantContext, skyr: int
+) -> None:
+    """One unit can hold several portions, so the unit alone does not say which was meant.
+
+    An egg is `piece` in four sizes; "1 piece" would stand for anything between 43 and 65 g.
+    A label that only repeats the unit's own word is dropped instead, because "1 piece
+    (piece)" says nothing - and every portion made before labels were used is exactly that.
+    """
+    from victus.application.use_cases import products as products_uc
+
+    small = products_uc.AddPortion(factory, alice).execute(
+        skyr,
+        products_uc.PortionInput(unit_code="cup", label="small", amount=150, is_default=True),
+    )
+    uc.CreateDay(factory, alice).execute(DAY, reliable=True)
+    meal = uc.AddMeal(factory, alice).execute(DAY, "Snack")
+    uc.AddLineItem(factory, alice).execute(
+        meal.id, uc.LineItemInput(consumable_id=skyr, amount=2, unit_code="cup")
+    )
+    uc.AddLineItem(factory, alice).execute(
+        meal.id, uc.LineItemInput(consumable_id=skyr, amount=1, unit_code="tub")
+    )
+    uc.AddLineItem(factory, alice).execute(
+        meal.id, uc.LineItemInput(consumable_id=skyr, amount=200, unit_code="g")
+    )
+
+    items = uc.GetDay(factory, alice).execute(DAY).meals[0].line_items
+    by_unit = {i.unit_code: i for i in items}
+
+    assert by_unit["cup"].portion_id == small.id
+    assert by_unit["cup"].portion_label == "small", "the size the amount was resolved through"
+    assert by_unit["cup"].base_amount == 300.0
+
+    assert by_unit["tub"].portion_id is not None, "the portion is still known"
+    assert by_unit["tub"].portion_label is None, "'tub (tub)' would say nothing"
+
+    assert by_unit["g"].portion_id is None and by_unit["g"].portion_label is None
+
+
 def test_t_svc_005_close_day_freezes_target_band(
     factory: UowFactory, alice: TenantContext, skyr: int
 ) -> None:
