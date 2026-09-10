@@ -1,10 +1,11 @@
-"""T-API-026/027: the proposal endpoints and their tenant isolation."""
+"""T-API-026/027/073: the proposal endpoints, portion operations and tenant isolation."""
 
 from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
 from tests.integration.api.conftest import Account
+from victus.application.use_cases import products as products_uc
 from victus.application.use_cases import proposals as prop_uc
 from victus.application.use_cases._base import UowFactory
 
@@ -62,3 +63,32 @@ def test_proposals_are_tenant_scoped(
 ) -> None:
     assert client.get("/api/v1/proposals", headers=bob_token).json() == []
     assert client.get("/api/v1/proposals/does-not-exist", headers=alice_token).status_code == 404
+
+
+def test_t_api_073_a_portion_operation_is_listed_with_its_plan(
+    client: TestClient,
+    alice_token: dict[str, str],
+    api_factory: UowFactory,
+    alice_account: Account,
+) -> None:
+    """T-API-073: the review list carries the row a portion entry would change."""
+    pid = _product(client, alice_token)
+    portion = products_uc.AddPortion(api_factory, alice_account.ctx).execute(
+        pid, products_uc.PortionInput(unit_code="tub", label="tub", amount=400)
+    )
+    prop_uc.ProposeProductChange(api_factory, alice_account.ctx).execute(
+        pid, {"portions": [{"op": "update", "portion_id": portion.id, "amount": 450}]}
+    )
+
+    listed = client.get("/api/v1/proposals", headers=alice_token)
+    assert listed.status_code == 200, listed.text
+    plan = listed.json()[0]["portion_plan"]
+    assert [(p["op"], p["current"]["amount"], p["blocked"]) for p in plan] == [
+        ("update", 400, None)
+    ]
+
+    proposal_id = listed.json()[0]["id"]
+    ok = client.post(f"/api/v1/proposals/{proposal_id}/approve", headers=alice_token, json={})
+    assert ok.status_code == 200 and ok.json()["portion_plan"] == []  # decided, so nothing pending
+    product = client.get(f"/api/v1/products/{pid}", headers=alice_token).json()
+    assert [(p["unit_code"], p["amount"]) for p in product["portions"]] == [("tub", 450)]

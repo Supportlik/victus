@@ -10,7 +10,8 @@ import { MarkdownPipe } from '../../shared/markdown.pipe';
 
 /**
  * The day's conversation. Everything you write, say or photograph here is a capture for this
- * date; the agent answers with summaries, questions and notes in the same thread.
+ * date; the agent answers with questions and notes in the same thread. Its verdict on the day
+ * is not a chat entry — that stands above the meals.
  */
 @Component({
   selector: 'v-day-thread',
@@ -56,7 +57,6 @@ import { MarkdownPipe } from '../../shared/markdown.pipe';
     .msg:not(.card) { padding: 0.5rem 0.7rem; border-radius: var(--v-radius-l); background: var(--v-surface-2); }
     .msg.agent, .msg.system { background: var(--v-agent-soft); border-left: 3px solid var(--v-agent); }
     .msg.question { border-left-color: var(--v-warn); }
-    .msg.summary { border-left-color: var(--v-ok); }
     .msg.note { border-left-style: dashed; }
     .meta { display: flex; gap: 0.5rem; align-items: center; font-size: var(--v-fs-xs); color: var(--v-ink-3); margin-bottom: 0.2rem; }
     .who { color: var(--v-ink-2); font-weight: 500; }
@@ -85,7 +85,10 @@ export class DayThread {
   reload(): void {
     this.api.dayMessages(this.date()).subscribe({
       next: (m) => {
-        this.messages.set(m);
+        // The day's verdict has its own quiet block above the meals; as a chat entry it
+        // would say the same two sentences twice on one page. What belongs in a
+        // conversation are the notes and the questions.
+        this.messages.set(m.filter((x) => !(x.role === 'agent' && x.kind === 'summary')));
         this.badges.refresh();
       },
       error: (e: unknown) => this.error.set(describeError(e)),

@@ -37,16 +37,26 @@ def search_products(
     ctx: Ctx,
     uow: Uow,
     q: Annotated[
-        str, Query(description="Substring search over name and brand; fuzzy fallback.")
+        str,
+        Query(
+            description="Search over name and brand, ranked by the name: exact, prefix, "
+            "word prefix, then substring; the fuzzy matcher adds candidates."
+        ),
     ] = "",
     category: int | None = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 20,
+    offset: Annotated[
+        int,
+        Query(ge=0, description="Skip this many rows, so a catalogue above the cap can be paged."),
+    ] = 0,
     on: Annotated[
         date | None,
         Query(description="Return the version of each product that applied on this day (R70)."),
     ] = None,
 ) -> list[ProductOut]:
-    rows = uc.SearchProducts(uow, ctx).execute(q, category_id=category, limit=limit, on=on)
+    rows = uc.SearchProducts(uow, ctx).execute(
+        q, category_id=category, limit=limit, offset=offset, on=on
+    )
     return [_out(p) for p in rows]
 
 
@@ -100,7 +110,11 @@ def product_usage(
     uow: Uow,
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
 ) -> ProductUsageOut:
-    """The days this product was logged on, newest first."""
+    """The days this product was logged on, newest first, plus `item_count` over all of them.
+
+    The id may also be the one-off consumable a pending `new` proposal is logged against,
+    which is how that proposal shows the day and the meal it was eaten in.
+    """
     return ProductUsageOut.model_validate(
         uc.GetProductUsage(uow, ctx).execute(product_id, limit=limit)
     )

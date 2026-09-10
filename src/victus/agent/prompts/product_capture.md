@@ -9,7 +9,9 @@ Steps:
    carbs, fat, fiber, salt; name, brand, ean or reference_unit when they differ), `capture_id`
    "{capture_id}", `source` "label photo, capture {capture_id}" and a one-sentence `rationale`
    in {language}.
-3. If the label states a portion (e.g. "1 slice = 25 g"), add it with `portion_create`.
+3. If the label states a portion (e.g. "1 slice = 25 g"), add it with `portion_create`. If a
+   portion already on the product contradicts the label, correct it with `portion_update` rather
+   than adding a second one, and use `portion_delete` with a `reason` for one that cannot exist.
 4. If nothing is legible or the capture is not about this product, call `capture_mark` with
    status `failed` and explain in one sentence. Then stop.
 

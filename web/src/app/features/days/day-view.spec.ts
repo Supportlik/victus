@@ -1,10 +1,12 @@
 // T-WEB-001: day view renders meals, totals, ⚠️ on estimates, draft tint and band gauges from a fixture.
-import { TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { By } from '@angular/platform-browser';
 import { provideRouter } from '@angular/router';
-import { DayLog } from '../../api';
+import { DayLog, Product } from '../../api';
 import { FormatService } from '../../core/format.service';
+import { LineItemForm } from '../../shared/line-item-form';
 import { DayView } from './day-view';
 
 const band = { min: 105, opt_min: 150, opt_max: 185, target: 165, max: 200, stretch: 185 };
@@ -37,6 +39,15 @@ const day: DayLog = {
       ],
     },
   ],
+};
+
+const skyrProduct: Product = {
+  id: 5, name: 'Skyr natural', reference_amount: 100, reference_unit: 'g', verified: true, kcal: 63, protein: 11,
+  portions: [{ id: 9, product_id: 5, unit_code: 'tub', label: 'tub', amount: 400, amount_unit: 'g', is_default: true }],
+};
+const chicken: Product = {
+  id: 9, name: 'Paprika chicken', reference_amount: 100, reference_unit: 'g', verified: false, kcal: 106, protein: 17,
+  portions: [],
 };
 
 describe('DayView', () => {
@@ -250,6 +261,88 @@ describe('DayView', () => {
     const item = http.expectOne(`/api/v1/meals/${day.meals[0].id}/line-items`);
     expect(item.request.body).toMatchObject({ consumable_id: 42, amount: 1, unit_code: 'bag', portion_id: 7 });
     item.flush({});
+    http.match(() => true).forEach((r) => r.flush(r.request.method === 'GET' ? [] : {}));
+  });
+
+  /** Press "edit" in the row of one item; jsdom needs the change detection by hand. */
+  function open(fixture: ComponentFixture<DayView>, item: string): void {
+    const rows = [...(fixture.nativeElement as HTMLElement).querySelectorAll('tbody tr')];
+    const row = rows.find((r) => r.textContent?.includes(item))!;
+    const button = [...row.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'edit');
+    (button as HTMLButtonElement).click();
+    fixture.detectChanges();
+  }
+
+  function save(panel: Element): void {
+    const button = [...panel.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Save');
+    (button as HTMLButtonElement).click();
+  }
+
+  // T-WEB-055: the numbers say whether the day stayed in its bands. They do not say what
+  // the day was, which is the question a person opens a day with.
+  it('shows the verdict above the meals, and nothing when there is none', async () => {
+    const fixture = await render();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('.verdict')).toBeNull();
+
+    fixture.componentInstance.day.update((d) => (d ? { ...d, verdict: 'A rest day that came in light. Two ready meals and a pudding.' } : d));
+    fixture.detectChanges();
+    const verdict = el.querySelector('.verdict');
+    expect(verdict?.textContent).toContain('came in light');
+    // above the meals, not inside the thread
+    expect(verdict!.compareDocumentPosition(el.querySelector('.ledger')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(el.querySelector('.thread .verdict')).toBeNull();
+  });
+
+  // T-WEB-056: editing an item was `window.prompt` for one number, so its unit, its portion
+  // and the two estimate marks could only be set while adding it. Withdrawing an estimate
+  // was implemented on the server and unreachable from the page.
+  it('takes both estimate marks back through the edit panel', async () => {
+    const fixture = await render();
+    const http = TestBed.inject(HttpTestingController);
+    const el = fixture.nativeElement as HTMLElement;
+    open(fixture, 'Paprika chicken');
+    http.expectOne('/api/v1/products/9').flush(chicken);
+    await fixture.whenStable();
+
+    const panel = el.querySelector('v-line-item-form')!;
+    const boxes = [...panel.querySelectorAll('input[type=checkbox]')] as HTMLInputElement[];
+    // the panel opens on what the item says: this one is ⚠️ on both counts
+    expect(boxes.map((b) => b.checked)).toEqual([true, true]);
+    boxes.forEach((b) => b.click());
+    fixture.detectChanges();
+    save(panel);
+
+    const req = http.expectOne('/api/v1/line-items/12');
+    expect(req.request.method).toBe('PATCH');
+    expect(req.request.body).toEqual({ amount: 396, unit_code: 'g', portion_id: null, estimated: false, amount_estimated: false });
+    req.flush({});
+    http.match(() => true).forEach((r) => r.flush(r.request.method === 'GET' ? [] : {}));
+  });
+
+  it('offers the product’s own portions and logs the item against the chosen one', async () => {
+    const fixture = await render();
+    const http = TestBed.inject(HttpTestingController);
+    const el = fixture.nativeElement as HTMLElement;
+    open(fixture, 'Skyr natural');
+    http.expectOne('/api/v1/products/5').flush(skyrProduct);
+    await fixture.whenStable();
+
+    const panel = el.querySelector('v-line-item-form')!;
+    const groups = [...panel.querySelectorAll('optgroup')].map((g) => g.getAttribute('label'));
+    expect(groups).toEqual(['Weight and volume', 'Portions of this product', 'Needs a size once']);
+    const options = [...panel.querySelectorAll('option')].map((o) => o.textContent?.trim());
+    expect(options).toContain('tub (400 g)');
+    // a select in jsdom does not write back through ngModel; the model is what matters here
+    const form = fixture.debugElement.query(By.directive(LineItemForm)).componentInstance as LineItemForm;
+    form.unitCode.set('portion:9');
+    ([...panel.querySelectorAll('input[type=checkbox]')] as HTMLInputElement[])[1].click();
+    fixture.detectChanges();
+    save(panel);
+
+    const req = http.expectOne('/api/v1/line-items/11');
+    expect(req.request.body).toEqual({ amount: 400, unit_code: 'tub', portion_id: 9, estimated: false, amount_estimated: true });
+    req.flush({});
     http.match(() => true).forEach((r) => r.flush(r.request.method === 'GET' ? [] : {}));
   });
 });

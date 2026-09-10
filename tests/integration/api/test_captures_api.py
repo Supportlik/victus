@@ -124,6 +124,27 @@ def test_audio_upload_is_transcribed_when_configured(
         cap = r.json()
         assert cap["kind"] == "audio" and cap["transcript"] == "a whole tub of skyr"
         assert fake.calls[0]["mime"] == "audio/ogg"
+        # the text says which recording it came from, and how long that one is
+        assert cap["transcripts"] == [
+            {
+                "attachment_id": cap["attachment_id"],
+                "text": "a whole tub of skyr",
+                "duration_s": 1.5,
+            }
+        ]
+        # two recordings in one capture are two transcripts, one per file
+        two = client.post(
+            "/api/v1/captures",
+            files=[
+                ("file", ("first.wav", b"RIFF-first", "audio/wav")),
+                ("file", ("second.wav", b"RIFF-second", "audio/wav")),
+            ],
+            headers=alice_token,
+        )
+        assert two.status_code == 201, two.text
+        assert [t["attachment_id"] for t in two.json()["transcripts"]] == [
+            a["id"] for a in two.json()["attachments"]
+        ]
         # force re-transcription
         fake.text = "half a tub of skyr"
         again = client.post(

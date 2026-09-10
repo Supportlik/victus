@@ -77,6 +77,18 @@ class AttachmentRefOut(Out):
     original_name: str | None = None
 
 
+class TranscriptOut(Out):
+    """What one recording of a capture says, and how long it is (R65)."""
+
+    #: The recording this text came from; null only for a transcript stored before a
+    #: transcript knew which recording it came from.
+    attachment_id: str | None = None
+    #: Empty when the provider heard nothing intelligible.
+    text: str
+    #: Seconds, as the transcription provider measured them.
+    duration_s: float | None = None
+
+
 class FindingOut(Out):
     kind: int
     code: str
@@ -139,6 +151,9 @@ class ProductUsageOut(Out):
     total_kcal: float
     first_date: date | None = None
     last_date: date | None = None
+    #: Line items pointing here in total, so a caller that asked for a window of entries
+    #: still learns how much depends on these values.
+    item_count: int = 0
 
 
 class ProductOut(MacrosOut):
@@ -226,6 +241,8 @@ class DayOut(DaySummaryOut):
     zones: dict[str, str] = Field(default_factory=dict)
     findings: list[FindingOut] = Field(default_factory=list)
     notes: str | None = None
+    #: The agent's short verdict on the day; the newest `summary` message of its thread.
+    verdict: str | None = None
 
 
 class DayMessageOut(Out):

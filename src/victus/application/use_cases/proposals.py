@@ -9,6 +9,12 @@ A food nobody has logged before takes the same road (``kind='new'``): the values
 land on a **one-off consumable**, so the day can be drafted with correct macros
 right away, and the catalogue entry appears only when a person approves — then the
 one-off is *promoted* in place, keeping every line item that already points at it.
+
+A product's portions travel in ``changes['portions']``, one object per portion,
+each naming what it does: ``add``, ``update`` or ``delete``. Anything a person may
+decide about a portion is therefore something an actor can draft, which is what ADR
+0013 asks for — before, only adding could be proposed, so correcting a wrong unit or
+removing a duplicate needed the ``approve`` scope the review gate exists to withhold.
 """
 
 from __future__ import annotations
@@ -25,12 +31,15 @@ from victus.application.tenant_context import (
     SCOPE_WRITE,
 )
 from victus.application.use_cases._base import UseCase, now, require_decision
+from victus.application.use_cases._mappers import portion_view
 from victus.application.use_cases.products import (
     PRODUCT_FIELDS,
     AddPortion,
     CreateProduct,
+    DeletePortion,
     PortionInput,
     ProductInput,
+    UpdatePortion,
     UpdateProduct,
     _resolve_category,
     _validate_product,
@@ -46,10 +55,28 @@ PROPOSABLE_FIELDS: frozenset[str] = frozenset(
 PENDING, APPROVED, REJECTED = "pending", "approved", "rejected"
 UPDATE, NEW = "update", "new"
 
+#: What one entry of ``changes['portions']`` does. An entry **without** ``op`` adds:
+#: proposals filed before the other two operations existed are stored that way and
+#: must still approve as they did.
+PORTION_ADD, PORTION_UPDATE, PORTION_DELETE = "add", "update", "delete"
+PORTION_OPS = (PORTION_ADD, PORTION_UPDATE, PORTION_DELETE)
+#: The fields a portion entry may carry, i.e. what ``AddPortion``/``UpdatePortion`` take.
+PORTION_FIELDS = (
+    "unit_code",
+    "label",
+    "description",
+    "amount",
+    "amount_unit",
+    "is_default",
+    "weight_source",
+)
+
 
 def _current_values(p: orm.Product, keys: list[str]) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for k in keys:
+        if k == "portions":
+            continue  # not one value to compare: the rows are in ``portion_plan``
         if k == "name":
             out[k] = p.consumable.name
         else:
@@ -62,7 +89,135 @@ def _product_of(uow: UnitOfWork, pr: orm.ProductProposal) -> orm.Product | None:
     return uow.products.get(pr.product_id) if pr.product_id is not None else None
 
 
-def proposal_view(pr: orm.ProductProposal, product: orm.Product | None) -> dto.ProductProposalView:
+def _op_of(entry: dict[str, Any]) -> str:
+    return str(entry.get("op") or PORTION_ADD)
+
+
+def _validated_portions(entries: Any, *, adds_only: bool = False) -> list[dict[str, Any]]:
+    """Check a ``portions`` list before it is stored, and write ``op`` into every entry.
+
+    Storing the operation even where it is the default keeps the proposal readable on its
+    own; reading tolerates its absence, because that is how older rows look.
+    """
+    if not isinstance(entries, list) or any(not isinstance(e, dict) for e in entries):
+        raise ValidationFailed("portions must be a list of objects")
+    out: list[dict[str, Any]] = []
+    for entry in entries:
+        op = _op_of(entry)
+        if op not in PORTION_OPS:
+            raise ValidationFailed(
+                f"unknown portion operation '{op}'; use one of {', '.join(PORTION_OPS)}"
+            )
+        if adds_only and op != PORTION_ADD:
+            raise ValidationFailed(f"a product that does not exist yet has no portion to {op}")
+        if op == PORTION_ADD:
+            if not entry.get("unit_code"):
+                raise ValidationFailed("a portion to add needs a unit_code")
+            try:
+                amount = float(entry["amount"])
+            except (KeyError, TypeError, ValueError):
+                raise ValidationFailed("a portion to add needs a positive amount") from None
+            if amount <= 0:
+                raise ValidationFailed("a portion to add needs a positive amount")
+        else:
+            if not isinstance(entry.get("portion_id"), int):
+                raise ValidationFailed(f"a portion to {op} needs its portion_id")
+            if op == PORTION_UPDATE and not any(k in entry for k in PORTION_FIELDS):
+                raise ValidationFailed(
+                    f"an update needs at least one of: {', '.join(PORTION_FIELDS)}"
+                )
+        out.append({**entry, "op": op})
+    return out
+
+
+def portion_plan(
+    uow: UnitOfWork, product_id: int | None, entries: Any
+) -> list[dto.PortionOperationView]:
+    """Read each portion entry against the catalogue as it stands (R81).
+
+    The reviewer sees the proposal, not the product, so the two refusals the database
+    would produce — a twin under the unique ``(product, unit, label)``, and the
+    ``RESTRICT`` on a portion days already point at — are resolved here and named in
+    the view. Approving then fails before it changes anything, not halfway through.
+
+    The entries are read in the order they will be applied, and ``taken`` follows along:
+    a proposal that removes the wrong-unit twin and adds the right portion is a swap, not
+    a duplicate, and must not be refused for the row it removes first.
+    """
+    if not isinstance(entries, list):
+        return []
+    existing = {p.id: p for p in uow.products.portions_for(product_id)} if product_id else {}
+    taken = {p.id: (p.unit_code, p.label) for p in existing.values()}
+    queued: set[tuple[str, str]] = set()  # pairs this proposal adds itself
+    rows: list[dto.PortionOperationView] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        op = _op_of(entry)
+        values = {k: entry[k] for k in PORTION_FIELDS if k in entry}
+        raw_id = entry.get("portion_id")
+        portion_id = raw_id if isinstance(raw_id, int) else None
+        current = existing.get(portion_id) if portion_id is not None else None
+        used_by, blocked = 0, None
+        if op == PORTION_ADD:
+            unit = str(values.get("unit_code") or "")
+            wanted = (unit, str(values.get("label") or unit))
+            twin = next((pid for pid, pair in taken.items() if pair == wanted), None)
+            if wanted in queued:
+                blocked = f"this proposal already adds '{wanted[1]}' in {wanted[0]}"
+            elif twin is not None:
+                blocked = f"portion {twin} already carries '{wanted[1]}' in {wanted[0]}"
+            else:
+                queued.add(wanted)
+        elif current is None:
+            blocked = f"portion {raw_id} is not a portion of this product"
+        elif op == PORTION_UPDATE:
+            wanted = (
+                str(values.get("unit_code") or current.unit_code),
+                str(values.get("label") or current.label),
+            )
+            twin = next(
+                (pid for pid, pair in taken.items() if pair == wanted and pid != current.id), None
+            )
+            used_by = uow.products.portion_usage(current.id)
+            if twin is not None:
+                blocked = f"portion {twin} already carries '{wanted[1]}' in {wanted[0]}"
+            else:
+                taken[current.id] = wanted
+        else:
+            used_by = uow.products.portion_usage(current.id)
+            if used_by:
+                plural = "" if used_by == 1 else "s"
+                blocked = f"still used by {used_by} logged item{plural}, so it cannot be removed"
+            else:
+                taken.pop(current.id, None)
+        rows.append(
+            dto.PortionOperationView(
+                op=op,
+                portion_id=portion_id,
+                values=values,
+                current=portion_view(current) if current is not None else None,
+                used_by=used_by,
+                blocked=blocked,
+                reason=entry.get("reason"),
+            )
+        )
+    return rows
+
+
+def _plan_of(uow: UnitOfWork, pr: orm.ProductProposal) -> list[dto.PortionOperationView]:
+    """Only a pending proposal has a plan: a decided one has already been applied."""
+    entries = (pr.changes or {}).get("portions")
+    if not entries or pr.status != PENDING:
+        return []
+    return portion_plan(uow, pr.product_id, entries)
+
+
+def proposal_view(
+    pr: orm.ProductProposal,
+    product: orm.Product | None,
+    plan: list[dto.PortionOperationView] | None = None,
+) -> dto.ProductProposalView:
     changes = dict(pr.changes or {})
     name = product.consumable.name if product is not None else changes.get("name")
     return dto.ProductProposalView(
@@ -80,6 +235,7 @@ def proposal_view(pr: orm.ProductProposal, product: orm.Product | None) -> dto.P
         decided_at=pr.decided_at,
         kind=pr.kind,
         consumable_id=pr.consumable_id,
+        portion_plan=plan or [],
     )
 
 
@@ -104,6 +260,8 @@ class ProposeProductChange(UseCase):
             raise ValidationFailed(f"fields cannot be proposed: {', '.join(unknown)}")
         if not clean:
             raise ValidationFailed("a proposal needs at least one changed field")
+        if "portions" in clean:
+            clean["portions"] = _validated_portions(clean["portions"])
         with self._uow() as uow:
             p = uow.products.get(product_id)
             if p is None:
@@ -133,7 +291,7 @@ class ProposeProductChange(UseCase):
                 "product.propose", "product", str(p.id), {"proposal": pr.id, "changes": clean}
             )
             uow.flush()
-            view = proposal_view(pr, p)
+            view = proposal_view(pr, p, _plan_of(uow, pr))
             uow.commit()
             return view
 
@@ -187,7 +345,8 @@ class ProposeNewProduct(UseCase):
             if v is not None
         }
         if portions:
-            changes["portions"] = portions
+            # A product that does not exist yet can only gain portions.
+            changes["portions"] = _validated_portions(portions, adds_only=True)
         with self._uow() as uow:
             if uow.products.by_name(data.name) is not None:
                 raise Conflict(
@@ -235,7 +394,7 @@ class ProposeNewProduct(UseCase):
                 {"proposal": pr.id, "name": changes["name"]},
             )
             uow.flush()
-            view = proposal_view(pr, None)
+            view = proposal_view(pr, None, _plan_of(uow, pr))
             uow.commit()
             return view
 
@@ -247,7 +406,7 @@ class ListProposals(UseCase):
         self.ctx.require(SCOPE_READ)
         with self._uow() as uow:
             rows = uow.proposals.list(status=status, product_id=product_id, limit=limit)
-            return [proposal_view(pr, _product_of(uow, pr)) for pr in rows]
+            return [proposal_view(pr, _product_of(uow, pr), _plan_of(uow, pr)) for pr in rows]
 
 
 class GetProposal(UseCase):
@@ -257,7 +416,7 @@ class GetProposal(UseCase):
             pr = uow.proposals.get(proposal_id)
             if pr is None:
                 raise NotFound(f"proposal {proposal_id} not found")
-            return proposal_view(pr, _product_of(uow, pr))
+            return proposal_view(pr, _product_of(uow, pr), _plan_of(uow, pr))
 
 
 class DecideProposal(UseCase):
@@ -297,6 +456,18 @@ class DecideProposal(UseCase):
                 if unknown:
                     raise ValidationFailed(f"fields cannot be applied: {', '.join(unknown)}")
                 applied.update({k: v for k, v in changes.items() if v is not None})
+            if approve and applied.get("portions"):
+                applied["portions"] = _validated_portions(
+                    applied["portions"], adds_only=pr.kind == NEW
+                )
+                refused = [
+                    f"{row.op} {row.portion_id or row.values.get('unit_code', '')}: {row.blocked}"
+                    for row in portion_plan(uow, pr.product_id, applied["portions"])
+                    if row.blocked
+                ]
+                if refused:
+                    # Nothing is applied yet, so the proposal stays pending and decidable.
+                    raise Conflict("; ".join(refused))
             pr.status = APPROVED if approve else REJECTED
             pr.decided_at = now()
             pr.decided_by = self.ctx.actor_id
@@ -335,19 +506,7 @@ class DecideProposal(UseCase):
                 assert product_id is not None
                 portions = apply.pop("portions", None) or []
                 UpdateProduct(self.uow_factory, self.ctx).execute(product_id, apply)
-                for portion in portions:
-                    AddPortion(self.uow_factory, self.ctx).execute(
-                        product_id,
-                        PortionInput(
-                            unit_code=str(portion["unit_code"]),
-                            label=str(portion.get("label") or portion["unit_code"]),
-                            amount=float(portion["amount"]),
-                            amount_unit=str(portion.get("amount_unit") or "g"),
-                            description=portion.get("description"),
-                            is_default=bool(portion.get("is_default", False)),
-                            weight_source=portion.get("weight_source"),
-                        ),
-                    )
+                self._apply_portions(product_id, portions)
         with self._uow() as uow:
             fresh = uow.proposals.get(proposal_id)
             assert fresh is not None
@@ -355,7 +514,32 @@ class DecideProposal(UseCase):
                 fresh.product_id = product_id  # the entry it created, for the review history
                 uow.flush()
                 uow.commit()
-            return proposal_view(fresh, _product_of(uow, fresh))
+            return proposal_view(fresh, _product_of(uow, fresh), _plan_of(uow, fresh))
+
+    def _apply_portions(self, product_id: int, entries: list[dict[str, Any]]) -> None:
+        """Send each entry to the use case its ``op`` names; an entry without one adds."""
+        for entry in entries:
+            op = _op_of(entry)
+            if op == PORTION_UPDATE:
+                UpdatePortion(self.uow_factory, self.ctx).execute(
+                    int(entry["portion_id"]),
+                    {k: entry[k] for k in PORTION_FIELDS if k in entry},
+                )
+            elif op == PORTION_DELETE:
+                DeletePortion(self.uow_factory, self.ctx).execute(int(entry["portion_id"]))
+            else:
+                AddPortion(self.uow_factory, self.ctx).execute(
+                    product_id,
+                    PortionInput(
+                        unit_code=str(entry["unit_code"]),
+                        label=str(entry.get("label") or entry["unit_code"]),
+                        amount=float(entry["amount"]),
+                        amount_unit=str(entry.get("amount_unit") or "g"),
+                        description=entry.get("description"),
+                        is_default=bool(entry.get("is_default", False)),
+                        weight_source=entry.get("weight_source"),
+                    ),
+                )
 
     def _promote(self, consumable_id: int, values: dict[str, Any]) -> int:
         """Make the pending one-off a catalogue product, keeping every logged line item."""
@@ -384,19 +568,7 @@ class DecideProposal(UseCase):
             uow.flush()
             uow.commit()
             product_id = product.id
-        for portion in portions:
-            AddPortion(self.uow_factory, self.ctx).execute(
-                product_id,
-                PortionInput(
-                    unit_code=str(portion["unit_code"]),
-                    label=str(portion.get("label") or portion["unit_code"]),
-                    amount=float(portion["amount"]),
-                    amount_unit=str(portion.get("amount_unit") or "g"),
-                    description=portion.get("description"),
-                    is_default=bool(portion.get("is_default", False)),
-                    weight_source=portion.get("weight_source"),
-                ),
-            )
+        self._apply_portions(product_id, portions)  # a new product's portions are all adds
         return product_id
 
 
@@ -491,7 +663,74 @@ def add_or_propose_portion(
         )
     return ProposeProductChange(uow_factory, ctx).execute(
         product_id,
-        {"portions": [portion]},
+        {"portions": [{**portion, "op": PORTION_ADD}]},
+        rationale=rationale,
+        capture_id=capture_id,
+        run_id=run_id,
+    )
+
+
+def _product_of_portion(uow_factory: Any, ctx: Any, portion_id: int) -> int:
+    """A portion proposal is filed against the product that owns the portion."""
+    ctx.require(SCOPE_READ)
+    with uow_factory(ctx) as uow:
+        portion = uow.products.get_portion(portion_id)
+        if portion is None:
+            raise NotFound(f"portion {portion_id} not found")
+        return int(portion.product_id)
+
+
+def update_or_propose_portion(
+    uow_factory: Any,
+    ctx: Any,
+    portion_id: int,
+    changes: dict[str, Any],
+    *,
+    rationale: str | None = None,
+    capture_id: str | None = None,
+    run_id: str | None = None,
+) -> dto.PortionView | dto.ProductProposalView:
+    """Correct a portion, or propose the correction — the wrong unit on an existing row.
+
+    Adding the corrected portion instead is not the same thing: the wrong row stays, and
+    where the unit is what was wrong the unique ``(product, unit, label)`` refuses it.
+    """
+    clean = {k: v for k, v in changes.items() if v is not None and k in PORTION_FIELDS}
+    if not clean:
+        raise ValidationFailed(f"a portion change needs one of: {', '.join(PORTION_FIELDS)}")
+    if ctx.has_scope(SCOPE_APPROVE):
+        return UpdatePortion(uow_factory, ctx).execute(portion_id, clean)
+    return ProposeProductChange(uow_factory, ctx).execute(
+        _product_of_portion(uow_factory, ctx, portion_id),
+        {"portions": [{"op": PORTION_UPDATE, "portion_id": portion_id, **clean}]},
+        rationale=rationale,
+        capture_id=capture_id,
+        run_id=run_id,
+    )
+
+
+def delete_or_propose_portion(
+    uow_factory: Any,
+    ctx: Any,
+    portion_id: int,
+    *,
+    reason: str | None = None,
+    rationale: str | None = None,
+    capture_id: str | None = None,
+    run_id: str | None = None,
+) -> dto.ProductProposalView | None:
+    """Remove a portion, or propose its removal; ``None`` means it is already gone.
+
+    A portion logged days already point at cannot be removed at all. Proposing it stays
+    allowed — that a portion is in use is itself worth reporting, and the proposal's plan
+    says so — but the approval is refused instead of failing halfway through.
+    """
+    if ctx.has_scope(SCOPE_APPROVE):
+        DeletePortion(uow_factory, ctx).execute(portion_id)
+        return None
+    return ProposeProductChange(uow_factory, ctx).execute(
+        _product_of_portion(uow_factory, ctx, portion_id),
+        {"portions": [{"op": PORTION_DELETE, "portion_id": portion_id, "reason": reason}]},
         rationale=rationale,
         capture_id=capture_id,
         run_id=run_id,

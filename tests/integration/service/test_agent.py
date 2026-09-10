@@ -18,6 +18,7 @@ from victus.application.errors import (
 from victus.application.tenant_context import TenantContext
 from victus.application.use_cases import agent as uc
 from victus.application.use_cases import captures as captures_uc
+from victus.application.use_cases import day_logs as day_uc
 from victus.application.use_cases import drafts as drafts_uc
 from victus.application.use_cases._base import UowFactory
 from victus.infrastructure.storage.memory import InMemoryBlobStorage
@@ -306,6 +307,30 @@ def test_approval_after_draft_marks_captures_processed(
     approved = drafts_uc.ApproveDay(factory, alice).execute(DAY, [], close=True)
     assert approved.status == "closed" and not approved.has_drafts and approved.reliable is True
     assert captures_uc.GetCapture(factory, alice).execute(cap).status == "processed"
+
+
+def test_a_second_verdict_replaces_the_first(factory: UowFactory, alice: TenantContext) -> None:
+    """T-SVC-085: one verdict per day, so a re-run corrects it instead of stacking."""
+    day_uc.CreateDay(factory, alice).execute(DAY, reliable=True)
+    run = uc.BeginAgentRun(factory, alice).execute(runner="worker", mode="manual", dates=[DAY])
+    first = uc.AddAgentMessage(factory, alice).execute(
+        run.run.id, DAY, "summary", "A rest day that came in light."
+    )
+    uc.AddAgentMessage(factory, alice).execute(run.run.id, DAY, "note", "Fibre is the weak one.")
+    second = uc.AddAgentMessage(factory, alice).execute(
+        run.run.id, DAY, "summary", "Two ready meals and a protein pudding. 20 g of protein short."
+    )
+    assert first.id != second.id
+    thread = day_uc.GetDayThread(factory, alice).execute(DAY)
+    assert [m.content for m in thread if m.kind == "summary"] == [second.content]
+    # notes are each about a different thing, so they accumulate as they always did
+    assert [m.content for m in thread if m.kind == "note"] == ["Fibre is the weak one."]
+    # and the day carries the current verdict, which is what it shows above its meals
+    assert day_uc.GetDay(factory, alice).execute(DAY).verdict == second.content
+    with pytest.raises(ValidationFailed):
+        uc.AddAgentMessage(factory, alice).execute(run.run.id, DAY, "summary", "   ")
+    with pytest.raises(ValidationFailed):
+        uc.AddAgentMessage(factory, alice).execute(run.run.id, DAY, "verdict", "wrong kind")
 
 
 def test_agent_runs_are_tenant_scoped(

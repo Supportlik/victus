@@ -143,6 +143,19 @@ class DayLogRepo(Repo):
         ).mappings()
         return [dict(r) for r in rows]
 
+    def usage_count(self, consumable_id: int) -> int:
+        """How many line items point at a consumable, past the cap ``usage_of`` stops at."""
+        total = self.session.execute(
+            text(
+                "SELECT COUNT(*) FROM line_item li "
+                "  JOIN meal m ON m.id = li.meal_id "
+                "  JOIN day_log d ON d.id = m.day_log_id "
+                " WHERE d.tenant_id = :t AND li.consumable_id = :c"
+            ),
+            {"t": self.tenant_id, "c": consumable_id},
+        ).scalar()
+        return int(total or 0)
+
     # ── meals / items ──
     def add_meal(self, meal: orm.Meal) -> orm.Meal:
         if self.get(meal.day_log_id) is None:

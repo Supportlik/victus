@@ -105,7 +105,8 @@ import { ProductForm } from './product-form';
             <h3>{{ i18n.t('Proposed corrections') }}</h3>
             <p class="v-small v-muted">{{ i18n.t('The agent read these from your label photos or notes. Nothing changes until you approve.') }}</p>
             @for (pr of proposals(); track pr.id) {
-              <div class="proposal">
+              <!-- the products list links straight to one proposal, not to the top of the page -->
+              <div class="proposal" [id]="'proposal-' + pr.id">
                 <div class="v-scroll-x">
                   <table class="v-table diff">
                     <thead><tr><th>{{ i18n.t('Apply') }}</th><th>{{ i18n.t('Field') }}</th><th class="num">{{ i18n.t('Now') }}</th><th class="num">{{ i18n.t('Proposed') }}</th></tr></thead>
@@ -122,7 +123,7 @@ import { ProductForm } from './product-form';
                   </table>
                 </div>
                 @if (pr.rationale) { <p class="v-small">{{ pr.rationale }}</p> }
-                <p class="v-small v-muted">{{ pr.source }} · {{ pr.created_at.replace('T', ' ').slice(0, 16) }}</p>
+                <p class="v-small v-muted">{{ pr.source }} · <time [attr.datetime]="pr.created_at">{{ format.moment(pr.created_at) }}</time></p>
                 <div class="v-actions">
                   <button type="button" class="v-btn primary" (click)="decide(pr, true)" [disabled]="deciding() || !selectedCount(pr)">
                     {{ selectedCount(pr) === keys(pr).length ? i18n.t('Apply all') : i18n.t('Apply {n} of {total}', { n: selectedCount(pr), total: keys(pr).length }) }}

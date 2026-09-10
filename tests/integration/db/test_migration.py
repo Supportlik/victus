@@ -1,12 +1,16 @@
-"""T-OPS-005: migration to head on an empty database; unit seed; views present."""
+"""T-OPS-005, T-OPS-017: migration to head on an empty and on a populated database."""
 
 from __future__ import annotations
+
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import Engine, inspect, text
 
+from tests.integration.db.conftest import TEST_URL
 from victus.domain.services.units import UNITS as DOMAIN_UNITS
 from victus.infrastructure.db import views
+from victus.infrastructure.db.engine import make_engine
 from victus.infrastructure.migrations import runner
 from victus.infrastructure.migrations.units_seed import UNITS
 
@@ -14,7 +18,7 @@ pytestmark = pytest.mark.service
 
 
 def test_upgrade_reaches_head_and_is_idempotent(engine: Engine) -> None:
-    assert runner.current(engine=engine) == runner.head() == "0010"
+    assert runner.current(engine=engine) == runner.head() == "0011"
     runner.upgrade(engine=engine)  # second run is a no-op
     assert runner.is_up_to_date(engine=engine)
 
@@ -67,3 +71,74 @@ def test_unit_seed(engine: Engine) -> None:
         )
     assert n == len(UNITS) == len(DOMAIN_UNITS)
     assert fuzzy == sorted(c for c, u in DOMAIN_UNITS.items() if u.fuzzy)
+
+
+def test_transcripts_are_attributed_to_a_recording_when_upgrading() -> None:
+    """T-OPS-017: 0011 gives the rows that predate ``attachment_id`` their recording.
+
+    An existing database holds transcripts keyed only to the capture. The upgrade
+    attributes each to the capture's first recording, which is the only part that was
+    ever sent to a provider, so the card can print it under that player.
+    """
+    eng = make_engine(TEST_URL)
+    try:
+        if not TEST_URL.startswith("sqlite"):
+            runner.downgrade(engine=eng, revision="base")
+        runner.upgrade(engine=eng, revision="0010")
+        with eng.begin() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO tenant (id, slug, name, active, created_at)"
+                    " VALUES (:i,:s,:n,true,:t)"
+                ),
+                {"i": "t1", "s": "alice", "n": "Alice", "t": datetime(2026, 1, 5, tzinfo=UTC)},
+            )
+            for att, mime in (("att_photo", "image/jpeg"), ("att_1", "audio/webm")):
+                conn.execute(
+                    text(
+                        "INSERT INTO attachment"
+                        " (id, tenant_id, sha256, mime, size, storage_key, created_at)"
+                        " VALUES (:i,'t1',:h,:m,10,:k,:t)"
+                    ),
+                    {
+                        "i": att,
+                        "h": att,
+                        "m": mime,
+                        "k": f"blobs/{att}",
+                        "t": datetime(2026, 1, 5, tzinfo=UTC),
+                    },
+                )
+            conn.execute(
+                text(
+                    "INSERT INTO capture"
+                    " (id, tenant_id, kind, captured_at, status, attachment_id, content_hash)"
+                    " VALUES ('c1','t1','audio',:t,'new','att_photo','hash1')"
+                ),
+                {"t": datetime(2026, 1, 5, tzinfo=UTC)},
+            )
+            # the photo arrived first, so it is the one `capture.attachment_id` names
+            for att, pos in (("att_photo", 1), ("att_1", 2)):
+                conn.execute(
+                    text(
+                        "INSERT INTO capture_attachment (capture_id, attachment_id, position)"
+                        " VALUES ('c1',:a,:p)"
+                    ),
+                    {"a": att, "p": pos},
+                )
+            conn.execute(
+                text(
+                    "INSERT INTO transcript (capture_id, provider, model, text, created_at)"
+                    " VALUES ('c1','openai','gpt-4o-transcribe','a whole tub of skyr',:t)"
+                ),
+                {"t": datetime(2026, 1, 5, tzinfo=UTC)},
+            )
+
+        runner.upgrade(engine=eng)
+        with eng.connect() as conn:
+            assert (
+                conn.execute(text("SELECT attachment_id FROM transcript")).scalar_one() == "att_1"
+            )
+    finally:
+        if not TEST_URL.startswith("sqlite"):
+            runner.downgrade(engine=eng, revision="base")
+        eng.dispose()

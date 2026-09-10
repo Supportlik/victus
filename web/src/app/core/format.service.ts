@@ -93,6 +93,20 @@ export class FormatService {
     });
   }
 
+  /** A length of audio as a clock reading: `0:42`, `1:05:03`.
+   *
+   * The same everywhere, in every locale: a running time is read as a clock, not as a
+   * localised number of seconds. */
+  duration(seconds: number): string {
+    const total = Math.max(0, Math.round(seconds));
+    const hours = Math.floor(total / 3600);
+    const minutes = Math.floor(total / 60) % 60;
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return hours
+      ? `${hours}:${pad(minutes)}:${pad(total % 60)}`
+      : `${minutes}:${pad(total % 60)}`;
+  }
+
   /** An ISO day (yyyy-mm-dd) written the way the tenant writes dates. */
   day(iso: string): string {
     const [y, m, d] = iso.slice(0, 10).split('-').map(Number);

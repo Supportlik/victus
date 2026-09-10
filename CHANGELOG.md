@@ -6,6 +6,121 @@ All notable changes to Victus are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-10
+
+### Added
+- **A day says what it was, in two or three sentences.** The numbers on a day answer "did I stay
+  in the band"; nobody answered "was this a good day", which is the question a person opens a day
+  with. The agent now writes one verdict per day, shown as a quiet block above the meals: what the
+  day was, what was eaten as a shape rather than the table already on the page, and at most one
+  small thing for tomorrow — and nothing at all when there is nothing to say. A later run replaces
+  that verdict instead of stacking a second opinion under the first. The reasoning, the trends and
+  the real advice stay in the report, where they can be that long. `agent_message_add` writes it
+  without creating a draft, and `GET /days/{date}` carries it as `verdict`.
+- **Editing a logged item is a form again**, in the same shape as adding one: the amount, the units
+  the product actually supports — its measured family, its own portions, and a count unit whose size
+  it asks for once — and the two estimate marks as checkboxes, **in both directions**. Withdrawing an
+  estimate had been implemented on the server since the beginning and was unreachable from the page:
+  an item marked ⚠️ because the agent guessed kept the mark for ever, even after the label had been
+  read and the food weighed, and the mark feeds the estimate count, so a day read as less certain
+  than it was. Editing used to be a browser prompt asking for one number. The same panel corrects an
+  item on the draft approval page, where "the agent guessed, I know better" happens most.
+- **A proposal can correct a portion and remove one, not only add one.** `changes.portions` carries an
+  operation per entry — `add`, `update` or `delete` with its `portion_id` and a reason — and approving
+  sends each to the use case it names; an entry without an operation still adds, which is how every
+  proposal filed before this is stored. Cleaning up the catalogue earlier today took 18 portions
+  removed and 8 corrected, and none of it could be proposed: it was done with a short-lived token
+  holding `approve`, stepping around the review gate for exactly the kind of change the gate exists
+  for (ADR 0013, R81). A pending proposal now also says what each line would do to the catalogue as
+  it stands — the row it changes, how many logged items use it, and what would refuse it — so the two
+  refusals the database produces, a twin under the unique `(product, unit, label)` and the `RESTRICT`
+  on a portion days already point at, are visible before the approval instead of failing halfway
+  through it. `portion_update` and `portion_delete` take the same road as `portion_create`: with
+  `approve` they write, without it they propose.
+- **Proposals are decided where they are listed.** A correction reads `carbs 42 → 8 g` instead of
+  naming the field, with the product's other five numbers, its brand and how many line items already
+  use it beside it, and with Approve, Reject and a link to that one proposal on the product page. A
+  new product the agent met shows the same block plus its portions, and links to the day and meal its
+  one-off was already eaten in — there is no page for an ad-hoc consumable, and the day it was eaten
+  on is the better evidence anyway. `GET /products/{id}/usage` and the `product_usage` tool return
+  `item_count`, and the id may be that one-off, which is how the proposal shows its day.
+- `GET /api/v1/products` takes an `offset`, and the products page pages through the catalogue. The
+  heading promised "All products (A–Z)" while the request asked for 25 rows, so every name past the
+  twenty-fifth could only be reached by searching for a product you would first have to be able to
+  name, and a catalogue above the endpoint's cap of 200 could not be listed in full at all. The page
+  loads 50 at a time, says how many are shown, and offers the rest until a page comes back short.
+
+### Fixed
+- **A short name could not be found by typing it.** `Ei` is a word and also a syllable — it sits
+  inside Weizen, Reis, Fleisch and Bäckerei, and 141 of 407 products contained it — and the hits came
+  back in alphabetical order, so the product actually called "Ei" stood at position 39, past every
+  result window, with all twenty rows above it false positives. The ranked matcher that would have
+  known better only ran when the substring search came back nearly empty, so the more hits a query
+  had, the worse its answer. Hits are now ordered by how well the name fits: the name itself, then a
+  name that begins with the query, then a name whose later word does, then a syllable anywhere, a
+  brand-only hit after those, alphabetical inside each tier. The fuzzy matcher contributes to every
+  query, which is also what finds `Öl` — the query is folded to ASCII and the stored name is not, so
+  a substring search never matched it at all.
+- **A portion or an amount given in the other unit of measure was counted as if the units had
+  matched**, so 400 ml of a syrup weighed in as 400 g and a tenth of its calories vanished. The
+  density a product must carry for such a portion to be allowed is now actually applied: the amount
+  is converted into the product's own unit before it is frozen — on a day, in an agent's draft, and
+  in a recipe ingredient before a batch's totals are stored, where it mattered most because those
+  totals are frozen and can never be recomputed. Days already logged keep the amounts frozen on them.
+- **A capture with two spoken notes only ever had the first one transcribed.** The second was stored,
+  it played back, and nothing ever read it: the request went to whichever audio file came first, and
+  the schema had room for exactly one transcript per capture, so there was nowhere to put a second
+  text. The card then printed that one text once underneath both players, which told the reader
+  neither which recording it belonged to nor that the other had never been listened to. Every
+  recording is now transcribed and carries its own text under its own player; one still waiting says
+  so on its own line instead of borrowing its neighbour's. The day's thread and the day context the
+  drafting prompt is built on carry every note too — that was the one place where a dropped sentence
+  turned into a missing meal.
+- **Every recording showed a length of 0:00.** The player was told to preload nothing, so the browser
+  had no metadata to take a duration from, and pressing play was the only way to find out how long a
+  note was. The player now loads the metadata, and the length the transcription provider measured is
+  kept with the recording and printed beside it — `0:42 · "…"` — so a capture in the inbox can be
+  judged without playing it.
+- `GET /api/v1/proposals` answered 500 for any proposal about a portion. Its `current` block filled
+  itself from the product's fields and `portions` is a relationship, so the response carried database
+  rows that cannot be serialised — that is every proposal a portion suggestion files without
+  `approve`, the road ADR 0013 sends an agent down.
+- A proposal's timestamp on the product page was cut out of the stored ISO string, so it read UTC:
+  the wrong hour, and after midnight the wrong day.
+- **Four patterns that read text a person supplies could be made to cost a full scan per character
+  position.** Three pull labels out of `[[wikilinks]]` and `[Label](links)` in a quantity, one strips
+  a parenthesised part off a name before matching, and all of them are reached by whatever a person
+  or a transcript writes. A pasted run of `[[` cost seconds of CPU per call at 60 000 characters; the
+  character classes now stop at the next bracket, so the same input costs a millisecond, and every
+  label, escaped pipe and parenthesised short form still comes out as before.
+- The translation check read string literals with a pattern that, on a quote nobody closed,
+  backtracked over everything behind it — exponentially, over our own source. It now scans a literal
+  the way the argument reader beside it always did: to the first unescaped closing quote, and no
+  further than the line. An unclosed quote yields no key instead of one guessed out of the characters
+  behind it, and every dictionary still reads with the same entries.
+- **The published api image carried seven util-linux advisories, a setuptools path traversal and an
+  msgpack out-of-bounds read, and none of them were ours.** The seven came in with `libuuid`, a shared
+  library of the runtime package list that Alpine had already patched inside the pinned release; the
+  other two came with the interpreter's own pip and setuptools, which nothing in this image ever runs,
+  because everything executes from the copied virtualenv. The build now takes the distro's patches
+  before adding its own packages and deletes pip and setuptools from the runtime interpreter. A
+  container that mounts nothing never had the util-linux tools to begin with.
+- The caddy image declares a `HEALTHCHECK` against caddy's admin endpoint — the same probe the compose
+  service uses — so a caddy that is up but not serving is visible to anything that waits for health.
+
+### Changed
+- The item table a run drafts is no longer filed in the day's thread as that day's `summary`. It is
+  the run's page and stays in the run summary, where it is read; `summary` is now the day's verdict
+  above the meals, and the thread keeps the notes and the questions. Left as it was, it would have
+  overwritten every verdict, because it is written after the session that produces one.
+- `deploy/Dockerfile.api` writes its base image tag into both stages instead of holding it in an
+  `ARG`: Dependabot cannot resolve `FROM ${ARG}` and was watching the web and caddy images but not
+  this one. Dependabot alerts, Dependabot security updates and private vulnerability reporting are
+  now enabled on the repository, so the next such advisory arrives as a pull request instead of
+  sitting in a list.
+- R75 is written down in the specification. It was referenced from two places in the code and the
+  requirement table went straight from R74 to R76 — the rule existed only as a comment.
+
 ## [1.1.0] - 2026-09-10
 
 ### Added

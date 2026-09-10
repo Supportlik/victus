@@ -43,11 +43,8 @@ DICTIONARIES = {
 #: The start of a call; the first argument is then read as an expression.
 CALL = re.compile(r"i18n\.t\(")
 
-#: A single-quoted or double-quoted string literal.
-LITERAL = re.compile(r"""(['"])(?P<text>(?:\\.|(?!\1).)*)\1""")
-
-#: Keys in the dictionary: 'text': '...' or Bare: '...'
-ENTRY = re.compile(r"^\s*(?:(['\"])(?P<quoted>(?:\\.|(?!\1).)*)\1|(?P<bare>[A-Za-z_][\w]*))\s*:")
+#: A dictionary key written without quotes: Bare: '...'
+BARE_ENTRY = re.compile(r"^\s*(?P<bare>[A-Za-z_]\w*)\s*:")
 
 
 def _skip_literal(text: str, i: int) -> int:
@@ -62,6 +59,36 @@ def _skip_literal(text: str, i: int) -> int:
             return i + 1
         i += 1
     return i
+
+
+def _literal_at(text: str, i: int) -> tuple[str, int] | None:
+    """The literal starting at ``i`` and the index just past it, or ``None`` for no literal.
+
+    Literals were read with ``(['"])(?:\\\\.|(?!\\1).)*\\1`` until CodeQL pointed out that an
+    apostrophe nobody closed makes that pattern backtrack over everything behind it. The scan
+    below is the same grammar walked once: it ends at the first unescaped closing quote and
+    gives up at the end of the line, which is where the regex gave up too (``.`` never
+    matched a newline).
+
+    Unlike ``_skip_literal`` — which answers "where does this string end" for the argument
+    scanner and therefore has to return *something* — an unterminated quote is not a literal
+    here, so a stray one contributes no key rather than swallowing the rest of the file.
+    """
+    quote = text[i]
+    j = i + 1
+    while j < len(text):
+        ch = text[j]
+        if ch == "\n":
+            return None
+        if ch == "\\":
+            if j + 1 >= len(text) or text[j + 1] == "\n":
+                return None
+            j += 2
+            continue
+        if ch == quote:
+            return text[i + 1 : j], j + 1
+        j += 1
+    return None
 
 
 def _first_argument(text: str, start: int) -> str:
@@ -103,14 +130,22 @@ def _keys_in(text: str, start: int) -> list[str]:
     """
     argument = _first_argument(text, start)
     keys: list[str] = []
-    for m in LITERAL.finditer(argument):
-        before = argument[: m.start()]
+    i = 0
+    while i < len(argument):
+        if argument[i] not in "'\"":
+            i += 1
+            continue
+        literal = _literal_at(argument, i)
+        if literal is None:
+            i += 1
+            continue
+        raw, before, i = literal[0], argument[:i], literal[1]
         if before.count("(") > before.count(")") or before.count("[") > before.count("]"):
             continue  # inside a nested call or index
         head = before.rstrip()
         if head and not head.endswith(VALUE_POSITION):
             continue
-        keys.append(m.group("text").replace("\\'", "'").replace('\\"', '"'))
+        keys.append(raw.replace("\\'", "'").replace('\\"', '"'))
     return keys
 
 
@@ -151,15 +186,33 @@ def server_strings() -> dict[str, list[str]]:
     return found
 
 
+def _entry_key(line: str) -> str | None:
+    """The key a dictionary line defines — ``'text': '…'`` or ``Bare: '…'`` — else ``None``.
+
+    The quoted half is scanned for the same reason as in ``_literal_at``: as a regex it read
+    an unclosed quote by backtracking over the line.
+    """
+    start = len(line) - len(line.lstrip())
+    if start < len(line) and line[start] in "'\"":
+        literal = _literal_at(line, start)
+        if literal is None:
+            return None
+        raw, end = literal
+        if not line[end:].lstrip().startswith(":"):
+            return None
+        return raw.replace("\\'", "'").replace('\\"', '"')
+    match = BARE_ENTRY.match(line)
+    return match.group("bare") if match else None
+
+
 def translated(dictionary: Path) -> set[str]:
     if not dictionary.exists():
         return set()
     keys: set[str] = set()
     for line in dictionary.read_text(encoding="utf-8").splitlines():
-        match = ENTRY.match(line)
-        if match:
-            raw = match.group("quoted") or match.group("bare") or ""
-            keys.add(raw.replace("\\'", "'").replace('\\"', '"'))
+        key = _entry_key(line)
+        if key is not None:
+            keys.add(key)
     return keys
 
 

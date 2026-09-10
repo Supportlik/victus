@@ -7,7 +7,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from victus.api.schemas.common import AttachmentRefOut, Out
+from victus.api.schemas.common import AttachmentRefOut, Out, PortionOut, TranscriptOut
 
 CaptureStatusLiteral = Literal["new", "in_progress", "assigned", "processed", "discarded", "failed"]
 #: "assess" judges frozen reports instead of drafting days and locks no day (R72).
@@ -21,6 +21,7 @@ class CaptureOut(Out):
     target_date: date | None = None
     text: str | None = None
     status: str
+    #: Every recording's text, joined; `transcripts` says which came from where.
     transcript: str | None = None
     attachment_id: str | None = None
     attachment_mime: str | None = None
@@ -29,6 +30,8 @@ class CaptureOut(Out):
     agent_run_id: str | None = None
     product_id: int | None = None
     attachments: list[AttachmentRefOut] = Field(default_factory=list)
+    #: One entry per transcribed recording; a recording still waiting has none (R65).
+    transcripts: list[TranscriptOut] = Field(default_factory=list)
     created: bool = True
 
 
@@ -101,6 +104,24 @@ class AgentStatusOut(Out):
     model: str | None = None
 
 
+class PortionOperationOut(Out):
+    """One line of a proposal's ``portions`` list, read against the catalogue."""
+
+    #: ``add``, ``update`` or ``delete``; an entry without one adds
+    op: str
+    portion_id: int | None = None
+    #: the fields the line would write
+    values: dict[str, Any]
+    #: the row it changes or removes, as it stands; null for an add
+    current: PortionOut | None = None
+    #: line items and recipe ingredients pointing at that row
+    used_by: int = 0
+    #: why approving this line would be refused, or null when it would apply
+    blocked: str | None = None
+    #: the actor's reason, mainly for a delete
+    reason: str | None = None
+
+
 class ProposalOut(Out):
     id: str
     #: null while a ``new`` proposal is pending — the product does not exist yet
@@ -119,6 +140,8 @@ class ProposalOut(Out):
     status: str
     created_at: datetime
     decided_at: datetime | None = None
+    #: what the proposed portions would do; filled while the proposal is pending
+    portion_plan: list[PortionOperationOut] = Field(default_factory=list)
 
 
 class ProposalDecisionIn(BaseModel):

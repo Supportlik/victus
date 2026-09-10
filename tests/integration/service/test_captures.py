@@ -8,11 +8,13 @@ import pytest
 
 from tests.integration.service.conftest import DAY
 from victus.application.errors import ExternalServiceError, NotFound, ValidationFailed
+from victus.application.ports.transcription import TranscriptionResult
 from victus.application.tenant_context import TenantContext
 from victus.application.use_cases import agent as agent_uc
 from victus.application.use_cases import captures as uc
 from victus.application.use_cases import day_logs as days_uc
 from victus.application.use_cases._base import UowFactory
+from victus.infrastructure.db import orm
 from victus.infrastructure.storage.memory import InMemoryBlobStorage
 from victus.infrastructure.transcription.fake import FakeTranscription
 
@@ -193,6 +195,159 @@ def test_the_voice_note_is_transcribed_not_the_photo_beside_it(
     )
     with pytest.raises(ValidationFailed):
         uc.TranscribeCapture(factory, alice, blobs, fake).execute(photos.id)
+
+
+class NumberedTranscription:
+    """A provider that answers every recording differently.
+
+    ``FakeTranscription`` returns one text however often it is called, which cannot show
+    which transcript came from which file.
+    """
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str | None]] = []
+
+    def transcribe(
+        self,
+        audio: bytes,
+        *,
+        mime: str,
+        filename: str | None = None,
+        language: str | None = None,
+        vocabulary_prompt: str | None = None,
+    ) -> TranscriptionResult:
+        self.calls.append((mime, filename))
+        n = len(self.calls)
+        return TranscriptionResult(
+            text=f"note {n}",
+            provider="fake",
+            model="fake-1",
+            language=language,
+            duration_s=10.0 * n,
+            segments=None,
+            cost_usd=0.0,
+        )
+
+
+def test_the_day_thread_carries_every_spoken_note(
+    factory: UowFactory, alice: TenantContext, blobs: InMemoryBlobStorage
+) -> None:
+    """T-SVC-087: a capture of two recordings reaches the thread with both texts.
+
+    Each recording has its own transcript, but the thread asked for the newest single one,
+    so the first note never reached a thread message — nor the day context the drafting
+    prompt is built on, which is the one place a dropped sentence turns into a missing
+    meal.
+    """
+    provider = NumberedTranscription()
+    cap = _upload(
+        factory,
+        alice,
+        blobs,
+        data=b"OggS-one",
+        filename="one.webm",
+        mime="audio/webm",
+        target_date=DAY,
+        files=(uc.UploadFile(b"OggS-two", "two.webm", "audio/webm"),),
+    )
+    uc.TranscribeCapture(factory, alice, blobs, provider).execute(cap.id)
+
+    thread = days_uc.GetDayThread(factory, alice).execute(DAY)
+    entry = next(m for m in thread if m.capture_id == cap.id)
+    assert entry.transcript == "note 1\nnote 2", "both notes, in the order they were recorded"
+
+    context = agent_uc.GetDayContext(factory, alice).execute(DAY)
+    assert "note 1" in str(context) and "note 2" in str(context)
+
+
+def test_two_voice_notes_each_get_their_own_transcript(
+    factory: UowFactory, alice: TenantContext, blobs: InMemoryBlobStorage
+) -> None:
+    """T-SVC-081: every recording is transcribed, and its text says which one it is.
+
+    Two spoken notes in one capture is ordinary (R65). Only the first was ever sent to a
+    provider, so the second was stored, played and never read — and the one transcript
+    was printed under both players, telling the reader neither which recording it came
+    from nor that another had never been listened to.
+    """
+    provider = NumberedTranscription()
+    cap = _upload(
+        factory,
+        alice,
+        blobs,
+        data=b"OggS-first-note",
+        filename="note-1.webm",
+        mime="audio/webm",
+        files=(
+            uc.UploadFile(b"\xff\xd8\xff-fake-jpeg", "photo.jpg", "image/jpeg"),
+            uc.UploadFile(b"OggS-second-note", "note-2.webm", "audio/webm"),
+        ),
+    )
+    view = uc.TranscribeCapture(factory, alice, blobs, provider).execute(cap.id)
+
+    # the photo between the two notes never reaches ffmpeg
+    assert provider.calls == [("audio/webm", "note-1.webm"), ("audio/webm", "note-2.webm")]
+    recordings = [a.id for a in view.attachments if a.mime.startswith("audio/")]
+    assert [(t.attachment_id, t.text, t.duration_s) for t in view.transcripts] == [
+        (recordings[0], "note 1", 10.0),
+        (recordings[1], "note 2", 20.0),
+    ]
+    # one field for a reader of one field: nothing is dropped from it
+    assert view.transcript == "note 1\nnote 2"
+
+    # both are stored, so a second call asks the provider for nothing
+    uc.TranscribeCapture(factory, alice, blobs, provider).execute(cap.id)
+    assert len(provider.calls) == 2
+    again = uc.TranscribeCapture(factory, alice, blobs, provider).execute(cap.id, force=True)
+    assert len(provider.calls) == 4
+    assert [t.text for t in again.transcripts] == ["note 3", "note 4"]
+    assert [t.attachment_id for t in again.transcripts] == recordings
+
+
+def test_a_transcript_without_a_recording_belongs_to_the_first_one(
+    factory: UowFactory, alice: TenantContext, blobs: InMemoryBlobStorage
+) -> None:
+    """T-SVC-082: rows written before transcripts knew their recording still show up.
+
+    ``attachment_id`` is nullable for them. Only the first recording was ever sent, so
+    that is the one such a row describes, and the second must still say it is waiting.
+    """
+    cap = _upload(
+        factory,
+        alice,
+        blobs,
+        data=b"OggS-first-note",
+        filename="old-1.webm",
+        mime="audio/webm",
+        files=(uc.UploadFile(b"OggS-second-note", "old-2.webm", "audio/webm"),),
+    )
+    with factory(alice) as uow:
+        uow.captures.add_transcript(
+            orm.Transcript(
+                capture_id=cap.id,
+                provider="openai",
+                model="gpt-4o-transcribe",
+                text="what the first note said",
+                duration_s=42.0,
+            )
+        )
+        uow.commit()
+
+    view = uc.GetCapture(factory, alice).execute(cap.id)
+    first, second = (a.id for a in view.attachments)
+    assert [(t.attachment_id, t.text) for t in view.transcripts] == [
+        (first, "what the first note said")
+    ]
+    assert second not in {t.attachment_id for t in view.transcripts}
+
+    # transcribing now leaves the attributed one alone and reads the one that was never read
+    provider = NumberedTranscription()
+    done = uc.TranscribeCapture(factory, alice, blobs, provider).execute(cap.id)
+    assert provider.calls == [("audio/webm", "old-2.webm")]
+    assert [(t.attachment_id, t.text) for t in done.transcripts] == [
+        (first, "what the first note said"),
+        (second, "note 1"),
+    ]
 
 
 def test_transcription_failure_marks_capture_failed(

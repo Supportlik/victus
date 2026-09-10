@@ -69,6 +69,30 @@ def test_product_search_and_day_tools(
     assert isinstance(listed, list) and listed[0]["date"] == DAY.isoformat()
 
 
+def test_agent_message_add_writes_a_verdict_without_a_draft(
+    tool_ctx: ToolContext, factory: UowFactory, alice: TenantContext
+) -> None:
+    """T-MCP-012: the day's verdict is reachable on its own, without drafting anything."""
+    day_uc.CreateDay(factory, alice).execute(DAY, reliable=True)
+    started = dispatch(tool_ctx, "agent_run_start", {"mode": "manual", "dates": [DAY.isoformat()]})
+    assert isinstance(started, dict)
+    run_id = started["run_id"]
+    written = dispatch(
+        tool_ctx,
+        "agent_message_add",
+        {
+            "run_id": run_id,
+            "date": DAY.isoformat(),
+            "kind": "summary",
+            "content": "A quiet rest day, two ready meals and a pudding.",
+        },
+    )
+    assert isinstance(written, dict) and written["role"] == "agent"
+    day = dispatch(tool_ctx, "day_get", {"date": DAY.isoformat()})
+    assert isinstance(day, dict) and day["status"] == "open" and not day["has_drafts"]
+    assert day["verdict"] == "A quiet rest day, two ready meals and a pudding."
+
+
 def test_report_render_markdown_and_json(tool_ctx: ToolContext) -> None:
     md = dispatch(tool_ctx, "report_render", {"name": "checkup", "period": "14d"})
     assert isinstance(md, str) and "#" in md

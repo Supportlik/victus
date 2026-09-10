@@ -12,3 +12,17 @@ FROM caddy:2.11.4-alpine
 LABEL org.opencontainers.image.source="https://github.com/Supportlik/victus" \
       org.opencontainers.image.licenses="LicenseRef-PolyForm-Noncommercial-1.0.0"
 COPY --from=builder /usr/bin/caddy /usr/bin/caddy
+
+# This image deliberately keeps the upstream root user (Trivy DS-0002, dismissed there with
+# the same reason). It is the edge itself: it binds 80 and 443 on the host, and the two ways
+# to do that without root — CAP_NET_BIND_SERVICE, or high ports plus a host-side mapping —
+# each move the privilege somewhere less visible than this line. Upstream ships and supports
+# the image as root, drops nothing into it but a static binary, and every service behind it
+# (api, web, worker) does run unprivileged. Revisit if caddy ever needs to run application
+# code; a proxy that only terminates TLS is not where a break-out starts.
+
+# Caddy answers on its admin endpoint before it has a certificate, which is what makes this
+# cheap: the container is up as soon as the config is loaded, independent of DNS-01 issuance.
+# Same probe as the compose service, so both agree on what "healthy" means.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget -q --spider http://127.0.0.1:2019/metrics || exit 1

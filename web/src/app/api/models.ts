@@ -253,6 +253,8 @@ export interface DayLog extends DaySummary {
   zones?: Partial<Record<MacroKey, BandZone>>;
   findings: Finding[];
   notes?: string | null;
+  /** The agent's verdict on the day: two or three sentences, or nothing at all. */
+  verdict?: string | null;
 }
 
 export interface DayFlags {
@@ -267,6 +269,8 @@ export interface LineItemInput {
   unit_code: string;
   portion_id?: number | null;
   estimated?: boolean;
+  /** Set apart from `estimated`: the nutrients are known, the portion was guessed. */
+  amount_estimated?: boolean;
 }
 
 export interface DayMessage {
@@ -321,6 +325,8 @@ export interface ProductUsage {
   total_kcal: number;
   first_date?: string | null;
   last_date?: string | null;
+  /** Line items in total, past the entry limit: how much depends on these values. */
+  item_count?: number;
 }
 
 /** A report frozen at a point in time, with the assessment written for those numbers. */
@@ -438,6 +444,16 @@ export interface AttachmentRef {
   original_name?: string | null;
 }
 
+/** What one recording of a capture says, and how long it is. */
+export interface Transcript {
+  /** The recording this text came from; null for a transcript stored before that was kept. */
+  attachment_id?: string | null;
+  /** Empty when the provider heard nothing intelligible. */
+  text: string;
+  /** Seconds, as the transcription provider measured them. */
+  duration_s?: number | null;
+}
+
 export interface Capture {
   id: string;
   kind: 'text' | 'audio' | 'image';
@@ -445,11 +461,14 @@ export interface Capture {
   target_date: string | null;
   text?: string | null;
   status: CaptureStatus;
+  /** Every recording's text, joined; `transcripts` says which came from where. */
   transcript?: string | null;
   attachment_id?: string | null;
   attachment_mime?: string | null;
   /** Every file of this capture, in order; the first one is `attachment_id`. */
   attachments?: AttachmentRef[];
+  /** One entry per transcribed recording; a recording still waiting has none. */
+  transcripts?: Transcript[];
   content_hash?: string;
   processed_at?: string | null;
   agent_run_id?: string | null;

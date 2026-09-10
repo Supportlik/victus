@@ -87,9 +87,11 @@ adding to it at any time, exactly like continuing a chat:
 | Message **while** the day is being processed | Stays `new`; a `follow_up` run for that day is queued and starts when the lock is released. The app shows the message as "waiting for the agent" |
 | Message after a draft exists ("the chicken was 300 g") | Queues a `follow_up` run; the session is seeded with the current draft and the thread and applies the correction incrementally |
 | Agent has a question ("chips — which pack size?") | Posted to the thread as a `question`; your reply is an ordinary message and follows the same path |
+| The day is drafted | The session also writes **one `summary`**: the day's verdict, two or three sentences, shown above the meals. A later run replaces it rather than adding a second opinion |
 | Message on another day | Belongs to that day's thread only; ADR 0009 still holds |
 
-Surfaces: `GET/POST /days/{date}/messages`, MCP `day_thread_get(date)` / `day_message_add(date, text)`,
+Surfaces: `GET/POST /days/{date}/messages`, MCP `day_thread_get(date)` / `day_message_add(date, text)` for
+the person's side and `agent_message_add(run_id, date, kind, content)` for the agent's,
 the chat panel on the day view (agent messages are tagged `summary`, `question`, `note`; your captures show
 "waiting for the agent" or "in draft").
 
@@ -107,7 +109,7 @@ A capture uploaded with `product_id` (the product page's "Label photos & notes",
 `product_id`) is about one product, never about a day. It is processed in its own short step, outside any
 day session: `captures_open(scope="product")` → `capture_get` (image or transcript) → `product_get` →
 `product_update` with the legible label values and `source = "label photo, capture <id>"` (plus
-`portion_create` when the label states a portion) → `capture_mark(processed)`. Values that cannot be read
+`portion_create` when the label states a portion, `portion_update` or `portion_delete` when one already there is wrong) → `capture_mark(processed)`. Values that cannot be read
 are left untouched and the capture is marked `failed` with a note in the summary. Corrected nutrients
 propagate to every logged quantity of that product by design; `verified` stays false until a person
 confirms the product in the review list.
@@ -160,10 +162,11 @@ The in-house runner uses the Anthropic Python SDK with a manual tool loop (no be
 |---|---|
 | `src/victus/agent/prompts/system.md` | Role, rules (never approve, always search before creating a product, flag estimates, answer in the tenant's language), tool usage order |
 | `src/victus/agent/prompts/capture_to_draft.md` | Per-day instructions: portion heuristics (portion size is the riskier estimate, not nutrient density), label photos beat estimates, ask-worthy items (e.g. "chips" without quantity → low confidence + open question) |
+| `src/victus/agent/prompts/day_verdict.md` | The day's verdict: two or three sentences, fewer than 60 words, at most one tip, nothing when there is nothing to say — and advice with reasoning left to the report |
 | `src/victus/agent/prompts/summary.md` | Format of the chat summary (below) |
 
 Prompt files are versioned in the repo; `agent_run.prompt_version` and `agent_session.prompt_version` record the
-first 12 hex digits of the SHA-256 over the three files, so a changed prompt is visible in every run record.
+first 12 hex digits of the SHA-256 over every prompt file, so a changed prompt is visible in every run record.
 
 ## Summary format (chat)
 

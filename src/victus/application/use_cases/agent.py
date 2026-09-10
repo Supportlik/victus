@@ -40,6 +40,7 @@ from victus.application.use_cases.day_logs import (
     resolve_base,
 )
 from victus.application.use_cases.drafts import draft_markdown
+from victus.application.use_cases.products import in_reference_unit
 from victus.domain.values import (
     AgentMode,
     CaptureStatus,
@@ -479,7 +480,7 @@ class GetDayContext(UseCase):
             )
             caps = [
                 capture_view(
-                    c, uow.captures.transcript_for(c.id), uow.captures.attachments_of(c.id)
+                    c, uow.captures.transcripts_for(c.id), uow.captures.attachments_of(c.id)
                 )
                 for c in uow.captures.list(target_date=day)
                 if c.product_id is None and (wanted is None or c.status in wanted)
@@ -495,7 +496,13 @@ class GetDayContext(UseCase):
 
 
 class AddAgentMessage(UseCase):
-    """Agent-side thread entry: summary, question or note for a day (ADR 0010)."""
+    """Agent-side thread entry: summary, question or note for a day (ADR 0010).
+
+    ``summary`` is the day's verdict and there is exactly one: a later run corrects it
+    instead of stacking a second opinion under the first, which is also what the day page
+    shows above the meals. Notes and questions accumulate, because each is about a
+    different thing.
+    """
 
     def execute(self, run_id: str, day: date, kind: str, content: str) -> dto.DayMessageView:
         self.ctx.require(SCOPE_AGENT_WRITE)
@@ -505,6 +512,8 @@ class AddAgentMessage(UseCase):
             raise ValidationFailed("message content is required")
         with self._uow() as uow:
             _run_or_404(uow, run_id)
+            if kind == MessageKind.SUMMARY.value:
+                uow.day_messages.remove_kind(day, kind)
             m = uow.day_messages.add(
                 orm.DayMessage(
                     tenant_id=self.ctx.tenant_id,
@@ -736,10 +745,12 @@ class CreateDraft(UseCase):
         try:
             base, base_unit, portion_id = resolve_base(uow, consumable, inp)
         except ValidationFailed:
-            # count unit without a portion: accept the agent's frozen base quantity
+            # count unit without a portion: accept the agent's frozen base quantity, which
+            # the prompt asks for in grams even when the product is stated per ml (R75)
             if item.get("base_quantity") is None:
                 raise
-            base, base_unit, portion_id = float(item["base_quantity"]), "g", None
+            base, base_unit = in_reference_unit(uow, consumable, float(item["base_quantity"]), "g")
+            portion_id = None
         position = (max((li.position for li in meal.line_items), default=0)) + 1
         li = uow.day_logs.add_line_item(
             orm.LineItem(

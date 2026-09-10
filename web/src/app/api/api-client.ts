@@ -115,7 +115,7 @@ export class ApiClient {
   categories(): Observable<Category[]> {
     return this.http.get<Category[]>(`${API_BASE}/categories`);
   }
-  products(q: string, opts: { category?: number; limit?: number; on?: string | null } = {}): Observable<Product[]> {
+  products(q: string, opts: { category?: number; limit?: number; offset?: number; on?: string | null } = {}): Observable<Product[]> {
     return this.http.get<Product[]>(`${API_BASE}/products`, { params: params({ q, ...opts }) });
   }
   product(id: number): Observable<Product> {

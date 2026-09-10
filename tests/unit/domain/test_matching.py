@@ -1,6 +1,8 @@
-"""T-DOM-020…023: three-tier consumable matching and its two regression traps."""
+"""T-DOM-020…023: three-tier consumable matching and its two regression traps; T-DOM-030."""
 
 from __future__ import annotations
+
+import time
 
 import pytest
 
@@ -99,3 +101,18 @@ def test_empty_and_short_inputs(index: ConsumableIndex) -> None:
     assert index.find("") == []
     assert index.find(None) == []
     assert index.best("   ") is None
+
+
+def test_short_form_stays_linear_on_bracket_storms() -> None:
+    """T-DOM-030: the parenthesis pattern is reached with the text a person typed.
+
+    ``short_form`` runs on every name the matcher is asked about, the free-text one included,
+    and the lazy ``(.*?)`` it used to hold walked to the end of the string from every opening
+    bracket (alert #44). One parenthesised part per name still goes, which is what tier 2
+    depends on.
+    """
+    assert short_form("Kartoffel (roh)") == "kartoffel"
+    storm = "(" * 30_000
+    start = time.perf_counter()
+    assert short_form(storm) == ""
+    assert time.perf_counter() - start < 1.0

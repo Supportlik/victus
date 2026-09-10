@@ -4,11 +4,13 @@
 #
 # Base images are Alpine and pinned to the newest stable release; Dependabot
 # (`.github/dependabot.yml`, ecosystem docker) proposes bumps.
-
-ARG PYTHON_IMAGE=python:3.14.7-alpine3.24
+#
+# The tag is written out in both stages rather than held in an ARG: Dependabot cannot see
+# through `FROM ${PYTHON_IMAGE}` and left this image unwatched, while it does update every
+# occurrence of the same image in one pull request. Keep the two lines equal.
 
 # ── Stage 1: resolve and install the locked dependency set ──────────────────
-FROM ${PYTHON_IMAGE} AS builder
+FROM python:3.14.7-alpine3.24 AS builder
 
 # uv binary from its official image (always the latest release).
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
@@ -35,7 +37,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev --extra postgres --extra auth --extra transcription --extra agent
 
 # ── Stage 2: minimal Alpine runtime ─────────────────────────────────────────
-FROM ${PYTHON_IMAGE} AS runtime
+FROM python:3.14.7-alpine3.24 AS runtime
 
 ARG VERSION=dev
 LABEL org.opencontainers.image.title="victus-api" \
@@ -47,11 +49,30 @@ LABEL org.opencontainers.image.title="victus-api" \
 # ffmpeg: audio conversion for transcription (e.g. .oga → mp3).
 # tini:   proper signal handling / zombie reaping for the scheduler processes.
 # libffi/libstdc++: runtime libs for argon2 / pydantic-core wheels.
-RUN apk add --no-cache ffmpeg tini ca-certificates libffi libstdc++ \
+#
+# `apk upgrade` runs first because a pinned base tag also freezes the package versions the
+# tag was cut with. That is where the published image's seven util-linux findings came from:
+# not the util-linux tools — the image ships none, this container mounts nothing — but the
+# libuuid library that comes in with the list below, already patched in the same Alpine
+# release. Without this line the fix would depend on the next base-image tag.
+RUN apk --no-cache upgrade \
+ && apk add --no-cache ffmpeg tini ca-certificates libffi libstdc++ \
  && addgroup -g 1000 -S victus \
  && adduser -u 1000 -S -G victus -h /home/victus -s /sbin/nologin victus \
  && mkdir -p /data /data/blobs /backups \
  && chown -R victus:victus /data /backups
+
+# Everything runs out of /app/.venv, which uv builds without pip, so the interpreter's own
+# pip and setuptools are never executed in this image — and they were the only reason the
+# setuptools path traversal and the msgpack advisory (vendored inside pip) were reported
+# against it. Nothing in the locked dependency set imports pkg_resources.
+RUN rm -rf /usr/local/lib/python3*/ensurepip \
+           /usr/local/lib/python3*/site-packages/pip* \
+           /usr/local/lib/python3*/site-packages/setuptools* \
+           /usr/local/lib/python3*/site-packages/pkg_resources* \
+           /usr/local/lib/python3*/site-packages/_distutils_hack* \
+           /usr/local/lib/python3*/site-packages/distutils-precedence.pth \
+           /usr/local/bin/pip*
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \

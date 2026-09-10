@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { ApiClient, Capture } from '../api';
+import { ApiClient, Capture, Transcript } from '../api';
 import { FormatService } from '../core/format.service';
 import { I18nService } from '../core/i18n.service';
 import { describeError } from '../core/problem';
@@ -9,6 +9,10 @@ import { describeError } from '../core/problem';
 /**
  * One capture, the same everywhere (inbox, day thread, product page): preview of the
  * text, transcript, audio or image; status; and the actions that make sense for its state.
+ *
+ * Each recording carries its own length and text — a capture holds as many spoken notes
+ * as were recorded into it (R65), and one text under all of them said nothing about
+ * which recording it came from.
  *
  * - new / failed: set day, discard, delete, re-transcribe (audio)
  * - assigned: nothing destructive (the agent used it; approve or discard the draft instead)
@@ -46,10 +50,20 @@ import { describeError } from '../core/problem';
         </div>
         @if (c().text) { <p class="text">{{ c().text }}</p> }
         @if (c().kind === 'audio') {
-          @for (a of audios(); track a.id) { <audio controls preload="none" [src]="api.attachmentUrl(a.id)"></audio> }
-          @if (c().transcript) { <p class="transcript">“{{ c().transcript }}”</p> }
-          @else if (c().transcript === '') { <p class="v-small v-muted">{{ i18n.t('No speech detected in this recording.') }}</p> }
-          @else { <p class="v-small v-muted">{{ i18n.t('No transcript yet.') }}</p> }
+          @for (a of audios(); track a.id) {
+            <div class="rec" [attr.data-recording]="a.id">
+              <audio controls preload="metadata" [src]="api.attachmentUrl(a.id)"></audio>
+              @if (transcriptOf(a.id); as t) {
+                <p class="transcript">
+                  @if (t.duration_s) { <span class="len">{{ format.duration(t.duration_s) }} · </span> }
+                  @if (t.text) { <span>“{{ t.text }}”</span> }
+                  @else { <span class="v-muted">{{ i18n.t('No speech detected in this recording.') }}</span> }
+                </p>
+              } @else {
+                <p class="transcript v-muted">{{ i18n.t('No transcript yet.') }}</p>
+              }
+            </div>
+          }
         }
         @if (error(); as e) { <div class="v-small err">{{ e }}</div> }
         @if (canAct()) {
@@ -99,6 +113,8 @@ import { describeError } from '../core/problem';
     .target { font-weight: 500; }
     .text { margin: 0; white-space: pre-wrap; font-size: var(--v-fs-s); }
     .transcript { margin: 0; color: var(--v-ink-2); font-style: italic; font-size: var(--v-fs-s); }
+    .rec { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.2rem; }
+    .len { font-style: normal; font-variant-numeric: tabular-nums; color: var(--v-ink-3); }
     audio { width: 100%; max-width: 20rem; display: block; }
     .actions { display: flex; gap: 0.3rem; flex-wrap: wrap; align-items: center; }
     .actions input { padding: 0.25rem 0.4rem; border: 1px solid var(--v-line-strong); border-radius: var(--v-radius); background: var(--v-surface); }
@@ -141,6 +157,28 @@ export class CaptureCard {
   audios(): { id: string; mime: string }[] {
     const audio = this.files().filter((a) => a.mime.startsWith('audio/') || a.mime.startsWith('video/'));
     return audio.length ? audio : this.c().attachment_id && this.c().kind === 'audio' ? [{ id: this.c().attachment_id!, mime: '' }] : [];
+  }
+
+  /**
+   * What one recording says, or null while it is still waiting.
+   *
+   * A capture can hold two spoken notes, and printing one text under both players told
+   * the reader neither which recording it belonged to nor that the other was never
+   * listened to. A transcript without an `attachment_id` predates the per-recording
+   * rows and can only have come from the first one.
+   */
+  transcriptOf(id: string): Transcript | null {
+    const rows = this.c().transcripts ?? [];
+    const first = this.audios()[0]?.id;
+    const own = rows.find((t) => (t.attachment_id ?? first) === id);
+    if (own) return own;
+    // A payload with no per-recording rows at all — a day-thread message carries only the
+    // capture-wide text — can only be describing the first recording.
+    const whole = this.c().transcript;
+    if (!rows.length && whole != null && first === id) {
+      return { attachment_id: id, text: whole, duration_s: null };
+    }
+    return null;
   }
 
   statusLabel(): string {

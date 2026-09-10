@@ -1,4 +1,5 @@
-"""T-TOOL-001: the translation check sees the key wherever the call puts it.
+"""T-TOOL-001: the translation check sees the key wherever the call puts it; T-TOOL-002: it
+reads literals by scanning them.
 
 The check is what stands between four languages and an English sentence on a German page,
 so it has to find a key that a ternary chooses and it must not invent keys out of the
@@ -9,6 +10,7 @@ the inbox page were missing from all three dictionaries and the check reported n
 from __future__ import annotations
 
 import importlib.util
+import time
 from pathlib import Path
 from types import ModuleType
 
@@ -64,6 +66,55 @@ def test_parameters_are_not_keys() -> None:
 def test_a_fallback_is_a_key() -> None:
     line = "{{ i18n.t(label() ?? 'Unnamed') }}"
     assert keys(line) == ["Unnamed"]
+
+
+def test_an_escaped_quote_stays_inside_the_key() -> None:
+    """T-TOOL-002: the key is the sentence the template shows, apostrophe included."""
+    assert keys("{{ i18n.t('It\\'s open') }}") == ["It's open"]
+    assert keys('{{ i18n.t("He said \\"no\\"") }}') == ['He said "no"']
+
+
+def test_a_quote_nobody_closed_yields_no_key() -> None:
+    """T-TOOL-002: an unclosed quote is not a literal, and must not become one by search.
+
+    The pattern this replaced could reach the same conclusion only by backtracking over
+    everything behind the quote, which on a file-sized string is what CodeQL reported as
+    exponential (alerts #49, #50). The scan stops at the end of the line, as the pattern's
+    ``.`` did.
+    """
+    assert keys("{{ i18n.t('Add a capture) }}") == []
+    assert keys("{{ i18n.t('spans\nlines') }}") == []
+
+
+def test_a_quote_storm_does_not_stall_the_check() -> None:
+    """T-TOOL-002: 26 escape pairs behind an unclosed quote took the old pattern ~8 s."""
+    bomb = "i18n.t('" + "\\a" * 26 + ")"
+    start = time.perf_counter()
+    assert keys(bomb) == []
+    assert time.perf_counter() - start < 1.0
+
+
+def test_dictionary_entries_are_read_quoted_and_bare(tmp_path: Path) -> None:
+    """T-TOOL-002: the key side of a dictionary line, however it is written."""
+    ct = _module()
+    path = tmp_path / "i18n.xx.ts"
+    path.write_text(
+        "export const XX: Record<string, string> = {\n"
+        "  'Add to this day, or correct it: 300 g': 'Y',\n"
+        "  Agent: 'Y',\n"
+        "  \"It's open\": 'Y',\n"
+        "  'It\\'s closed': 'Y',\n"
+        "  // a comment is not an entry\n"
+        "  'never closed: 'Y',\n"
+        "};\n",
+        encoding="utf-8",
+    )
+    assert ct.translated(path) == {
+        "Add to this day, or correct it: 300 g",
+        "Agent",
+        "It's open",
+        "It's closed",
+    }
 
 
 def test_the_repository_itself_passes() -> None:

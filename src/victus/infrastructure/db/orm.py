@@ -736,11 +736,21 @@ class CaptureAttachment(Base):
 
 
 class Transcript(Base):
+    """What one recording says: one row per audio part, not one per capture (R65).
+
+    ``attachment_id`` is nullable because it did not exist while a capture could hold
+    exactly one transcript. Such a row belongs to the capture's first recording — that
+    was the only part ever sent to a provider.
+    """
+
     __tablename__ = "transcript"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     capture_id: Mapped[str] = mapped_column(
         ID, ForeignKey("capture.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    attachment_id: Mapped[str | None] = mapped_column(
+        ID, ForeignKey("attachment.id", ondelete="SET NULL")
     )
     provider: Mapped[str] = mapped_column(String(50), nullable=False)
     model: Mapped[str] = mapped_column(String(100), nullable=False)

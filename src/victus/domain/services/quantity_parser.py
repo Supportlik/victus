@@ -42,17 +42,27 @@ _MULT_ANYWHERE = re.compile(
 )
 _LEADING_BASE = re.compile(r"^\s*~?\s*(\d[\d.,]*)\s*(kg|g|ml|l)(?![a-zäöüß])", re.IGNORECASE)
 _PARENS = re.compile(r"\(([^)]*)\)")
+# Wikilinks and Markdown links. Each negated class excludes the *opening* bracket as well as
+# the closing one, so a failed attempt stops at the next bracket instead of walking to the
+# end of the text: without that, a pasted "[[[[[[…" costs one full scan per position, and
+# this text comes from a person or a transcript. A label or URL containing "[" or "(" is not
+# a link either way. The "\?" that used to precede the pipe was dead — the class before it
+# already swallows the backslash of an escaped "\|" — and only added backtracking.
+_WIKILINK_LABELLED = re.compile(r"\[\[[^\][|]*\|([^\][]+)\]\]")
+_WIKILINK = re.compile(r"\[\[([^\][]+)\]\]")
+_MD_LINK = re.compile(r"\[([^\][]+)\]\([^()]*\)")
+_WHITESPACE = re.compile(r"\s+")
 
 
 def clean_text(text: str | None) -> str:
     """Strip Markdown decoration and wikilinks, collapse whitespace."""
     if not text:
         return ""
-    s = re.sub(r"\[\[[^\]|]*\\?\|([^\]]+)\]\]", r"\1", text)  # [[target\|Label]] → Label
-    s = re.sub(r"\[\[([^\]]+)\]\]", r"\1", s)
-    s = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", s)  # [Label](url) → Label
+    s = _WIKILINK_LABELLED.sub(r"\1", text)  # [[target\|Label]] → Label
+    s = _WIKILINK.sub(r"\1", s)
+    s = _MD_LINK.sub(r"\1", s)  # [Label](url) → Label
     s = _DECORATION.sub("", s)
-    return re.sub(r"\s+", " ", s).strip()
+    return _WHITESPACE.sub(" ", s).strip()
 
 
 def parse_number(text: str | None) -> float | None:

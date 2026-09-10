@@ -3,11 +3,11 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ApiClient, DayLog, LineItem, MACRO_KEYS, MACRO_LABEL, MACRO_UNIT, MacroKey, Meal, Product, TrainingType, Unit } from '../../api';
 import { HttpErrorResponse } from '@angular/common/http';
-import { FormatService } from '../../core/format.service';
 import { I18nService } from '../../core/i18n.service';
 import { describeError } from '../../core/problem';
 import { BandGauge } from '../../shared/band-gauge';
-import { DayNamePipe, MacroPipe, shiftDate } from '../../shared/format';
+import { DayNamePipe, MacroPipe, formatAmount, formatUnit, shiftDate } from '../../shared/format';
+import { LineItemForm } from '../../shared/line-item-form';
 import { ProductSearch } from '../../shared/product-search';
 import { StatusTag } from '../../shared/status-tag';
 import { FoodIcon } from '../../shared/food-icon';
@@ -20,7 +20,7 @@ import { DayThread } from './day-thread';
 @Component({
   selector: 'v-day-view',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, FormsModule, BandGauge, StatusTag, MacroPipe, DayNamePipe, ProductSearch, DayThread, FoodIcon],
+  imports: [RouterLink, FormsModule, BandGauge, StatusTag, MacroPipe, DayNamePipe, ProductSearch, DayThread, FoodIcon, LineItemForm],
   template: `
     <div class="v-page">
       <header class="v-page-head">
@@ -95,6 +95,15 @@ import { DayThread } from './day-thread';
             <v-band-gauge [macro]="k" [label]="i18n.t(label[k])" [unit]="unit[k]" [value]="d.macros[k]" [band]="bandFor(d, k)" [zone]="d.zones?.[k]" />
           }
         </section>
+
+        @if (d.verdict) {
+          <!-- What the day was, in the agent's own two or three sentences. The numbers
+               above answer "did I stay in the band"; this answers "was this a good day". -->
+          <section class="verdict" [attr.aria-label]="i18n.t('The day in short')">
+            <span class="who v-small">{{ i18n.t('Agent') }}</span>
+            <p>{{ d.verdict }}</p>
+          </section>
+        }
 
         @if (d.findings.length) {
           <div class="v-notice">
@@ -204,10 +213,17 @@ import { DayThread } from './day-thread';
                           <td class="num v-hide-m">{{ it.salt | macro: 'salt' }}</td>
                           <td class="row-actions">
                             @if (it.is_draft) { <button type="button" class="v-btn small primary" (click)="acceptItem(it)" [title]="i18n.t('Accept this drafted item')">{{ i18n.t('Accept') }}</button> }
-                            <button type="button" class="v-btn quiet small" (click)="editAmount(it)">{{ i18n.t('edit') }}</button>
+                            <button type="button" class="v-btn quiet small" (click)="edit(it)">{{ i18n.t('edit') }}</button>
                             <button type="button" class="v-btn quiet small danger" (click)="remove(it)">{{ i18n.t('remove') }}</button>
                           </td>
                         </tr>
+                        @if (editing() === it.id) {
+                          <tr class="editor">
+                            <td colspan="9">
+                              <v-line-item-form [item]="it" [units]="units()" (saved)="itemSaved()" (cancelled)="editing.set(null)" />
+                            </td>
+                          </tr>
+                        }
                       } @empty {
                         <tr><td colspan="9" class="v-muted">{{ i18n.t('Nothing logged in this meal.') }}</td></tr>
                       }
@@ -271,6 +287,11 @@ import { DayThread } from './day-thread';
     .create-day form { align-items: end; }
     .sub { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
     .gauges { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: 1rem 1.5rem; padding: 1rem 1.25rem; margin-bottom: 1.25rem; background: var(--v-surface); border: 1px solid var(--v-line); border-radius: var(--v-radius-l); }
+    // Quiet on purpose: the agent's tint and one line of text, no heading and no panel
+    // chrome competing with the gauges above it.
+    .verdict { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.15rem; padding: 0.6rem 0.9rem; margin-bottom: 1.25rem; border-left: 3px solid var(--v-agent); border-radius: var(--v-radius); background: var(--v-agent-soft); }
+    .verdict .who { color: var(--v-ink-3); }
+    .verdict p { margin: 0; }
     .columns { display: grid; grid-template-columns: minmax(0, 2fr) minmax(16rem, 1fr); gap: 1.5rem; align-items: start; }
     .ledger { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.25rem; }
     .drafts-bar { display: flex; justify-content: space-between; gap: 1rem; align-items: center; flex-wrap: wrap; }
@@ -301,6 +322,7 @@ import { DayThread } from './day-thread';
     .size input { min-width: 5rem; }
     .add .hint { grid-column: 1 / -1; margin: 0; }
     tr.draft td { background: var(--v-agent-soft); }
+    tr.editor td { padding: 0.35rem 0; }
     .warn-mark { margin-left: 0.25rem; }
     .row-actions { white-space: nowrap; text-align: right; }
     .new-meal { display: flex; flex-wrap: wrap; gap: 0.5rem; }
@@ -322,7 +344,6 @@ import { DayThread } from './day-thread';
 export class DayView {
   private readonly api = inject(ApiClient);
   readonly i18n = inject(I18nService);
-  readonly format = inject(FormatService);
   readonly date = input.required<string>();
   readonly day = signal<DayLog | null>(null);
   readonly error = signal<string | null>(null);
@@ -332,6 +353,8 @@ export class DayView {
   /** Raised when an approval changed a capture, so the thread and the badges catch up. */
   readonly threadRevision = signal(0);
   readonly adding = signal<number | null>(null);
+  /** The item whose edit panel is open, under its row. */
+  readonly editing = signal<number | null>(null);
   readonly pending = signal<Product | null>(null);
   readonly prev = computed(() => shiftDate(this.date(), -1));
   readonly next = computed(() => shiftDate(this.date(), 1));
@@ -360,22 +383,12 @@ export class DayView {
     this.i18n.t(this.units().find((u) => u.code === this.unitCode())?.singular ?? this.unitCode()),
   );
 
-  /** The unit an item was logged in, with the portion when the unit alone is ambiguous.
-   *
-   * One unit can have several portions — a piece of egg is S, M, L or XL — so "1 Stück"
-   * would stand for anything between 43 and 65 g.
-   */
   unitOf(it: LineItem): string {
-    const unit = this.i18n.t(it.unit_code ?? it.base_unit);
-    // a label that only repeats the unit's own word would read "1 Stück (Stück)"
-    const named = it.portion_label && it.portion_label !== it.unit_code;
-    return named ? `${unit} (${this.i18n.t(it.portion_label!)})` : unit;
+    return formatUnit(it, (k) => this.i18n.t(k));
   }
 
-  /** An amount as it is written here: a whole number stays whole, a fraction keeps one place. */
   amountText(value: number | null | undefined): string {
-    if (value == null) return '–';
-    return this.format.number(value, Number.isInteger(value) ? 0 : 1);
+    return formatAmount(value);
   }
 
   readonly macroKeys = MACRO_KEYS;
@@ -567,18 +580,14 @@ export class DayView {
       });
   }
 
-  editAmount(it: LineItem): void {
-    const v = window.prompt(
-      this.i18n.t('Amount for {name} ({unit})', {
-        name: it.consumable_name,
-        unit: this.unitOf(it),
-      }),
-      String(it.amount ?? it.base_amount),
-    );
-    if (v === null) return;
-    const amount = Number(v.replace(',', '.'));
-    if (!Number.isFinite(amount) || amount <= 0) return;
-    this.api.updateLineItem(it.id, { amount }).subscribe({ next: () => this.reload(), error: (e: unknown) => this.error.set(describeError(e)) });
+  /** One panel at a time; a second click on the same row closes it again. */
+  edit(it: LineItem): void {
+    this.editing.update((open) => (open === it.id ? null : it.id));
+  }
+
+  itemSaved(): void {
+    this.editing.set(null);
+    this.reload();
   }
 
   remove(it: LineItem): void {

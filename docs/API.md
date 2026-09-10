@@ -55,12 +55,12 @@ The tenant is always derived from the principal (session or token); it never app
 |---|---|---|
 | GET | `/units` | Global units |
 | GET / POST / PATCH | `/categories[/{id}]` | Product categories |
-| GET | `/products?q=&category=&limit=&cursor=` | Search (full-text + fuzzy score)  `on=<day>` returns the version of each product that applied on that day |
+| GET | `/products?q=&category=&limit=&offset=` | Search, ranked by the name: exact, prefix, word prefix, substring, then fuzzy candidates. An empty `q` lists the catalogue A–Z, and `offset` pages through it  `on=<day>` returns the version of each product that applied on that day |
 | POST | `/products` | Create product |
 | GET / PATCH / DELETE | `/products/{id}` | Product detail |
 | GET | `/products/{id}/versions` | Every version of the product, oldest first, with the days each one covers (R70) |
 | POST | `/products/{id}/versions` | Record changed values from a day on `{valid_from, changes}`; the previous version is closed the day before and keeps its numbers |
-| GET | `/products/{id}/usage?limit=` | The days this product was logged on, newest first, with amounts, kcal and draft flags (R60) |
+| GET | `/products/{id}/usage?limit=` | The days this product was logged on, newest first, with amounts, kcal and draft flags, plus `item_count` over all of them rather than only the ones returned (R60). `{id}` may also be the one-off consumable a pending `new` proposal is logged against, which is how that proposal shows the day and meal it was eaten in |
 | GET / POST | `/products/{id}/portions` | Portions of a product |
 | PATCH / DELETE | `/portions/{id}` | Edit portion |
 | POST | `/products/match` | Free text → ranked candidates `{id, name, stage, score}` (same function the agent uses) |
@@ -75,14 +75,14 @@ The tenant is always derived from the principal (session or token); it never app
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/days?from=&to=&status=` | List days with computed macros |
-| GET | `/days/{date}` | Day with meals, line items, computed macros, target band, findings. A finding's `message` is `{key, params}`, not a sentence: the client translates it (R78) |
+| GET | `/days/{date}` | Day with meals, line items, computed macros, target band, findings, and `verdict` — the agent's short word on the day, its newest `summary` thread message. A finding's `message` is `{key, params}`, not a sentence: the client translates it (R78) |
 | POST | `/days/{date}` | Create the day (`reliable` required, `training_type`, `notes`) |
 | PUT | `/days/{date}` | Flags (`reliable`, `training_type`), notes; 404 if the day does not exist |
 | POST | `/days/{date}/meals` | Add meal |
 | PATCH | `/meals/{id}` | Rename a meal or change its time (`{name?, time?}`) |
 | DELETE | `/meals/{id}` | Delete an **empty** meal; `409` while it still has line items (R53) |
 | POST | `/meals/{id}/line-items` | Add line item |
-| PATCH / DELETE | `/line-items/{id}` | Edit / remove line item |
+| PATCH / DELETE | `/line-items/{id}` | Edit (`amount`, `unit_code`, `portion_id`, `consumable_id`, `estimated`, `amount_estimated`; a mark can be set back to `false`) / remove line item |
 | POST | `/days/{date}/close` | `open → closed`, freeze `target_band_id` |
 | POST | `/days/{date}/reopen` | Back to `open` |
 | GET | `/days/{date}/messages` | The day's thread: captures and agent messages in order, with processing state |
@@ -129,8 +129,8 @@ The tenant is always derived from the principal (session or token); it never app
 | POST | `/captures` | Multipart: `text` and/or several `file` parts, which become **one** capture (R64) (audio, image), optional `target_date` or `product_id` (a capture about one product: label photo or spoken correction, R52; it never has a day). `201` with the capture; an upload whose content hash already exists returns `200` with the existing capture and `created: false` (no-op, R35). Audio is transcribed right away when a transcription provider is configured; a failed transcription leaves the capture `failed` and the upload still succeeds |
 | GET | `/captures?status=&date=&product_id=&limit=` | List (newest first). Reading the list also purges captures that were discarded more than a day ago |
 | DELETE | `/captures/{id}` | Delete a capture the agent has not used (`new`, `failed` or `discarded`); `409` otherwise. Its blob goes too when no other capture references it |
-| GET / PATCH | `/captures/{id}` | Detail incl. `transcript`, `attachment_id`, `attachment_mime` / change `status` (e.g. `discarded`), `target_date` or `product_id`. Re-targeting a `new` capture to a drafted or locked day queues a `follow_up` run |
-| POST | `/captures/{id}/transcribe?force=` | (Re-)transcribe an audio capture; `502` with problem details when the provider fails or none is configured |
+| GET / PATCH | `/captures/{id}` | Detail incl. `transcript`, `transcripts`, `attachment_id`, `attachment_mime` / change `status` (e.g. `discarded`), `target_date` or `product_id`. Re-targeting a `new` capture to a drafted or locked day queues a `follow_up` run |
+| POST | `/captures/{id}/transcribe?force=` | (Re-)transcribe an audio capture: **every** recording in it, one transcript each. Parts that already have one are left alone unless `force`; `502` with problem details when the provider fails or none is configured |
 | GET | `/attachments/{id}` | The attachment bytes (image, audio) inline, tenant-checked; `Cache-Control: private` |
 
 ### Report snapshots
@@ -205,7 +205,7 @@ correction becomes a proposal a person approves (R54).
 |---|---|
 | Errors | `application/problem+json` (RFC 9457): `{type, title, status, detail, instance, errors[]}`. Validation errors list field paths. |
 | Not found vs. forbidden | A resource of another tenant is **404**, never 403 (no existence leak). |
-| Pagination | Cursor based: `?limit=50&cursor=<opaque>`; response carries `next_cursor`. |
+| Pagination | `?limit=50&offset=100` on the list endpoints that have it; a short page is the last one. A cursor form stays reserved for collections that grow while they are read. |
 | Dates | `date` as ISO `YYYY-MM-DD`; timestamps ISO 8601 with offset. |
 | Numbers | Decimal point; grams with one decimal, kcal integer, salt two decimals. |
 | Idempotency | `POST /captures` deduplicates by content hash; other POSTs accept `Idempotency-Key`. |

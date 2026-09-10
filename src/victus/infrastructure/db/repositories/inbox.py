@@ -121,6 +121,20 @@ class CaptureRepo(Repo):
             .limit(1)
         )
 
+    def transcripts_for(self, capture_id: str) -> Sequence[orm.Transcript]:
+        """Every transcript of a capture, oldest first.
+
+        A capture with two spoken notes has two of them (R65), and re-transcribing adds
+        a row rather than replacing one, so the caller picks the newest per recording.
+        """
+        if self.get(capture_id) is None:
+            return []
+        return self.session.scalars(
+            select(orm.Transcript)
+            .where(orm.Transcript.capture_id == capture_id)
+            .order_by(orm.Transcript.created_at, orm.Transcript.id)
+        ).all()
+
     def delete(self, capture: orm.Capture) -> None:
         self.guard(capture)
         self.session.delete(capture)
@@ -294,3 +308,27 @@ class DayMessageRepo(Repo):
                 select(orm.DayMessage).where(orm.DayMessage.date == day), orm.DayMessage
             ).order_by(orm.DayMessage.created_at, orm.DayMessage.id)
         ).all()
+
+    def latest(self, day: date, kind: str) -> orm.DayMessage | None:
+        return self.session.scalars(
+            self.scoped(
+                select(orm.DayMessage).where(
+                    orm.DayMessage.date == day, orm.DayMessage.kind == kind
+                ),
+                orm.DayMessage,
+            ).order_by(orm.DayMessage.created_at.desc(), orm.DayMessage.id.desc())
+        ).first()
+
+    def remove_kind(self, day: date, kind: str) -> int:
+        result = cast(
+            CursorResult[Any],
+            self.session.execute(
+                delete(orm.DayMessage).where(
+                    orm.DayMessage.tenant_id == self.tenant_id,
+                    orm.DayMessage.date == day,
+                    orm.DayMessage.kind == kind,
+                )
+            ),
+        )
+        self.session.flush()
+        return int(result.rowcount or 0)

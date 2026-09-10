@@ -75,4 +75,5 @@ def day_out(d: dto.DayView) -> DayOut:
             for f in d.findings
         ],
         notes=d.notes,
+        verdict=d.verdict,
     )

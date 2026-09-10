@@ -62,5 +62,9 @@ person dictated, not an inference about it, and there is no draft state for a me
   the intended answer: propose through MCP, decide in the app.
 - One-off consumables gain a second life as "pending products", which keeps the day's numbers honest while the
   catalogue stays curated.
+- The drafting surface has to be as wide as the deciding one, or the difference gets filled by handing out
+  `approve`. Portions showed that: only *adding* one could be proposed, so a wrong unit or a duplicate row
+  was cleaned up with a short-lived `approve` token instead. A proposal's `portions` list now carries one
+  operation per entry (`add`, `update`, `delete`) and says what each would do to the catalogue.
 - A promoted consumable changes `consumable.kind`, so the subtype row is deleted before the supertype is updated —
   the composite foreign key `(id, kind)` would otherwise refuse.

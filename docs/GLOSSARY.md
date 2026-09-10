@@ -24,7 +24,7 @@ vault, so the last column lists the term as it appears in that source format.
 | **estimated / quantity_estimated** | Item-level flags rendered as ⚠️; they survive approval. | geschätzt |
 | **capture** | An inbox item: text, audio or image with a content hash, optional `target_date`, and processing status (`new`, `in_progress`, `assigned`, `processed`, `discarded`, `failed`). | Capture |
 | **attachment** | The stored file behind a capture, addressed by SHA-256. | Anhang |
-| **transcript** | Text produced from an audio capture, with provider, model and cost. | Transkript |
+| **transcript** | Text produced from one recording of a capture, with provider, model, length and cost. | Transkript |
 | **agent_run** | One processing job: runner, mode, tokens, cost, summary. | – |
 | **agent_lock** | Per `(tenant, date)` lock so two runners never draft the same day. | – |
 | **weight_entry** | One weigh-in with timestamp, kg and `source` (`scale_sync`, `manual`, `import`). | Gewicht |

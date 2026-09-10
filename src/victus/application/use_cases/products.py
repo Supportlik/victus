@@ -8,11 +8,13 @@ from typing import Any
 
 from victus.application import dto
 from victus.application.errors import Conflict, NotFound, ValidationFailed
+from victus.application.ports.unit_of_work import UnitOfWork
 from victus.application.tenant_context import SCOPE_READ, SCOPE_WRITE
 from victus.application.use_cases._base import UseCase, require_decision
 from victus.application.use_cases._mappers import portion_view, product_view
+from victus.domain.services import search_ranking
 from victus.domain.services.matching import ConsumableIndex
-from victus.domain.services.units import UNITS
+from victus.domain.services.units import UNITS, convert_base
 from victus.domain.values import ConsumableKind, MatchCandidate
 from victus.infrastructure.db import orm
 
@@ -103,15 +105,21 @@ def valid_on(versions: list[orm.Product], day: date | None) -> orm.Product | Non
     return max(versions, key=lambda p: (p.valid_until or date.min, p.id))
 
 
-def _resolve_versions(uow: Any, rows: list[orm.Product], day: date | None) -> list[orm.Product]:
+def _resolve_versions(
+    uow: Any, rows: list[orm.Product], day: date | None, *, need: int | None = None
+) -> list[orm.Product]:
     """Collapse each version chain to the one row that applied on ``day``.
 
     Without this a search for a product with three versions would return three rows that
-    look identical apart from their numbers.
+    look identical apart from their numbers. ``need`` stops once the caller has enough
+    rows for its page, so a query that ranked a few hundred candidates does not walk the
+    version chain of every one of them.
     """
     out: list[orm.Product] = []
     handled: set[int] = set()
     for p in rows:
+        if need is not None and len(out) >= need:
+            break
         if p.id in handled:
             continue
         chain = list(uow.products.versions_of(p.id))
@@ -125,7 +133,20 @@ def _resolve_versions(uow: Any, rows: list[orm.Product], day: date | None) -> li
 
 
 class SearchProducts(UseCase):
-    """Substring search first; when it finds little, the fuzzy matcher adds candidates."""
+    """Substring hits and fuzzy candidates together, ordered by how well the name fits.
+
+    The substring query is the wide net: in German a two-letter query is a syllable in a
+    great many longer words, so a third of the catalogue can come back for `Ei`. Ranking
+    is therefore not a nicety — without it the product by that name sits wherever its
+    initial letter falls and never reaches the window (see ``search_ranking``). The fuzzy
+    matcher contributes on every query rather than only when the substring search comes
+    back nearly empty: it is what finds `Öl`, which SQL misses because the query is
+    folded to ASCII and the stored name is not.
+    """
+
+    #: How many substring hits to rank. Wide enough to hold every hit of a short query on
+    #: a personal catalogue, so the ranking decides the answer rather than the SQL LIMIT.
+    CANDIDATES = 500
 
     def execute(
         self,
@@ -133,31 +154,38 @@ class SearchProducts(UseCase):
         *,
         category_id: int | None = None,
         limit: int = 20,
+        offset: int = 0,
         on: date | None = None,
     ) -> list[dto.ProductView]:
         self.ctx.require(SCOPE_READ)
+        window = slice(offset, offset + limit)
         with self._uow() as uow:
             names = _category_names(uow)
             if not query.strip():
-                rows = _resolve_versions(uow, list(uow.products.list(category_id=category_id)), on)
-                return [_view(uow, p, names) for p in rows[:limit]]
-            rows = list(uow.products.search(query, limit=limit))
+                rows = _resolve_versions(
+                    uow,
+                    list(uow.products.list(category_id=category_id)),
+                    on,
+                    need=offset + limit,
+                )
+                return [_view(uow, p, names) for p in rows[window]]
+            rows = list(uow.products.search(query, limit=max(self.CANDIDATES, offset + limit)))
             if category_id is not None:
                 rows = [p for p in rows if p.category_id == category_id]
-            if len(rows) < 3:
-                index = ConsumableIndex(
-                    (cid, ConsumableKind.PRODUCT, name) for cid, name in uow.products.all_names()
-                )
-                seen = {p.id for p in rows}
-                for cand in index.find(query, limit=limit):
-                    if cand.consumable_id in seen:
-                        continue
-                    p = uow.products.get(cand.consumable_id)
-                    if p is not None and (category_id is None or p.category_id == category_id):
-                        rows.append(p)
-                        seen.add(p.id)
-            rows = _resolve_versions(uow, rows, on)
-            return [_view(uow, p, names) for p in rows[:limit]]
+            index = ConsumableIndex(
+                (cid, ConsumableKind.PRODUCT, name) for cid, name in uow.products.all_names()
+            )
+            seen = {p.id for p in rows}
+            for cand in index.find(query, limit=max(limit, 20)):
+                if cand.consumable_id in seen:
+                    continue
+                p = uow.products.get(cand.consumable_id)
+                if p is not None and (category_id is None or p.category_id == category_id):
+                    rows.append(p)
+                    seen.add(p.id)
+            rows.sort(key=lambda p: search_ranking.sort_key(query, p.name, p.brand))
+            rows = _resolve_versions(uow, rows, on, need=offset + limit)
+            return [_view(uow, p, names) for p in rows[window]]
 
 
 class ProductVersions(UseCase):
@@ -284,7 +312,12 @@ def _validate_product(data: ProductInput) -> None:
 
 
 class GetProductUsage(UseCase):
-    """Which days a product was logged on, newest first."""
+    """Which days a product was logged on, newest first.
+
+    Any consumable of the tenant answers here, not only a catalogue product: the one-off a
+    pending ``new`` proposal was logged against has a day, a meal and an amount too, and
+    those are the evidence a person decides that proposal on (R81).
+    """
 
     def execute(self, product_id: int, *, limit: int = 100) -> dto.ProductUsage:
         self.ctx.require(SCOPE_READ)
@@ -320,6 +353,7 @@ class GetProductUsage(UseCase):
                 total_kcal=sum(e.kcal or 0.0 for e in entries),
                 first_date=min(dates) if dates else None,
                 last_date=max(dates) if dates else None,
+                item_count=uow.day_logs.usage_count(product_id),
             )
 
 
@@ -414,6 +448,38 @@ def _check_portion_unit(product: orm.Product, amount_unit: str) -> None:
         f"{product.reference_unit}, so a portion must be in {product.reference_unit}. "
         f"Set a density to allow {amount_unit}."
     )
+
+
+def in_product_unit(product: orm.Product, amount: float, unit: str) -> tuple[float, str]:
+    """Restate an amount in the unit this product's nutrients are stated in (R75).
+
+    Nutrients are multiplied by the resolved amount without the two units ever being
+    compared, so an amount in the other one has to be converted here or it counts as if
+    they had agreed: 400 ml of a syrup stated per 100 g would arrive as 400 g. The density
+    R75 asks for is what makes the conversion possible, and this is where it earns its
+    place.
+
+    Without a density the two units cannot be related, and such an amount has always been
+    counted one for one. It is left that way: refusing an input the software has accepted
+    all along is a decision about the rule, not about the arithmetic. R75 keeps portions
+    out of that state in the first place.
+    """
+    converted = convert_base(amount, unit, product.reference_unit, product.density_g_per_ml)
+    if converted is None:
+        return amount, unit
+    return converted, product.reference_unit
+
+
+def in_reference_unit(
+    uow: UnitOfWork, consumable: orm.Consumable, amount: float, unit: str
+) -> tuple[float, str]:
+    """``in_product_unit`` for a consumable; a recipe batch or one-off has no density."""
+    if consumable.kind != ConsumableKind.PRODUCT.value:
+        return amount, unit
+    product = uow.products.get(consumable.id)
+    if product is None:
+        return amount, unit
+    return in_product_unit(product, amount, unit)
 
 
 class AddPortion(UseCase):

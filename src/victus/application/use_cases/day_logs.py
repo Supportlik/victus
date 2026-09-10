@@ -24,7 +24,12 @@ from victus.application.use_cases._mappers import (
     target_band_view,
     weekday_name,
 )
-from victus.application.use_cases.captures import queue_follow_up_if_needed
+from victus.application.use_cases.captures import (
+    joined_transcript,
+    queue_follow_up_if_needed,
+    transcript_refs,
+)
+from victus.application.use_cases.products import in_reference_unit
 from victus.application.use_cases.settings import regional_of
 from victus.domain.model.checks import DayForCheck
 from victus.domain.services.nutrients import sum_macros
@@ -67,7 +72,11 @@ def _training(value: str | None) -> str | None:
 def resolve_base(
     uow: UnitOfWork, consumable: orm.Consumable, item: LineItemInput
 ) -> tuple[float, str, int | None]:
-    """Turn (amount, unit, portion) into the frozen base amount in g/ml."""
+    """Turn (amount, unit, portion) into the frozen base amount in the consumable's unit.
+
+    The unit comes out as the one the nutrients are stated in, so the view's per-100
+    arithmetic needs no unit comparison of its own (R75).
+    """
     if item.amount is None or item.amount < 0:
         raise ValidationFailed("amount must be zero or positive")
     spec = UNITS.get(item.unit_code)
@@ -75,7 +84,8 @@ def resolve_base(
         raise ValidationFailed(f"unknown unit '{item.unit_code}'")
     factor = base_factor(item.unit_code)
     if factor is not None:
-        return item.amount * factor[0], factor[1], None
+        base, unit = in_reference_unit(uow, consumable, item.amount * factor[0], factor[1])
+        return base, unit, None
     # count unit → needs a portion of the product
     if consumable.kind != "product":
         raise ValidationFailed("count units need a product portion")
@@ -92,7 +102,8 @@ def resolve_base(
         raise ValidationFailed(
             f"no portion for unit '{item.unit_code}'; give a portion or a weight"
         )
-    return item.amount * chosen.amount, chosen.amount_unit, chosen.id
+    base, unit = in_reference_unit(uow, consumable, item.amount * chosen.amount, chosen.amount_unit)
+    return base, unit, chosen.id
 
 
 def _day_or_404(uow: UnitOfWork, day: date) -> orm.DayLog:
@@ -166,6 +177,7 @@ def build_day_view(uow: UnitOfWork, d: orm.DayLog) -> dto.DayView:
         )
     )
     weights = uow.weights.daily_means(d.date, d.date, regional_of(uow).timezone)
+    verdict = uow.day_messages.latest(d.date, MessageKind.SUMMARY.value)
     return dto.DayView(
         date=d.date,
         status=d.status,
@@ -180,6 +192,7 @@ def build_day_view(uow: UnitOfWork, d: orm.DayLog) -> dto.DayView:
         zones=zones,
         findings=findings,
         notes=d.training_note,
+        verdict=verdict.content if verdict is not None else None,
     )
 
 
@@ -539,6 +552,21 @@ def _attachment_refs(uow: UnitOfWork, capture: orm.Capture | None) -> list[dto.A
     ]
 
 
+def _spoken(uow: UnitOfWork, capture: orm.Capture | None) -> str | None:
+    """Everything said in a capture, joined in the order it was recorded.
+
+    A capture can hold several recordings and each carries its own transcript (R65). Asking
+    for the newest single one dropped every note but the last from the thread, and with it
+    from the day context the drafting prompt is built on.
+    """
+    if capture is None:
+        return None
+    refs = transcript_refs(
+        uow.captures.transcripts_for(capture.id), uow.captures.attachments_of(capture.id)
+    )
+    return joined_transcript(refs)
+
+
 def _message_view(
     m: orm.DayMessage,
     capture: orm.Capture | None,
@@ -574,16 +602,13 @@ class GetDayThread(UseCase):
             out: list[dto.DayMessageView] = []
             for m in messages:
                 cap = uow.captures.get(m.capture_id) if m.capture_id else None
-                tr = uow.captures.transcript_for(cap.id) if cap is not None else None
-                out.append(
-                    _message_view(m, cap, tr.text if tr else None, _attachment_refs(uow, cap))
-                )
+                out.append(_message_view(m, cap, _spoken(uow, cap), _attachment_refs(uow, cap)))
             # captures that arrived without a thread message (uploads, voice notes)
             for cap in uow.captures.list(target_date=day):
                 if cap.id in linked or cap.product_id is not None:
                     continue
-                tr = uow.captures.transcript_for(cap.id)
-                text = cap.text or (tr.text if tr and tr.text else "") or f"[{cap.kind}]"
+                spoken = _spoken(uow, cap)
+                text = cap.text or spoken or f"[{cap.kind}]"
                 out.append(
                     dto.DayMessageView(
                         id=f"capture:{cap.id}",
@@ -597,7 +622,7 @@ class GetDayThread(UseCase):
                         attachment_id=cap.attachment_id,
                         attachment_mime=cap.attachment.mime if cap.attachment else None,
                         attachments=_attachment_refs(uow, cap),
-                        transcript=tr.text if tr else None,
+                        transcript=spoken,
                     )
                 )
             out.sort(key=lambda m: m.created_at)

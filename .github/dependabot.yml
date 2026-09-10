@@ -34,6 +34,9 @@ updates:
       interval: weekly
       day: monday
 
+  # Every FROM under deploy/ (api, web, caddy) plus the images in the compose files.
+  # Dependabot cannot resolve `FROM ${ARG}`, which is why Dockerfile.api spells its tag out
+  # twice instead of holding it in one build argument.
   - package-ecosystem: docker
     directory: /deploy
     schedule:

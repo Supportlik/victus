@@ -168,7 +168,10 @@ def test_queue_worker_draft_approve(
     assert cap.status == "assigned"
     thread = day_uc.GetDayThread(factory, alice).execute(DAY)
     kinds = {m.kind for m in thread if m.role == "agent"}
-    assert {"summary", "note", "question"} <= kinds
+    assert {"note", "question"} <= kinds
+    # the draft's item table is the run's page, not the day's: `summary` is the day's
+    # verdict now, and this scripted model never wrote one
+    assert "summary" not in kinds and day_uc.GetDay(factory, alice).execute(DAY).verdict is None
     assert agent_uc.ListAgentLocks(factory, alice).execute() == []
 
     # approval through the same tool registry an external chat would use

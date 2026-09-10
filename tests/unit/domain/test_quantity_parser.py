@@ -1,6 +1,8 @@
-"""T-DOM-018 (quantity golden table) and T-DOM-019 (number normalisation)."""
+"""T-DOM-018 (quantity golden table), T-DOM-019 (number normalisation), T-DOM-029 (links)."""
 
 from __future__ import annotations
+
+import time
 
 import pytest
 
@@ -114,6 +116,28 @@ def test_clean_text_removes_wikilinks_and_decoration() -> None:
     assert clean_text("[[../../foods\\|Bergquell Skyr Natur]] 🆕") == "Bergquell Skyr Natur"
     assert clean_text("**[[Chili sin Carne]]**") == "Chili sin Carne"
     assert clean_text("[Label](https://example.com)  x") == "Label x"
+    # The pipe carries a label whether or not it is escaped, and the label keeps its commas.
+    assert clean_text("[[foods|Skyr]] 300 g") == "Skyr 300 g"
+    assert clean_text("[[2026-08-01\\|Mo, 1.8.]]") == "Mo, 1.8."
+    # An unclosed link is text, not a link.
+    assert clean_text("[[Skyr") == "[[Skyr"
+    assert clean_text("[Label](https://example.com") == "[Label](https://example.com"
+
+
+def test_clean_text_stays_linear_on_bracket_storms() -> None:
+    """T-DOM-029: a pasted bracket storm must not cost one scan per position.
+
+    Quantities come from a person or a transcript, so hostile input reaches the three link
+    patterns; each of them used to re-scan the rest of the text from every opening bracket
+    (alerts #45–#47). At these sizes the old patterns took 2–6 seconds and the current ones
+    take about a millisecond, so the budget separates them by three orders of magnitude
+    instead of measuring the machine.
+    """
+    for storm in ("[[" * 30_000, "[[|" * 30_000, "[a](" * 60_000):
+        start = time.perf_counter()
+        cleaned = clean_text(storm)
+        assert time.perf_counter() - start < 1.0
+        assert cleaned == storm  # none of them is a link
 
 
 @pytest.mark.parametrize(

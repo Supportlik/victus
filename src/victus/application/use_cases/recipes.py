@@ -11,6 +11,7 @@ from victus.application.errors import Conflict, NotFound, ValidationFailed
 from victus.application.tenant_context import SCOPE_READ, SCOPE_WRITE
 from victus.application.use_cases._base import UseCase
 from victus.application.use_cases._mappers import batch_view, product_macros, recipe_view
+from victus.application.use_cases.products import in_product_unit
 from victus.domain.services.nutrients import line_item_macros, macros_per_100, sum_macros
 from victus.domain.services.units import base_factor
 from victus.infrastructure.db import orm
@@ -97,6 +98,18 @@ class UpdateRecipe(UseCase):
 
 
 def _base_for(uow: Any, ing: IngredientInput) -> tuple[float | None, str | None]:
+    base, unit = _raw_base_for(uow, ing)
+    if base is None or unit is None or ing.product_id is None:
+        return base, unit
+    # Cooking freezes the totals, so an ingredient in the other unit has to be converted
+    # before it is weighed against per-100 values (R75), not when the batch is read back.
+    product = uow.products.get(ing.product_id)
+    if product is None:
+        return base, unit
+    return in_product_unit(product, base, unit)
+
+
+def _raw_base_for(uow: Any, ing: IngredientInput) -> tuple[float | None, str | None]:
     if ing.amount is None or ing.unit_code is None:
         return None, None
     factor = base_factor(ing.unit_code)

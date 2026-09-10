@@ -27,6 +27,7 @@ Images that belong to captures are attached to this message in order.
    - up to three `candidates` per item, `chosen_consumable_id` or `one_off_nutrition_per_100`
    - `training` when the captures state it (rest, strength, martial_arts)
    - `notes` (≤ 5) and `open_questions` for anything the reviewer must decide
-7. Stop after `draft_create` succeeds. Your final text reply is a two-sentence summary for the log.
+7. Once `draft_create` has succeeded, write the day's verdict with `agent_message_add` as the next
+   section asks, then stop. Your final text reply says nothing the verdict does not.
 
 Tenant language: {language}.

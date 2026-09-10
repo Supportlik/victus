@@ -289,3 +289,31 @@ def test_product_versions_over_http(client: TestClient, alice_token: dict[str, s
         p["id"]
         for p in client.get("/api/v1/products", params={"q": "skyr"}, headers=alice_token).json()
     ] == [fresh["id"]]
+
+
+def test_products_page_and_rank_over_http(client: TestClient, alice_token: dict[str, str]) -> None:
+    """T-API-072: `offset` reaches the whole catalogue, and a short query is ranked."""
+    for name in ("Ei", "Eiweißmilch", "Bäckerei Brötchen", "Fleischwurst", "Reiswaffeln"):
+        r = client.post("/api/v1/products", json={"name": name, "kcal": 100}, headers=alice_token)
+        assert r.status_code == 201, r.text
+
+    first = client.get("/api/v1/products", params={"limit": 2}, headers=alice_token).json()
+    second = client.get(
+        "/api/v1/products", params={"limit": 2, "offset": 2}, headers=alice_token
+    ).json()
+    third = client.get(
+        "/api/v1/products", params={"limit": 2, "offset": 4}, headers=alice_token
+    ).json()
+    assert [p["name"] for p in first] == ["Bäckerei Brötchen", "Ei"]
+    assert [p["name"] for p in second] == ["Eiweißmilch", "Fleischwurst"]
+    assert [p["name"] for p in third] == ["Reiswaffeln"], "a short page is the last one"
+    assert (
+        client.get("/api/v1/products", params={"limit": 2, "offset": 5}, headers=alice_token).json()
+        == []
+    )
+    bad = client.get("/api/v1/products", params={"offset": -1}, headers=alice_token)
+    assert bad.status_code == 422
+
+    # every one of these names contains "ei"; the one that is "Ei" comes first
+    ranked = client.get("/api/v1/products", params={"q": "Ei", "limit": 3}, headers=alice_token)
+    assert [p["name"] for p in ranked.json()] == ["Ei", "Eiweißmilch", "Bäckerei Brötchen"]

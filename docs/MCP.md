@@ -42,6 +42,7 @@ HTTP responses: missing or invalid token → `401`; token lacks the tool's scope
 | `drafts_list()` | `read` | `ListDrafts` | days with drafts |
 | `day_thread_get(date)` | `read` + `capture:read` | `GetDayContext` | the day's context: draft, thread messages, open captures, current lock holder |
 | `day_message_add(date, text)` | `write` | `AddDayMessage` | message added; `follow_up` queued when applicable |
+| `agent_message_add(run_id, date, kind, content)` | `agent:write` | `AddAgentMessage` | your own thread entry: `summary` is the day's verdict shown above its meals and replaces the previous one, `note`/`question`/`correction` accumulate |
 | `draft_summary(date)` | `read` | `DraftSummary` | Markdown + JSON summary |
 | `report_render(name, period="14d", format="markdown")` | `read` | `ReportEngine` | rendered report (`period` like `7d`/`14d`/`30d`, or `from`/`to`) |
 | `report_snapshot_create(name, period?, start?, end?, label?)` | `read` | `FreezeReport` | the frozen snapshot **and** its numbers, ready to assess |
@@ -58,7 +59,7 @@ HTTP responses: missing or invalid token → `401`; token lacks the tool's scope
 | `line_item_approve(line_item_id, amount?, unit_code?, consumable_id?)` | `approve` | `ApproveLineItem` | the accepted item; the rest of the day stays a draft |
 | `day_approve(date, corrections[], close)` | `approve` | `ApproveDay` | approved day + warnings |
 | `meal_update(meal_id, name?, time?)`, `meal_delete(meal_id)` | `write` | `UpdateMeal` / `DeleteMeal` | meal; delete fails while items remain |
-| `product_propose(product_id, changes, capture_id?, source?, rationale?)` | `agent:write` | `ProposeProductChange` | proposal awaiting a person's approval; the way to act on a product capture |
+| `product_propose(product_id, changes, capture_id?, source?, rationale?)` | `agent:write` | `ProposeProductChange` | proposal awaiting a person's approval; the way to act on a product capture. `changes.portions` is a list of operations — `{op: 'add'|'update'|'delete', …}`, an entry without `op` adds — and the proposal comes back with a `portion_plan` saying what each line would do to the catalogue and what would refuse it |
 | `product_update(product_id, …, source)` | `write` (+ `approve` to apply) | `update_or_propose_product` | with `approve` the values are written; without it the same call becomes a proposal (R81) |
 | `product_version_create(id, valid_from, changes)` | `approve` | `NewProductVersion` | changed values from a day on; days already logged keep their numbers (R70) |
 | `line_item_create` | `write` | `AddLineItem` | the item; **without `approve` it is added as a draft** (R81) |
@@ -66,6 +67,8 @@ HTTP responses: missing or invalid token → `401`; token lacks the tool's scope
 | `line_item_delete` | `agent:write` for your own draft, `approve` for a fact | `DeleteLineItem` | `{deleted: id}` |
 | `product_create(..., portions?, capture_id?, rationale?)` | `write` (+ `approve` to write it) | `create_or_propose_product` | with `approve` the product; without it a pending `new` proposal plus `log_against_consumable_id` — log the day against that id now, the person approves the catalogue entry later and it is promoted in place, keeping the item (R81) |
 | `portion_create(...)` | `write` (+ `approve` to apply) | `add_or_propose_portion` | portion, or a proposal carrying it |
+| `portion_update(portion_id, unit_code?, label?, amount?, amount_unit?, is_default?, rationale?)` | `write` (+ `approve` to apply) | `update_or_propose_portion` | the corrected portion, or a proposal carrying `{op: 'update', portion_id, …}` |
+| `portion_delete(portion_id, reason)` | `write` (+ `approve` to apply) | `delete_or_propose_portion` | `{deleted: id}`, or a proposal carrying `{op: 'delete', portion_id, reason}`; a portion logged items use cannot be removed |
 | `weight_add(date, kg)` | `write` | `AddWeight` | weight row (`source=manual`) |
 
 **Scopes in one line (R81, ADR 0013): `write` proposes, `approve` decides.** A token without `approve` may read,
@@ -84,6 +87,7 @@ day_thread_get("2026-09-07")                 → 2 new captures, no draft yet
 capture_get("cap_…")                         → transcript
 product_search("skyr")                       → [{id: 123, name: "Skyr natural", tier: 2, score: 0.93}, …]
 draft_create({run_id: "7f3a", date: "2026-09-07", meals: [...], source_captures: [...]})
+agent_message_add("7f3a", "2026-09-07", kind="summary", content="A rest day that came in light. …")
 report_render("checkup", "14d")
 agent_run_finish("7f3a", status="finished", summary_md="## Drafts 2026-09-07 …")
 — user reads the summary in the chat —

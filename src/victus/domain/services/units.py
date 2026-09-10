@@ -154,3 +154,23 @@ def base_factor(code: str) -> tuple[float, str] | None:
         return None
     base = "g" if spec.unit_type is UnitType.MASS else "ml"
     return spec.factor_base, base
+
+
+def convert_base(
+    amount: float, from_unit: str, to_unit: str, density_g_per_ml: float | None
+) -> float | None:
+    """Restate a mass as a volume or the other way round; ``None`` when it cannot be done.
+
+    Grams and millilitres only relate to each other through a density, so without a usable
+    one there is no answer to give. Returning the amount unchanged instead would hand one
+    unit over as if it were the other.
+    """
+    if from_unit == to_unit:
+        return amount
+    if density_g_per_ml is None or density_g_per_ml <= 0:
+        return None
+    if from_unit == "ml" and to_unit == "g":
+        return amount * density_g_per_ml
+    if from_unit == "g" and to_unit == "ml":
+        return amount / density_g_per_ml
+    return None

@@ -208,6 +208,9 @@ class DayView:
     zones: dict[str, BandZone]
     findings: list[Finding]
     notes: str | None
+    #: The agent's short verdict on this day, if it wrote one: the newest ``summary``
+    #: message of the thread. Two or three sentences; the reasoning is in the report.
+    verdict: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -375,6 +378,19 @@ class AttachmentRef:
 
 
 @dataclass(frozen=True, slots=True)
+class TranscriptRef:
+    """What one recording of a capture says, and how long it is."""
+
+    #: The recording this text came from; null only for a transcript stored before a
+    #: transcript knew its recording and whose capture has no audio file left.
+    attachment_id: str | None
+    #: Empty when the provider heard nothing intelligible (a prompt echo).
+    text: str
+    #: As the transcription provider measured it, so a length is known before playing.
+    duration_s: float | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class CaptureView:
     id: str
     kind: str
@@ -382,6 +398,7 @@ class CaptureView:
     target_date: date | None
     text: str | None
     status: str
+    #: Every recording's text, joined — one capture can hold several (R65).
     transcript: str | None
     attachment_id: str | None
     attachment_mime: str | None
@@ -390,7 +407,33 @@ class CaptureView:
     agent_run_id: str | None
     product_id: int | None = None  # set for captures about one product (label photo)
     attachments: list[AttachmentRef] = field(default_factory=list)
+    #: One entry per transcribed recording; a recording still waiting has none.
+    transcripts: list[TranscriptRef] = field(default_factory=list)
     created: bool = True  # False when the upload was a duplicate (content hash)
+
+
+@dataclass(frozen=True, slots=True)
+class PortionOperationView:
+    """One entry of a proposal's ``portions`` list, read against what is there now.
+
+    A person decides a proposal without seeing the catalogue, so a line that cannot
+    be applied — a portion of another product, a delete of a portion days already
+    point at — says so here rather than failing after the approval.
+    """
+
+    #: ``add``, ``update`` or ``delete``; an entry without one adds.
+    op: str
+    portion_id: int | None
+    #: The fields the entry carries, i.e. what it would write.
+    values: dict[str, Any]
+    #: The row it changes or removes, as it stands; ``None`` for an add.
+    current: PortionView | None
+    #: Line items and recipe ingredients pointing at that row.
+    used_by: int
+    #: Why approving this line would be refused, or ``None`` when it would apply.
+    blocked: str | None
+    #: The actor's reason, mainly for a delete.
+    reason: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -412,6 +455,9 @@ class ProductProposalView:
     kind: str = "update"
     #: The one-off consumable a pending ``new`` proposal is logged against.
     consumable_id: int | None = None
+    #: What the proposed ``portions`` would do; filled while the proposal is pending,
+    #: since after the decision it would describe the catalogue it has already changed.
+    portion_plan: list[PortionOperationView] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)
@@ -441,6 +487,9 @@ class ProductUsage:
     total_kcal: float
     first_date: date | None
     last_date: date | None
+    #: Every line item that points here, including the ones beyond the entry limit: a
+    #: proposal has to say how much already depends on the values it changes.
+    item_count: int = 0
 
 
 @dataclass(frozen=True, slots=True)

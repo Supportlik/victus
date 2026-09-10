@@ -236,6 +236,15 @@ class DayMessageAddIn(_In):
     text: str = Field(min_length=1)
 
 
+class AgentMessageAddIn(_In):
+    run_id: str
+    date: dt.date
+    kind: Literal["summary", "note", "question", "correction"] = Field(
+        description="'summary' is the day's verdict: writing one replaces the day's previous."
+    )
+    content: str = Field(min_length=1)
+
+
 class DraftSummaryIn(_In):
     date: dt.date
 
@@ -521,6 +530,31 @@ class PortionCreateIn(_In):
     is_default: bool = False
 
 
+class PortionUpdateIn(_In):
+    portion_id: int = Field(description="The portion to correct, from the product's portions.")
+    unit_code: str | None = Field(
+        default=None, description="Corrected count unit, e.g. 'ball' where 'piece' was wrong."
+    )
+    label: str | None = None
+    description: str | None = None
+    amount: float | None = Field(
+        default=None, gt=0, description="Corrected weight/volume of one unit."
+    )
+    amount_unit: Literal["g", "ml"] | None = None
+    is_default: bool | None = None
+    rationale: str | None = Field(
+        default=None, description="One sentence: what is wrong and how you know."
+    )
+
+
+class PortionDeleteIn(_In):
+    portion_id: int
+    reason: str = Field(
+        description="Why it should go, e.g. 'duplicates the 250 g pouch in the right unit'."
+    )
+    rationale: str | None = None
+
+
 class WeightAddIn(_In):
     measured_at: dt.datetime = Field(description="Timestamp of the measurement (ISO 8601).")
     kg: float
@@ -673,6 +707,13 @@ def _day_thread_get(tc: ToolContext, inp: DayThreadGetIn) -> ToolResult:
 
 def _day_message_add(tc: ToolContext, inp: DayMessageAddIn) -> ToolResult:
     view = day_uc.AddDayMessage(tc.uow_factory, tc.ctx).execute(inp.date, inp.text)
+    return cast(dict[str, Any], jsonable(view))
+
+
+def _agent_message_add(tc: ToolContext, inp: AgentMessageAddIn) -> ToolResult:
+    view = agent_uc.AddAgentMessage(tc.uow_factory, tc.ctx).execute(
+        inp.run_id, inp.date, inp.kind, inp.content
+    )
     return cast(dict[str, Any], jsonable(view))
 
 
@@ -989,6 +1030,35 @@ def _portion_create(tc: ToolContext, inp: PortionCreateIn) -> ToolResult:
     return out
 
 
+def _portion_update(tc: ToolContext, inp: PortionUpdateIn) -> ToolResult:
+    fields = inp.model_dump(exclude_none=True)
+    portion_id = int(fields.pop("portion_id"))
+    rationale = fields.pop("rationale", None)
+    view = proposal_uc.update_or_propose_portion(
+        tc.uow_factory, tc.ctx, portion_id, fields, rationale=rationale, run_id=tc.run_id
+    )
+    out = cast(dict[str, Any], jsonable(view))
+    if isinstance(view, dto.ProductProposalView):
+        out["pending_review"] = True
+    return out
+
+
+def _portion_delete(tc: ToolContext, inp: PortionDeleteIn) -> ToolResult:
+    view = proposal_uc.delete_or_propose_portion(
+        tc.uow_factory,
+        tc.ctx,
+        inp.portion_id,
+        reason=inp.reason,
+        rationale=inp.rationale or inp.reason,
+        run_id=tc.run_id,
+    )
+    if view is None:
+        return {"deleted": inp.portion_id}
+    out = cast(dict[str, Any], jsonable(view))
+    out["pending_review"] = True
+    return out
+
+
 def _weight_add(tc: ToolContext, inp: WeightAddIn) -> ToolResult:
     view = weight_uc.AddManualWeight(tc.uow_factory, tc.ctx).execute(inp.measured_at, inp.kg)
     return cast(dict[str, Any], jsonable(view))
@@ -1115,6 +1185,16 @@ TOOLS: tuple[ToolSpec, ...] = (
         SCOPE_WRITE,
         DayMessageAddIn,
         _day_message_add,
+        read_only=False,
+    ),
+    _spec(
+        "agent_message_add",
+        "Write your own message into a day's thread without drafting: 'summary' is the day's "
+        "verdict shown above its meals (two or three sentences, see the day_verdict prompt) "
+        "and replaces the previous one, 'note', 'question' and 'correction' accumulate.",
+        SCOPE_AGENT_WRITE,
+        AgentMessageAddIn,
+        _agent_message_add,
         read_only=False,
     ),
     _spec(
@@ -1319,7 +1399,10 @@ TOOLS: tuple[ToolSpec, ...] = (
     _spec(
         "product_propose",
         "Propose corrected product values read from a label photo or note. A person approves "
-        "in the app; nothing changes until then. Use this for product captures.",
+        "in the app; nothing changes until then. Use this for product captures. `changes` may "
+        "also carry a `portions` list whose entries say what they do: {'op': 'add', "
+        "'unit_code': …, 'amount': …}, {'op': 'update', 'portion_id': …, …} or {'op': 'delete', "
+        "'portion_id': …, 'reason': …}.",
         SCOPE_AGENT_WRITE,
         ProductProposeIn,
         _product_propose,
@@ -1357,6 +1440,28 @@ TOOLS: tuple[ToolSpec, ...] = (
         read_only=False,
     ),
     _spec(
+        "portion_update",
+        "Correct an existing portion — the wrong count unit, a wrong weight, a better label. "
+        "Adding the corrected portion instead leaves the wrong row in place, and where the "
+        "unit is what was wrong it is refused as a duplicate. Without the approve scope this "
+        "becomes a proposal a person decides.",
+        SCOPE_WRITE,
+        PortionUpdateIn,
+        _portion_update,
+        read_only=False,
+    ),
+    _spec(
+        "portion_delete",
+        "Remove a portion that should not exist — a duplicate in the wrong unit, a size no "
+        "such thing can have. Say why in `reason`: the person reviewing sees it next to the "
+        "row and how many logged items use it. Without the approve scope this becomes a "
+        "proposal; a portion still in use cannot be removed at all.",
+        SCOPE_WRITE,
+        PortionDeleteIn,
+        _portion_delete,
+        read_only=False,
+    ),
+    _spec(
         "weight_add",
         "Record a manual body-weight measurement.",
         SCOPE_WRITE,
@@ -1388,10 +1493,13 @@ WORKER_TOOLS: frozenset[str] = frozenset(
         "captures_open",
         "capture_get",
         "capture_mark",
+        "agent_message_add",
         "draft_create",
         "product_create",
         "product_propose",
         "portion_create",
+        "portion_update",
+        "portion_delete",
     }
 )
 

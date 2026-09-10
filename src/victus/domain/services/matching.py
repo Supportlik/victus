@@ -31,7 +31,10 @@ THRESHOLD: dict[ConsumableKind, float] = {
 }
 MIN_KEY_LENGTH = 5
 
-_PARENS = re.compile(r"\(.*?\)")
+# "(…)" up to the first closing bracket, as the lazy ".*?" did — but the class excludes the
+# opening bracket as well, so "((((((…" in a name a person typed fails at once instead of
+# scanning to the end of the string once per position.
+_PARENS = re.compile(r"\([^()]*\)")
 
 
 def normalize(name: str | None) -> str:

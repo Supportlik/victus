@@ -1,10 +1,11 @@
 import { ChangeDetectionStrategy, Component, effect, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { ApiClient, ApproveRequest, DraftCorrection, DraftSummary, LineItem } from '../../api';
+import { ApiClient, ApproveRequest, DraftCorrection, DraftSummary, LineItem, Unit } from '../../api';
 import { I18nService } from '../../core/i18n.service';
 import { describeError } from '../../core/problem';
-import { DayNamePipe, MacroPipe } from '../../shared/format';
+import { DayNamePipe, MacroPipe, formatUnit } from '../../shared/format';
+import { LineItemForm } from '../../shared/line-item-form';
 import { MarkdownPipe } from '../../shared/markdown.pipe';
 
 interface Row {
@@ -21,7 +22,7 @@ interface Row {
 @Component({
   selector: 'v-draft-approval',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, RouterLink, MacroPipe, DayNamePipe, MarkdownPipe],
+  imports: [FormsModule, RouterLink, MacroPipe, DayNamePipe, MarkdownPipe, LineItemForm],
   template: `
     <div class="v-page">
       <header class="v-page-head">
@@ -35,7 +36,7 @@ interface Row {
           <form (ngSubmit)="approve()" class="items">
             <div class="v-scroll-x">
               <table class="v-table">
-                <thead><tr><th>{{ i18n.t('Meal') }}</th><th>{{ i18n.t('Item') }}</th><th class="num">{{ i18n.t('Amount') }}</th><th class="num">kcal</th><th>{{ i18n.t('Confidence') }}</th><th>{{ i18n.t('Reasoning') }}</th><th>{{ i18n.t('Keep') }}</th></tr></thead>
+                <thead><tr><th>{{ i18n.t('Meal') }}</th><th>{{ i18n.t('Item') }}</th><th class="num">{{ i18n.t('Amount') }}</th><th class="num">kcal</th><th>{{ i18n.t('Confidence') }}</th><th>{{ i18n.t('Reasoning') }}</th><th>{{ i18n.t('Keep') }}</th><th></th></tr></thead>
                 <tbody>
                   @for (r of rows(); track r.item.id) {
                     <tr [class.removed]="r.remove">
@@ -51,12 +52,22 @@ interface Row {
                         } @else { {{ r.item.consumable_name }} }
                         @if (r.item.estimated || r.item.amount_estimated) { <span [title]="i18n.t('estimated')">⚠️</span> }
                       </td>
-                      <td class="num"><input [name]="'a' + r.item.id" type="number" step="any" min="0" [(ngModel)]="r.amount" class="amount" /> {{ r.item.unit_code ?? r.item.base_unit }}</td>
+                      <td class="num"><input [name]="'a' + r.item.id" type="number" step="any" min="0" [(ngModel)]="r.amount" class="amount" /> {{ unitOf(r.item) }}</td>
                       <td class="num">{{ r.item.kcal | macro: 'kcal' }}</td>
                       <td>@if (r.item.confidence != null) { <span class="conf" [class.low]="r.item.confidence < 0.7">{{ (r.item.confidence * 100).toFixed(0) }} %</span> }</td>
                       <td class="v-small v-muted">{{ r.item.rationale }}</td>
                       <td><input type="checkbox" [name]="'k' + r.item.id" [ngModel]="!r.remove" (ngModelChange)="r.remove = !$event" /></td>
+                      <td class="row-actions"><button type="button" class="v-btn quiet small" (click)="edit(r.item)">{{ i18n.t('edit') }}</button></td>
                     </tr>
+                    @if (editing() === r.item.id) {
+                      <!-- The unit, the portion and the estimate marks, where "the agent
+                           guessed, I know better" happens most. -->
+                      <tr class="editor">
+                        <td colspan="8">
+                          <v-line-item-form [item]="r.item" [units]="units()" (saved)="itemSaved()" (cancelled)="editing.set(null)" />
+                        </td>
+                      </tr>
+                    }
                   }
                 </tbody>
               </table>
@@ -80,6 +91,8 @@ interface Row {
     .amount { width: 5.5rem; padding: 0.25rem 0.4rem; border: 1px solid var(--v-line-strong); border-radius: var(--v-radius); background: var(--v-surface); text-align: right; }
     .removed td { opacity: 0.45; text-decoration: line-through; }
     .conf.low { color: var(--v-warn-ink); }
+    .row-actions { white-space: nowrap; text-align: right; }
+    tr.editor td { padding: 0.35rem 0; }
     .foot { margin-top: 1rem; }
     .check { display: flex; align-items: center; gap: 0.4rem; }
     @media (max-width: 64rem) { .grid { grid-template-columns: 1fr; } }
@@ -94,29 +107,54 @@ export class DraftApproval {
   readonly rows = signal<Row[]>([]);
   readonly error = signal<string | null>(null);
   readonly busy = signal(false);
+  /** The unit table, for the edit panel's unit list. */
+  readonly units = signal<Unit[]>([]);
+  /** The item whose edit panel is open, under its row. */
+  readonly editing = signal<number | null>(null);
   close = true;
 
   constructor() {
+    this.api.units().subscribe({ next: (u) => this.units.set(u), error: () => this.units.set([]) });
     effect(() => {
-      this.api.draftSummary(this.date()).subscribe({
-        next: (s) => {
-          this.summary.set(s);
-          this.rows.set(
-            s.day.meals.flatMap((m) => m.line_items.filter((i) => i.is_draft)).map((item) => ({
-              item,
-              amount: item.amount ?? item.base_amount,
-              consumableId: item.consumable_id,
-              remove: false,
-            })),
-          );
-        },
-        error: (e: unknown) => this.error.set(describeError(e)),
-      });
+      this.date();
+      this.load();
+    });
+  }
+
+  private load(): void {
+    this.api.draftSummary(this.date()).subscribe({
+      next: (s) => {
+        this.summary.set(s);
+        this.rows.set(
+          s.day.meals.flatMap((m) => m.line_items.filter((i) => i.is_draft)).map((item) => ({
+            item,
+            amount: item.amount ?? item.base_amount,
+            consumableId: item.consumable_id,
+            remove: false,
+          })),
+        );
+      },
+      error: (e: unknown) => this.error.set(describeError(e)),
     });
   }
 
   mealName(id: number): string {
     return this.summary()?.day.meals.find((m) => m.id === id)?.name ?? '';
+  }
+
+  unitOf(it: LineItem): string {
+    return formatUnit(it, (k) => this.i18n.t(k));
+  }
+
+  /** One panel at a time; a second click on the same row closes it again. */
+  edit(it: LineItem): void {
+    this.editing.update((open) => (open === it.id ? null : it.id));
+  }
+
+  /** The panel wrote straight to the item, so the corrections are rebuilt from it. */
+  itemSaved(): void {
+    this.editing.set(null);
+    this.load();
   }
 
   /** Only what changed becomes a correction; untouched items are approved as they are. */

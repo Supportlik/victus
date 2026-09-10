@@ -199,6 +199,26 @@ class ProductRepo(Repo):
         self.session.delete(portion)
         self.session.flush()
 
+    def portion_usage(self, portion_id: int) -> int:
+        """How many logged items and recipe ingredients point at this portion.
+
+        The foreign keys are ``RESTRICT``, so a portion in use cannot be deleted. The
+        count turns that refusal into something a reviewer can be shown beforehand.
+        """
+        if self.get_portion(portion_id) is None:
+            return 0
+        items = (
+            select(func.count())
+            .select_from(orm.LineItem)
+            .where(orm.LineItem.portion_id == portion_id)
+        )
+        ingredients = (
+            select(func.count())
+            .select_from(orm.RecipeIngredient)
+            .where(orm.RecipeIngredient.portion_id == portion_id)
+        )
+        return int(self.session.scalar(items) or 0) + int(self.session.scalar(ingredients) or 0)
+
     def delete_consumable(self, consumable: orm.Consumable) -> None:
         """Delete a consumable and its subtype row (FK cascade). RESTRICT on use raises."""
         self.guard(consumable)

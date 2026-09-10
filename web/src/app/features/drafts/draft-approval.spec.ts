@@ -65,6 +65,42 @@ describe('DraftApproval', () => {
     req.flush(summary.day);
   });
 
+  // T-WEB-056: the same edit panel as on the day, on the page where "the agent guessed,
+  // I know better" happens most — and it has to work inside the approve form.
+  it('corrects an item in place before the draft is taken over', async () => {
+    const fixture = TestBed.createComponent(DraftApproval);
+    fixture.componentRef.setInput('date', '2026-01-02');
+    await fixture.whenStable();
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/units').flush([{ code: 'g', singular: 'g', plural: 'g', unit_type: 'mass' }]);
+    http.expectOne('/api/v1/drafts/2026-01-02/summary').flush(summary);
+    await fixture.whenStable();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const row = [...el.querySelectorAll('tbody tr')].find((r) => r.textContent?.includes('Chicken'))!;
+    ([...row.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'edit') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    http.expectOne('/api/v1/products/5').flush({ id: 5, name: 'Chicken', reference_amount: 100, reference_unit: 'g', verified: false, portions: [] });
+    await fixture.whenStable();
+
+    const panel = el.querySelector('v-line-item-form')!;
+    const boxes = [...panel.querySelectorAll('input[type=checkbox]')] as HTMLInputElement[];
+    expect(boxes.map((b) => b.checked)).toEqual([true, true]);
+    // the nutrients came off a label after all; the portion is still a guess
+    boxes[0].click();
+    fixture.detectChanges();
+    ([...panel.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Save') as HTMLButtonElement).click();
+
+    const req = http.expectOne('/api/v1/line-items/21');
+    expect(req.request.method).toBe('PATCH');
+    expect(req.request.body).toEqual({ amount: 400, unit_code: 'g', portion_id: null, estimated: false, amount_estimated: true });
+    req.flush({});
+    // the panel closes and the corrections are rebuilt from the item as it now stands
+    http.expectOne('/api/v1/drafts/2026-01-02/summary').flush(summary);
+    await fixture.whenStable();
+    expect(el.querySelector('v-line-item-form')).toBeNull();
+  });
+
   it('renders the agent summary as HTML and alternatives as a select', async () => {
     const fixture = TestBed.createComponent(DraftApproval);
     fixture.componentRef.setInput('date', '2026-01-02');

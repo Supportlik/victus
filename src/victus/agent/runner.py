@@ -42,7 +42,6 @@ from victus.domain.values import (
     AgentMode,
     CaptureKind,
     CaptureStatus,
-    MessageKind,
     Period,
     RunStatus,
 )
@@ -82,6 +81,7 @@ MAX_IMAGE_EDGE = 1024
 class Prompts:
     system: str
     capture_to_draft: str
+    day_verdict: str
     product_capture: str
     assess: str
     summary: str
@@ -93,12 +93,20 @@ def load_prompts() -> Prompts:
     package = resources.files("victus.agent.prompts")
     texts = {
         name: (package / f"{name}.md").read_text(encoding="utf-8")
-        for name in ("system", "capture_to_draft", "product_capture", "assess", "summary")
+        for name in (
+            "system",
+            "capture_to_draft",
+            "day_verdict",
+            "product_capture",
+            "assess",
+            "summary",
+        )
     }
     digest = hashlib.sha256("\n".join(texts[n] for n in sorted(texts)).encode("utf-8"))
     return Prompts(
         system=texts["system"],
         capture_to_draft=texts["capture_to_draft"],
+        day_verdict=texts["day_verdict"],
         product_capture=texts["product_capture"],
         assess=texts["assess"],
         summary=texts["summary"],
@@ -270,8 +278,14 @@ class DayDrafter:
         notes, changed = self._transcribe_pending(view)
         if changed:
             view = agent_uc.GetDayContext(self.tc.uow_factory, self.tc.ctx).execute(day)
-        task = self.prompts.capture_to_draft.format(
-            date=day.isoformat(), run_id=run_id, language=tenant_language(self.tc)
+        fields = {
+            "date": day.isoformat(),
+            "run_id": run_id,
+            "language": tenant_language(self.tc),
+        }
+        # One task block: drafting the day and saying what the day was are the same errand.
+        task = "\n\n".join(
+            p.format(**fields) for p in (self.prompts.capture_to_draft, self.prompts.day_verdict)
         )
         content: list[dict[str, Any]] = [
             {"type": "text", "text": task},
@@ -350,10 +364,10 @@ class DayDrafter:
         messages: list[dict[str, Any]] = [{"role": "user", "content": content}]
         self._converse(run_id, day, messages, outcome, tools, success="drafted")
         self._record(run_id, outcome, started)
-        if outcome.outcome == "drafted" and outcome.markdown:
-            agent_uc.AddAgentMessage(self.tc.uow_factory, self.tc.ctx).execute(
-                run_id, day, MessageKind.SUMMARY.value, outcome.markdown
-            )
+        # The draft's item table used to be filed here as the day's `summary` message. It is
+        # the run's page, not the day's: `summary` is now the model's own short verdict,
+        # written during the session with `agent_message_add` (see prompts/day_verdict.md),
+        # and this table stays where it is read — in the run summary.
         return outcome
 
     def _converse(

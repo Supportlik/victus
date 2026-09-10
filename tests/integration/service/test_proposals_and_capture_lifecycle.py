@@ -1,4 +1,4 @@
-"""T-SVC-050…066: product proposals, capture delete/purge, retention, echo guard."""
+"""T-SVC-050…066, T-SVC-090: product proposals, capture lifecycle, retention, echo guard."""
 
 from __future__ import annotations
 
@@ -6,9 +6,11 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from tests.integration.service.conftest import DAY
 from victus.application.errors import Conflict, NotFound, ValidationFailed
 from victus.application.tenant_context import TenantContext
 from victus.application.use_cases import captures as uc
+from victus.application.use_cases import day_logs as days_uc
 from victus.application.use_cases import products as products_uc
 from victus.application.use_cases import proposals as prop_uc
 from victus.application.use_cases._base import UowFactory
@@ -210,3 +212,30 @@ def test_several_files_become_one_capture(factory: UowFactory, alice: TenantCont
     # deleting it takes every blob that nothing else uses
     uc.DeleteCapture(factory, alice, blobs).execute(view.id)
     assert blobs.blobs == {}
+
+
+def test_t_svc_090_usage_of_a_pending_one_off_names_the_day_and_meal(
+    factory: UowFactory, alice: TenantContext
+) -> None:
+    """A ``new`` proposal has no product to look at, but its values were already eaten."""
+    pr = prop_uc.ProposeNewProduct(factory, alice).execute(
+        products_uc.ProductInput(
+            name="Protein bar", kcal=380, protein=30, carbs=28, fat=14, fiber=6, salt=1
+        ),
+        rationale="read from the wrapper",
+    )
+    assert pr.consumable_id is not None
+    days_uc.CreateDay(factory, alice).execute(DAY, reliable=True)
+    meal = days_uc.AddMeal(factory, alice).execute(DAY, "Breakfast")
+    for _ in range(2):
+        days_uc.AddLineItem(factory, alice).execute(
+            meal.id,
+            days_uc.LineItemInput(consumable_id=pr.consumable_id, amount=60, unit_code="g"),
+        )
+
+    # the one-off answers the product usage question, which is what makes the proposal
+    # decidable: this is the day, this is the meal, this is how much
+    usage = products_uc.GetProductUsage(factory, alice).execute(pr.consumable_id, limit=1)
+    assert [(e.date, e.meal, e.base_amount) for e in usage.entries] == [(DAY, "Breakfast", 60)]
+    # asking for one entry still says how many there are, so a list can print the number
+    assert usage.item_count == 2

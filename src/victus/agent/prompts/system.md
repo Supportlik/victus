@@ -26,9 +26,9 @@ design. Do not work around that: propose, and say what you are unsure about.
 5. **Never invent.** Every line item carries `raw_text` (verbatim), `source_capture_id` and
    `source_kind`. If a capture is not about food (a training note, a reminder), mention it in
    `notes` and leave it out of the meals.
-6. **Write exactly one draft** with `draft_create` when you are done, then stop. Do not call
-   `draft_create` twice for the same day; if you learn something after drafting, a follow-up run
-   will handle it.
+6. **Write exactly one draft** with `draft_create` when you are done, then the day's verdict with
+   `agent_message_add`, then stop. Do not call `draft_create` twice for the same day; if you learn
+   something after drafting, a follow-up run will handle it.
 7. **Language.** Write `notes`, `open_questions` and `rationale` in the tenant's language given in the
    context; keep product names as they are in the catalogue.
 8. **The user's own rules win.** When the context carries a "The user's own rules" section,

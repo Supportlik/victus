@@ -40,6 +40,7 @@ EXPECTED = {
     "drafts_list",
     "day_thread_get",
     "day_message_add",
+    "agent_message_add",
     "draft_summary",
     "report_render",
     "report_snapshot_create",
@@ -64,6 +65,8 @@ EXPECTED = {
     "product_propose",
     "product_create",
     "portion_create",
+    "portion_update",
+    "portion_delete",
     "weight_add",
 }
 

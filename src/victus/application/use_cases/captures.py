@@ -92,9 +92,50 @@ def kind_for_mime(mime: str) -> CaptureKind:
     raise ValidationFailed(f"unsupported attachment type '{mime}' (audio or image expected)")
 
 
+def is_audio_mime(mime: str | None) -> bool:
+    """Audio, including the video containers a browser's MediaRecorder produces."""
+    return (mime or "").lower().startswith(("audio/", "video/"))
+
+
+def transcript_refs(
+    transcripts: Sequence[orm.Transcript], attachments: Sequence[orm.Attachment]
+) -> list[dto.TranscriptRef]:
+    """One transcript per recording: the newest attempt, in the order of the files.
+
+    A transcript stored before it knew its recording carries no ``attachment_id``. Only
+    the first audio part was ever sent to a provider, so that is where such a row
+    belongs — unless that part has since been transcribed in its own right, which
+    supersedes it.
+    """
+    audio = [a.id for a in attachments if is_audio_mime(a.mime)]
+    newest: dict[str | None, orm.Transcript] = {}
+    for t in transcripts:  # oldest first, so a later attempt wins
+        newest[t.attachment_id] = t
+    unattributed = newest.pop(None, None)
+    if unattributed is not None and audio and audio[0] not in newest:
+        newest[audio[0]] = unattributed
+    position: dict[str | None, int] = {aid: i for i, aid in enumerate(audio)}
+    return [
+        dto.TranscriptRef(attachment_id=aid, text=t.text, duration_s=t.duration_s)
+        for aid, t in sorted(newest.items(), key=lambda kv: position.get(kv[0], len(position)))
+    ]
+
+
+def joined_transcript(refs: Sequence[dto.TranscriptRef]) -> str | None:
+    """The whole capture as one text, because a reader of one field must miss nothing.
+
+    Spoken parts are joined in the order they were recorded; an empty string stays an
+    empty string, which is how a capture says "nothing intelligible in there".
+    """
+    if not refs:
+        return None
+    spoken = [r.text for r in refs if r.text]
+    return "\n".join(spoken) if spoken else ""
+
+
 def capture_view(
     cap: orm.Capture,
-    transcript: orm.Transcript | None,
+    transcripts: Sequence[orm.Transcript],
     attachments: Sequence[orm.Attachment],
     *,
     created: bool = True,
@@ -104,6 +145,7 @@ def capture_view(
     ``attachments`` is required rather than optional: a view built without them tells the
     interface the capture has no photos, and it dutifully removed them from the card.
     """
+    refs = transcript_refs(transcripts, attachments)
     return dto.CaptureView(
         id=cap.id,
         kind=cap.kind,
@@ -111,7 +153,7 @@ def capture_view(
         target_date=cap.target_date,
         text=cap.text,
         status=cap.status,
-        transcript=transcript.text if transcript else None,
+        transcript=joined_transcript(refs),
         attachment_id=cap.attachment_id,
         attachment_mime=cap.attachment.mime if cap.attachment is not None else None,
         content_hash=cap.content_hash,
@@ -122,6 +164,7 @@ def capture_view(
             dto.AttachmentRef(id=a.id, mime=a.mime, size=a.size, original_name=a.original_name)
             for a in attachments
         ],
+        transcripts=refs,
         created=created,
     )
 
@@ -240,7 +283,7 @@ class UploadCapture(UseCase):
             if existing is not None:
                 return capture_view(
                     existing,
-                    uow.captures.transcript_for(existing.id),
+                    uow.captures.transcripts_for(existing.id),
                     uow.captures.attachments_of(existing.id),
                     created=False,
                 )
@@ -275,7 +318,7 @@ class UploadCapture(UseCase):
                     "files": len(attachments),
                 },
             )
-            view = capture_view(cap, None, attachments)
+            view = capture_view(cap, (), attachments)
             uow.commit()
             return view
 
@@ -389,7 +432,7 @@ class ListCaptures(UseCase):
             return [
                 capture_view(
                     c,
-                    uow.captures.transcript_for(c.id),
+                    uow.captures.transcripts_for(c.id),
                     uow.captures.attachments_of(c.id),
                 )
                 for c in rows
@@ -405,7 +448,7 @@ class GetCapture(UseCase):
                 raise NotFound(f"capture {capture_id} not found")
             return capture_view(
                 cap,
-                uow.captures.transcript_for(cap.id),
+                uow.captures.transcripts_for(cap.id),
                 uow.captures.attachments_of(cap.id),
             )
 
@@ -443,7 +486,7 @@ class UpdateCapture(UseCase):
             uow.audit.record("capture.update", "capture", cap.id, diff)
             uow.flush()
             view = capture_view(
-                cap, uow.captures.transcript_for(cap.id), uow.captures.attachments_of(cap.id)
+                cap, uow.captures.transcripts_for(cap.id), uow.captures.attachments_of(cap.id)
             )
             uow.commit()
             return view
@@ -507,24 +550,46 @@ def looks_like_prompt_echo(text: str, vocabulary_prompt: str | None) -> bool:
     return hits / len(words) >= 0.8
 
 
-def _audio_of(uow: UnitOfWork, cap: orm.Capture) -> orm.Attachment | None:
-    """The capture's audio file, whichever position it holds.
+def _audio_parts(uow: UnitOfWork, cap: orm.Capture) -> list[orm.Attachment]:
+    """Every recording of the capture, in the order the files were added.
 
-    A capture is one thing made of several parts — two photos and a spoken note is an
-    ordinary capture (R65) — and ``attachment_id`` names the part that arrived first.
-    Transcribing that one handed ffmpeg a photo, which turned it into an mp3 with no
-    stream in it and reported the failure as a conversion error.
+    A capture is one thing made of several parts — two photos and two spoken notes is an
+    ordinary capture (R65). Only the part that arrived first used to be transcribed, so a
+    second note was stored, played and never read; and where that first part was a photo
+    it went to ffmpeg, which turned it into an mp3 with no stream in it and reported the
+    failure as a conversion error.
     """
     files = list(uow.captures.attachments_of(cap.id))
     if not files and cap.attachment_id:
         single = uow.captures.get_attachment(cap.attachment_id)
         files = [single] if single is not None else []
-    audio = [f for f in files if (f.mime or "").lower().startswith(("audio/", "video/"))]
-    return audio[0] if audio else None
+    return [f for f in files if is_audio_mime(f.mime)]
+
+
+def _already_transcribed(
+    transcripts: Sequence[orm.Transcript], parts: Sequence[orm.Attachment]
+) -> set[str]:
+    """Which recordings have a transcript, counting the rows that predate ``attachment_id``.
+
+    Such a row can only have come from the first recording: it was the only part a
+    transcription request was ever made for.
+    """
+    done: set[str] = set()
+    for t in transcripts:
+        if t.attachment_id is not None:
+            done.add(t.attachment_id)
+        elif parts:
+            done.add(parts[0].id)
+    return done
 
 
 class TranscribeCapture(UseCase):
-    """Transcribe an audio capture through the port and store the transcript (R36)."""
+    """Transcribe every recording of a capture and store one transcript each (R36).
+
+    A capture holds as many spoken notes as were recorded into it, and each gets its own
+    row, so a reader can tell which text belongs to which recording. Parts that already
+    have a transcript are left alone unless ``force`` asks for them again.
+    """
 
     def __init__(
         self,
@@ -545,67 +610,84 @@ class TranscribeCapture(UseCase):
                 raise NotFound(f"capture {capture_id} not found")
             if cap.kind != CaptureKind.AUDIO.value:
                 raise ValidationFailed("only audio captures can be transcribed")
-            existing = uow.captures.transcript_for(cap.id)
-            if existing is not None and not force:
-                return capture_view(cap, existing, uow.captures.attachments_of(cap.id))
+            parts = _audio_parts(uow, cap)
+            if not parts:
+                raise ValidationFailed(f"capture {capture_id} has no audio to transcribe")
+            stored = uow.captures.transcripts_for(cap.id)
+            done = _already_transcribed(stored, parts)
+            pending = list(parts) if force else [p for p in parts if p.id not in done]
+            if not pending:
+                return capture_view(cap, stored, uow.captures.attachments_of(cap.id))
             if self.transcription is None:
                 raise ExternalServiceError(
                     "transcription is not configured (providers.openai_api_key missing)"
                 )
-            att = _audio_of(uow, cap)
-            if att is None:
-                raise ValidationFailed(f"capture {capture_id} has no audio to transcribe")
-            try:
-                audio = self.blobs.get(att.storage_key)
-            except BlobNotFoundError as exc:
-                raise NotFound(f"blob for capture {capture_id} is missing") from exc
             language, vocab = transcription_settings(uow)
-            try:
-                result = self.transcription.transcribe(
-                    audio,
-                    mime=att.mime,
-                    filename=att.original_name,
-                    language=language,
-                    vocabulary_prompt=vocab,
+            for att in pending:
+                try:
+                    audio = self.blobs.get(att.storage_key)
+                except BlobNotFoundError as exc:
+                    raise NotFound(f"blob for capture {capture_id} is missing") from exc
+                try:
+                    result = self.transcription.transcribe(
+                        audio,
+                        mime=att.mime,
+                        filename=att.original_name,
+                        language=language,
+                        vocabulary_prompt=vocab,
+                    )
+                except TranscriptionError as exc:
+                    cap.status = CaptureStatus.FAILED.value
+                    uow.audit.record(
+                        "capture.transcribe_failed",
+                        "capture",
+                        cap.id,
+                        {"attachment_id": att.id, "error": str(exc)},
+                    )
+                    # what earlier parts produced is kept: it is not wrong, only incomplete
+                    uow.commit()
+                    raise ExternalServiceError(f"transcription failed: {exc}") from exc
+                echo = looks_like_prompt_echo(result.text, vocab)
+                uow.captures.add_transcript(
+                    orm.Transcript(
+                        capture_id=cap.id,
+                        attachment_id=att.id,
+                        provider=result.provider,
+                        model=result.model,
+                        language=result.language,
+                        text="" if echo else result.text,
+                        segments=None if echo else result.segments,
+                        duration_s=result.duration_s,
+                        cost_usd=result.cost_usd,
+                    )
                 )
-            except TranscriptionError as exc:
-                cap.status = CaptureStatus.FAILED.value
+                if echo:
+                    # nothing intelligible: keep the audio, flag it, never feed the prompt
+                    # to the agent
+                    uow.audit.record(
+                        "capture.transcribe_empty",
+                        "capture",
+                        cap.id,
+                        {"attachment_id": att.id, "model": result.model},
+                    )
                 uow.audit.record(
-                    "capture.transcribe_failed", "capture", cap.id, {"error": str(exc)}
+                    "capture.transcribe",
+                    "capture",
+                    cap.id,
+                    {
+                        "attachment_id": att.id,
+                        "model": result.model,
+                        "duration_s": result.duration_s,
+                        "cost_usd": result.cost_usd,
+                    },
                 )
-                uow.commit()
-                raise ExternalServiceError(f"transcription failed: {exc}") from exc
-            echo = looks_like_prompt_echo(result.text, vocab)
-            transcript = uow.captures.add_transcript(
-                orm.Transcript(
-                    capture_id=cap.id,
-                    provider=result.provider,
-                    model=result.model,
-                    language=result.language,
-                    text="" if echo else result.text,
-                    segments=None if echo else result.segments,
-                    duration_s=result.duration_s,
-                    cost_usd=result.cost_usd,
-                )
-            )
-            if echo:
-                # nothing intelligible: keep the audio, flag it, never feed the prompt to the agent
+            transcripts = uow.captures.transcripts_for(cap.id)
+            attachments = uow.captures.attachments_of(cap.id)
+            spoken = any(r.text for r in transcript_refs(transcripts, attachments))
+            if not spoken:
                 cap.status = CaptureStatus.FAILED.value
-                uow.audit.record(
-                    "capture.transcribe_empty", "capture", cap.id, {"model": result.model}
-                )
             elif cap.status == CaptureStatus.FAILED.value:
                 cap.status = CaptureStatus.NEW.value
-            uow.audit.record(
-                "capture.transcribe",
-                "capture",
-                cap.id,
-                {
-                    "model": result.model,
-                    "duration_s": result.duration_s,
-                    "cost_usd": result.cost_usd,
-                },
-            )
-            view = capture_view(cap, transcript, uow.captures.attachments_of(cap.id))
+            view = capture_view(cap, transcripts, attachments)
             uow.commit()
             return view

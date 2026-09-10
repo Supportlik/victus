@@ -1,5 +1,5 @@
 import { Pipe, PipeTransform } from '@angular/core';
-import { BandZone, MacroKey, Quality } from '../api';
+import { BandZone, LineItem, MacroKey, Quality } from '../api';
 import { isoDayIn } from '../core/format.service';
 import { storedLocale } from '../core/format.service';
 
@@ -26,6 +26,25 @@ export function formatMacro(value: number | null | undefined, key: MacroKey): st
 export function formatKg(value: number | null | undefined, digits = 1): string {
   if (value === null || value === undefined || Number.isNaN(value)) return '–';
   return decimal(value, digits);
+}
+
+/** An amount as the ledger writes it: a whole number stays whole, a fraction keeps one place. */
+export function formatAmount(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return '–';
+  return decimal(value, Number.isInteger(value) ? 0 : 1);
+}
+
+/**
+ * The unit an item was logged in, with the portion when the unit alone is ambiguous.
+ *
+ * One unit can have several portions — a piece of egg is S, M, L or XL — so "1 piece" would
+ * stand for anything between 43 and 65 g. `t` translates; the caller owns the dictionary.
+ */
+export function formatUnit(it: LineItem, t: (text: string) => string): string {
+  const unit = t(it.unit_code ?? it.base_unit);
+  const label = it.portion_label;
+  // a label that only repeats the unit's own word would read "1 piece (piece)"
+  return label && label !== it.unit_code ? `${unit} (${t(label)})` : unit;
 }
 
 export function formatSigned(value: number | null | undefined, digits = 1, unit = ''): string {
