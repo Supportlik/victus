@@ -6,6 +6,19 @@ All notable changes to Victus are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-09-10
+
+### Fixed
+- The length of a recording is measured instead of hoped for, so a card stops saying 0:00. Only
+  the `whisper-*` models answer in verbose JSON and report a duration; the `gpt-4o` transcribers
+  return the text alone, so the field was always null for the configured model — and with it the
+  cost, which is derived from it. Loading the player's metadata cannot stand in either: a recording
+  the browser's MediaRecorder produced carries no duration in its header, which is why the control
+  read 0:00 until the file had played to the end and why `Duration:` in ffmpeg's own banner says
+  `N/A` for exactly these files. The length now comes from decoding the audio and discarding the
+  output, which is the one way to read a header that does not have it, and a failure to measure
+  costs a label rather than the transcript.
+
 ## [1.2.0] - 2026-09-10
 
 ### Added

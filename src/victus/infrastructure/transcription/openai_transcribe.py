@@ -7,6 +7,7 @@ prompt is passed as ``prompt`` so product names and numbers come out right.
 
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 import tempfile
@@ -23,6 +24,25 @@ PRICE_PER_MINUTE_USD: dict[str, float] = {
 }
 
 # Containers OpenAI accepts as-is; everything else goes through ffmpeg.
+#: ffmpeg reports progress as ``time=HH:MM:SS.ss``; the last one is the length it read.
+_FFMPEG_TIME = re.compile(r"time=(\d+):(\d\d):(\d\d(?:\.\d+)?)")
+
+
+def duration_from_ffmpeg(output: str) -> float | None:
+    """The length ffmpeg last reported, in seconds.
+
+    Read from the progress lines rather than from ``Duration:``, because a recording the
+    browser produced has no duration in its header — that header is exactly why the player
+    shows 0:00 — and only decoding it to the end finds out.
+    """
+    matches = _FFMPEG_TIME.findall(output)
+    if not matches:
+        return None
+    hours, minutes, seconds = matches[-1]
+    total = int(hours) * 3600 + int(minutes) * 60 + float(seconds)
+    return round(total, 2) if total > 0 else None
+
+
 _NATIVE = {
     "audio/mpeg": "mp3",
     "audio/mp3": "mp3",
@@ -57,6 +77,25 @@ class OpenAITranscription:
         self.ffmpeg_path = ffmpeg_path
 
     # ── conversion ──
+    def _probe_duration(self, audio: bytes, suffix: str) -> float | None:
+        """How long the recording is, by decoding it and discarding the output.
+
+        Silent about its own failure on purpose: a missing length costs a label on a card,
+        and refusing a transcript over it would cost the transcript.
+        """
+        ffmpeg = shutil.which(self.ffmpeg_path)
+        if ffmpeg is None:
+            return None
+        with tempfile.TemporaryDirectory(prefix="victus-probe-") as tmp:
+            src = Path(tmp) / f"input{suffix or '.bin'}"
+            src.write_bytes(audio)
+            cmd = [ffmpeg, "-i", str(src), "-vn", "-f", "null", "-"]
+            try:
+                done = subprocess.run(cmd, capture_output=True, timeout=120, check=False)
+            except (subprocess.TimeoutExpired, OSError):
+                return None
+            return duration_from_ffmpeg(done.stderr.decode("utf-8", "replace"))
+
     def _to_mp3(self, audio: bytes, suffix: str) -> bytes:
         ffmpeg = shutil.which(self.ffmpeg_path)
         if ffmpeg is None:
@@ -131,6 +170,11 @@ class OpenAITranscription:
             raise TranscriptionError(str(exc)) from exc
         text = response if isinstance(response, str) else getattr(response, "text", "")
         duration = getattr(response, "duration", None)
+        if duration is None:
+            # Only whisper-* answers in verbose_json; the gpt-4o transcribers return the
+            # text alone, so the length has to be measured here or it is lost for good.
+            suffix = Path(name).suffix or (Path(filename).suffix if filename else ".bin")
+            duration = self._probe_duration(data, suffix)
         segments_raw = getattr(response, "segments", None)
         segments: list[dict[str, Any]] | None = None
         if segments_raw:
