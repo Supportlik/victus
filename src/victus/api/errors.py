@@ -27,6 +27,7 @@ _TITLES = {
     429: "Too many requests",
     500: "Internal server error",
     501: "Not implemented",
+    503: "Service unavailable",
 }
 
 

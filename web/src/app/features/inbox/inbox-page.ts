@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal, viewChild, viewChildren } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { AgentRun, AgentStatus, ApiClient, Capture, DraftListEntry, ReportSnapshot } from '../../api';
@@ -6,14 +6,20 @@ import { FormatService } from '../../core/format.service';
 import { I18nService } from '../../core/i18n.service';
 import { BadgesService } from '../../core/badges.service';
 import { ClaudeHandoff } from '../../core/claude-handoff';
+import { liveRefresh } from '../../core/live-refresh';
+import { ChangeTarget } from '../../core/live.service';
 import { describeError } from '../../core/problem';
 import { CaptureCard } from '../../shared/capture-card';
 import { CaptureInput } from '../../shared/capture-input';
 import { MarkdownPipe } from '../../shared/markdown.pipe';
+import { RefreshHint } from '../../shared/refresh-hint';
 import { DraftDayCard } from './draft-day-card';
 import { todayLocal } from '../../core/format.service';
 
 type Filter = 'open' | 'assigned' | 'processed' | 'discarded' | 'failed' | 'all';
+
+/** What this screen shows: captures come in, runs draft them, days wait for a decision. */
+const INBOX_TARGETS = ['capture', 'agent_run', 'day_log', 'report_snapshot'];
 
 /**
  * One screen for the whole loop: drop a capture, let the agent draft it, accept the
@@ -23,7 +29,7 @@ type Filter = 'open' | 'assigned' | 'processed' | 'discarded' | 'failed' | 'all'
 @Component({
   selector: 'v-inbox-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, RouterLink, MarkdownPipe, CaptureInput, CaptureCard, DraftDayCard],
+  imports: [FormsModule, RouterLink, MarkdownPipe, CaptureInput, CaptureCard, DraftDayCard, RefreshHint],
   template: `
     <div class="v-page">
       <header class="v-page-head">
@@ -47,6 +53,7 @@ type Filter = 'open' | 'assigned' | 'processed' | 'discarded' | 'failed' | 'all'
         </p>
       }
       @if (error(); as e) { <div class="v-error">{{ e }}</div> }
+      <v-refresh-hint [live]="stale" />
 
       <section class="v-panel add">
         <div class="add-head">
@@ -165,6 +172,14 @@ export class InboxPage {
   ];
   targetDate = todayLocal();
   private timer: ReturnType<typeof setTimeout> | null = null;
+  private readonly composer = viewChild(CaptureInput);
+  private readonly draftCards = viewChildren(DraftDayCard);
+  /** Keeps the screen level with the stream unless something here is half done (R80). */
+  readonly stale = liveRefresh({
+    accepts: (targets: ChangeTarget[]) => targets.some((t) => INBOX_TARGETS.includes(t.type)),
+    refresh: () => this.reload(),
+    busy: () => this.beingEdited(),
+  });
 
   readonly visible = computed(() => this.captures().filter((c) => this.matches(c, this.filter())));
   /** Only a worker with a model key would collect a queued run. */
@@ -200,6 +215,14 @@ export class InboxPage {
       next: (s) => this.snapshots.set(s),
       error: () => this.snapshots.set([]),
     });
+  }
+
+  /**
+   * Whether reloading would take something away: a capture being written or recorded in
+   * the box above, or a drafted row whose amount, product or meal was already corrected.
+   */
+  private beingEdited(): boolean {
+    return (this.composer()?.dirty() ?? false) || this.draftCards().some((card) => card.dirty());
   }
 
   /** Hand the job to the user's own Claude: captures, or one frozen report. */

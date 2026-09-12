@@ -615,3 +615,38 @@ class DraftCreateView:
     captures_assigned: int
     questions: int
     markdown: str
+
+
+# ── change feed (server-sent events) ────────────────────────────────────────
+
+
+@dataclass(frozen=True, slots=True)
+class ChangeCounts:
+    """The four numbers the navigation badges show, counted in one place."""
+
+    new_captures: int
+    draft_days: int
+    open_days: int
+    pending_proposals: int
+
+
+@dataclass(frozen=True, slots=True)
+class ChangeTarget:
+    """What one audit entry touched. Deliberately without its ``diff`` (R83):
+    a listener learns *that* a thing changed, never what the change was."""
+
+    action: str
+    type: str
+    id: str
+
+
+@dataclass(frozen=True, slots=True)
+class ChangeView:
+    """The tenant's audit cursor with the counts and the targets behind it."""
+
+    cursor: int
+    counts: ChangeCounts
+    targets: list[ChangeTarget] = field(default_factory=list)
+    #: True when more entries happened than ``targets`` carries; the counts and
+    #: the cursor are still exact, so a client reloads instead of patching.
+    truncated: bool = False

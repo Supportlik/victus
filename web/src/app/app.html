@@ -40,13 +40,23 @@
             <span class="label">{{ i18n.t('Collapse menu') }}</span>
           </button>
         </div>
-        <p class="health" aria-live="polite">
-          @if (health(); as h) {
-            <span class="dot ok"></span>API {{ h.version }}
-          } @else if (apiError(); as err) {
-            <span class="dot bad"></span>{{ err }}
-          } @else {
-            <span class="dot"></span>{{ i18n.t('checking API…') }}
+        <!-- Three states, and the page behind it keeps whatever it already has in every
+             one of them: the API answers (dot and version), the change stream is away and
+             trying, or the API does not answer at all. -->
+        <p class="health" aria-live="polite" [title]="apiError() ?? ''">
+          @switch (apiState()) {
+            @case ('down') {
+              <span class="dot bad"></span>{{ i18n.t('API unreachable') }}
+            }
+            @case ('reconnecting') {
+              <span class="dot warn"></span>{{ i18n.t('Reconnecting…') }}
+            }
+            @case ('ok') {
+              <span class="dot ok"></span>API {{ health()!.version }}
+            }
+            @default {
+              <span class="dot"></span>{{ i18n.t('checking API…') }}
+            }
           }
         </p>
       </div>

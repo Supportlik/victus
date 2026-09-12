@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from datetime import date, datetime, timedelta
 from typing import Any, cast
 
-from sqlalchemy import CursorResult, delete, select
+from sqlalchemy import CursorResult, delete, func, select
 
 from victus.infrastructure.db import orm
 from victus.infrastructure.db.repositories._base import Repo
@@ -49,6 +49,12 @@ class CaptureRepo(Repo):
         if limit:
             stmt = stmt.limit(limit)
         return self.session.scalars(stmt).all()
+
+    def count(self, status: str | None = None) -> int:
+        stmt = self.scoped(select(func.count()).select_from(orm.Capture), orm.Capture)
+        if status:
+            stmt = stmt.where(orm.Capture.status == status)
+        return self.session.scalar(stmt) or 0
 
     def add_attachment(self, attachment: orm.Attachment) -> orm.Attachment:
         self.guard(attachment)

@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, func, select
 
 from victus.infrastructure.db import orm
 from victus.infrastructure.db.repositories._base import Repo
@@ -46,6 +46,26 @@ class AuditRepo(Repo):
                 orm.AuditLog,
             ).order_by(orm.AuditLog.created_at)
         ).all()
+
+    def max_id(self) -> int:
+        """The tenant's change cursor: monotonic, one row per write, and cheap to
+        ask for. ``0`` while the tenant has never been written to (R83)."""
+        return (
+            self.session.scalar(self.scoped(select(func.max(orm.AuditLog.id)), orm.AuditLog)) or 0
+        )
+
+    def since(self, cursor: int, limit: int) -> Sequence[orm.AuditLog]:
+        """The newest ``limit`` entries after ``cursor``, oldest of them first.
+
+        Newest rather than oldest, because a listener that fell far behind cares
+        about where the data stands now, not about replaying the backlog.
+        """
+        newest = self.session.scalars(
+            self.scoped(select(orm.AuditLog).where(orm.AuditLog.id > cursor), orm.AuditLog)
+            .order_by(orm.AuditLog.id.desc())
+            .limit(limit)
+        ).all()
+        return list(reversed(newest))
 
 
 class BackupJobRepo(Repo):

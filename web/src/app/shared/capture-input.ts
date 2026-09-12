@@ -162,6 +162,14 @@ export class CaptureInput {
   readonly canRecord = typeof MediaRecorder !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
   readonly cameraOpen = signal(false);
   readonly canSwitch = signal(false);
+  /**
+   * Whether this form holds anything a refresh of the page around it would throw away:
+   * a typed line, a file in the tray, a recording under way, the camera open, an upload
+   * in flight. The page asks before it replaces what is on screen (R80).
+   */
+  readonly dirty = computed(
+    () => this.hasContent() || this.busy() || this.recording() || this.cameraOpen(),
+  );
 
   private readonly preview = viewChild<ElementRef<HTMLVideoElement>>('preview');
   private cameraStream: MediaStream | null = null;

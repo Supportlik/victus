@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, effect, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, effect, inject, input, signal, viewChild } from '@angular/core';
 import { ApiClient, Capture, DayMessage } from '../../api';
 import { BadgesService } from '../../core/badges.service';
 import { FormatService } from '../../core/format.service';
@@ -73,6 +73,12 @@ export class DayThread {
   readonly revision = input(0);
   readonly messages = signal<DayMessage[]>([]);
   readonly error = signal<string | null>(null);
+  private readonly composer = viewChild(CaptureInput);
+
+  /** Whether something is half written here, so the day around it leaves the page alone. */
+  dirty(): boolean {
+    return this.composer()?.dirty() ?? false;
+  }
 
   constructor() {
     effect(() => {

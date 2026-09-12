@@ -138,6 +138,16 @@
   .dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--v-line-strong); flex: none; }
   .dot.ok { background: var(--v-ok); }
   .dot.bad { background: var(--v-bad); }
+  // Trying, rather than broken: the dot breathes instead of sitting there in red.
+  .dot.warn { background: var(--v-warn); animation: v-pulse 1.6s ease-in-out infinite; }
+}
+
+@keyframes v-pulse {
+  50% { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rail .dot.warn { animation: none; }
 }
 
 // Collapsed rail: icon with a small label underneath, so entries stay readable.

@@ -57,19 +57,46 @@ class DayLogRepo(Repo):
             stmt = stmt.where(orm.DayLog.status == status)
         return self.session.scalars(stmt.order_by(orm.DayLog.date)).all()
 
-    def draft_days(self) -> Sequence[orm.DayLog]:
+    @staticmethod
+    def _is_draft() -> Any:
+        """A day counts as a draft while its own status says so *or* one of its items
+        is still a proposal. Shared so the list and the count can never disagree."""
         draft_item_days = (
             select(orm.Meal.day_log_id)
             .join(orm.LineItem, orm.LineItem.meal_id == orm.Meal.id)
             .where(orm.LineItem.is_draft.is_(True))
         )
-        stmt = self.scoped(
-            select(orm.DayLog).where(
-                (orm.DayLog.status == "draft") | orm.DayLog.id.in_(draft_item_days)
-            ),
-            orm.DayLog,
-        )
+        return (orm.DayLog.status == "draft") | orm.DayLog.id.in_(draft_item_days)
+
+    def draft_days(self) -> Sequence[orm.DayLog]:
+        stmt = self.scoped(select(orm.DayLog).where(self._is_draft()), orm.DayLog)
         return self.session.scalars(stmt.order_by(orm.DayLog.date)).all()
+
+    def count_drafts(self) -> int:
+        """How many days wait for a decision — the same set as :meth:`draft_days`."""
+        return (
+            self.session.scalar(
+                self.scoped(
+                    select(func.count()).select_from(orm.DayLog).where(self._is_draft()),
+                    orm.DayLog,
+                )
+            )
+            or 0
+        )
+
+    def count_open_before(self, day: date) -> int:
+        """Days still ``open`` that are already over — today is not one of them."""
+        return (
+            self.session.scalar(
+                self.scoped(
+                    select(func.count())
+                    .select_from(orm.DayLog)
+                    .where(orm.DayLog.status == "open", orm.DayLog.date < day),
+                    orm.DayLog,
+                )
+            )
+            or 0
+        )
 
     def delete_day(self, day_log: orm.DayLog) -> None:
         self.guard(day_log)

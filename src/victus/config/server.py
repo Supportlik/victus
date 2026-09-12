@@ -97,6 +97,18 @@ class AgentConfig(BaseModel):
         return self.pricing.get(model, ModelPricing())
 
 
+class EventsConfig(BaseModel):
+    """Server-sent events: the push channel an open page listens on (R83)."""
+
+    enabled: bool = True
+    # How often a connection looks at the tenant's audit cursor: one cheap
+    # MAX(id) per connected client, well below what a person notices.
+    poll_seconds: float = 2.0
+    # Idle connections are dropped by proxies after a minute or so; a beat well
+    # inside that keeps the channel open at a cost of one line of text.
+    heartbeat_seconds: float = 20.0
+
+
 class McpConfig(BaseModel):
     http_enabled: bool = False
     # Tailscale's CGNAT range; the sensible default for a private mesh.
@@ -146,6 +158,7 @@ class ServerConfig(BaseSettings):
     providers: ProvidersConfig = Field(default_factory=ProvidersConfig)
     transcription: TranscriptionConfig = Field(default_factory=TranscriptionConfig)
     agent: AgentConfig = Field(default_factory=AgentConfig)
+    events: EventsConfig = Field(default_factory=EventsConfig)
     mcp: McpConfig = Field(default_factory=McpConfig)
     backup: BackupConfig = Field(default_factory=BackupConfig)
     server: ServerSection = Field(default_factory=ServerSection)

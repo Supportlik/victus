@@ -194,6 +194,28 @@ export class DraftDayCard {
     });
   }
 
+  /**
+   * Whether a row here has been touched, so the screen around it leaves the card alone.
+   *
+   * The same comparison `approve()` makes: a corrected amount, another product picked from
+   * the alternatives, another meal chosen, or a new meal's name half typed. Reloading
+   * would put the agent's own numbers back and undo the correction without a word (R80).
+   */
+  dirty(): boolean {
+    return (
+      this.busy() ||
+      this.confirmDiscard() ||
+      this.rows().some(
+        (r) =>
+          r.busy ||
+          r.amount !== (r.item.amount ?? r.item.base_amount) ||
+          r.consumableId !== r.item.consumable_id ||
+          r.mealChoice !== r.item.meal_id ||
+          r.newMeal.trim() !== '',
+      )
+    );
+  }
+
   /** Meals of the drafted day, for the per-item meal picker. */
   meals(): { id: number; name: string }[] {
     return (this.day()?.meals ?? []).map((m) => ({ id: m.id, name: m.name }));

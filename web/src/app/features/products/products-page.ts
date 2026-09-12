@@ -4,13 +4,19 @@ import { RouterLink } from '@angular/router';
 import { ApiClient, Product, ProductProposal, ProductUsage, ProductUsageEntry } from '../../api';
 import { FormatService } from '../../core/format.service';
 import { I18nService } from '../../core/i18n.service';
+import { liveRefresh } from '../../core/live-refresh';
+import { ChangeTarget } from '../../core/live.service';
 import { describeError } from '../../core/problem';
 import { formatAmount, MacroPipe } from '../../shared/format';
 import { FoodIcon } from '../../shared/food-icon';
 import { ProductSearch } from '../../shared/product-search';
+import { RefreshHint } from '../../shared/refresh-hint';
 
 /** Rows per request. Large enough that most catalogues arrive in one or two. */
 const PAGE_SIZE = 50;
+
+/** What this screen shows: the catalogue and the proposals waiting on it. */
+const PRODUCT_TARGETS = ['product', 'product_proposal', 'capture'];
 
 /** Occurrences listed under a proposal: enough to recognise the meal, not a history. */
 const USAGE_SHOWN = 5;
@@ -43,7 +49,7 @@ function unitOf(field: string, referenceUnit: string): string {
 @Component({
   selector: 'v-products-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, FormsModule, MacroPipe, ProductSearch, FoodIcon],
+  imports: [RouterLink, FormsModule, MacroPipe, ProductSearch, FoodIcon, RefreshHint],
   template: `
     <div class="v-page">
       <header class="v-page-head">
@@ -54,6 +60,7 @@ function unitOf(field: string, referenceUnit: string): string {
         </div>
       </header>
       @if (error(); as e) { <div class="v-error">{{ e }}</div> }
+      <v-refresh-hint [live]="stale" />
       @if (corrections().length) {
         <section class="v-panel pending">
           <h3>{{ i18n.t('Waiting for your approval') }}</h3>
@@ -196,8 +203,23 @@ export class ProductsPage {
   readonly deciding = signal(false);
   readonly loading = signal(false);
   readonly more = signal(false);
+  /**
+   * A proposal the agent files, or a product it meets, appears here without a reload —
+   * unless a decision is in flight, in which case the list would change under the button
+   * that is being pressed (R80).
+   */
+  readonly stale = liveRefresh({
+    accepts: (targets: ChangeTarget[]) => targets.some((t) => PRODUCT_TARGETS.includes(t.type)),
+    refresh: () => this.reload(),
+    busy: () => this.deciding(),
+  });
   constructor() {
-    this.load(0);
+    this.reload();
+  }
+
+  /** The catalogue as far as it was paged, and everything waiting for a decision. */
+  private reload(): void {
+    this.load(0, Math.max(PAGE_SIZE, this.recent().length));
     this.api.proposals().subscribe({
       next: (p) => {
         this.proposals.set(p);

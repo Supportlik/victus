@@ -1,11 +1,13 @@
 // T-WEB-032: the inbox screen carries captures and drafts together; a drafted item shows the
 // capture it came from and can be accepted on its own.
+// T-WEB-075: a capture half written here survives a change arriving on the stream.
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { Capture, DraftListEntry } from '../../api';
+import { LiveService } from '../../core/live.service';
 import { InboxPage } from './inbox-page';
 
 const CAPTURES: Capture[] = [
@@ -164,6 +166,41 @@ describe('InboxPage', () => {
     expect(req.request.body).toEqual({});
     req.flush({ ...SUMMARY.day.meals[0].line_items[0], is_draft: false });
     f.detectChanges();
+    http.match(() => true).forEach((r) => r.flush([]));
+  });
+
+  // A capture is typed one line at a time and often over a minute or two. A change landing
+  // in the middle of that must not take the box away, and must still be reachable.
+  it('holds a change back while a capture is being written, and applies it when asked', async () => {
+    const f = TestBed.createComponent(InboxPage);
+    f.detectChanges();
+    flush(http);
+    f.detectChanges();
+    await f.whenStable();
+    http.match((r) => r.url === '/api/v1/drafts/2026-01-05/summary').forEach((r) => r.flush(SUMMARY));
+    f.detectChanges();
+    await f.whenStable();
+    // the badge read the page's reload set off is not part of what is under test
+    http.match(() => true).forEach((r) => r.flush([]));
+
+    const el = f.nativeElement as HTMLElement;
+    const box = el.querySelector('textarea.note') as HTMLTextAreaElement;
+    box.value = '200 g quark with berries';
+    box.dispatchEvent(new Event('input'));
+    f.detectChanges();
+
+    TestBed.inject(LiveService).lastChange.set({
+      cursor: 9,
+      targets: [{ action: 'capture.create', type: 'capture', id: 'c_new' }],
+    });
+    await f.whenStable();
+    http.expectNone((r) => r.url === '/api/v1/captures');
+    expect((el.querySelector('textarea.note') as HTMLTextAreaElement).value).toBe('200 g quark with berries');
+    expect(el.querySelector('.stale')?.textContent).toContain('There is newer data.');
+
+    const show = Array.from(el.querySelectorAll('.stale button')).find((b) => b.textContent?.trim() === 'Show it') as HTMLButtonElement;
+    show.click();
+    expect(http.match((r) => r.url === '/api/v1/captures')).toHaveLength(1);
     http.match(() => true).forEach((r) => r.flush([]));
   });
 });

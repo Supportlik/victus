@@ -133,6 +133,48 @@ The tenant is always derived from the principal (session or token); it never app
 | POST | `/captures/{id}/transcribe?force=` | (Re-)transcribe an audio capture: **every** recording in it, one transcript each. Parts that already have one are left alone unless `force`; `502` with problem details when the provider fails or none is configured |
 | GET | `/attachments/{id}` | The attachment bytes (image, audio) inline, tenant-checked; `Cache-Control: private` |
 
+### Events (server-sent)
+
+One long-lived `GET` that says when this tenant's data changed, so an open page does not
+have to poll for it (R83). The source is the `audit_log` table: every write in the
+application books an entry, including writes from the worker container and from MCP, and
+`MAX(id)` per tenant is the cursor. The server polls that cursor; the client is pushed to.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/events?cursor=` | `text/event-stream` for the authenticated tenant. Scopes `read` **and** `capture:read` (one of the counts counts captures). `503` when `events.enabled` is false — a clean refusal, so a client falls back to polling instead of hanging on a connection that will never speak |
+
+**Request.** Session cookie or bearer token, as everywhere else; an unauthenticated
+request is `401`. The response carries `Cache-Control: no-cache` and `X-Accel-Buffering: no`
+(nginx buffers proxied responses by default, which would hold every event back).
+
+**Events.** Every message carries `id:` = the cursor it reflects.
+
+| Event | Payload | When |
+|---|---|---|
+| `hello` | `{"cursor": 41, "counts": {…}}` | Once, on connect. `cursor` is where this stream starts: the current one, or the resume point if one was given |
+| `change` | `{"cursor": 43, "counts": {…}, "targets": [{"action": "day.update", "type": "day_log", "id": "12"}], "truncated": false}` | The cursor moved. `targets` are the audit entries since the previous message — the newest 50, oldest of them first; `truncated` is `true` when more happened than the list carries, and a client then reloads rather than patching |
+| `heartbeat` | `{"cursor": 43}` | After `events.heartbeat_seconds` of silence, so proxies leave an idle connection alone |
+
+**`targets` carry no `diff`.** Action, target type and target id only: a listener learns
+that the day changed, never what was eaten.
+
+**`counts`** are the four numbers the navigation badges show, computed server-side in one
+place (`application/use_cases/events.py`), so the client needs no request of its own:
+
+```json
+{"new_captures": 2, "draft_days": 1, "open_days": 3, "pending_proposals": 0}
+```
+
+`open_days` counts days **before today** that are still `open` — today is expected to be
+open while it is being lived. Which day is today follows the tenant's timezone (R69).
+
+**Resuming.** A browser's `EventSource` sends the last `id:` back as `Last-Event-ID` when it
+reconnects; `?cursor=` does the same for a client that is not an `EventSource` (the header
+wins where both are present). The stream then greets at that cursor and sends one `change`
+with what was missed, instead of replaying everything or losing it. An unreadable
+`Last-Event-ID` is ignored rather than refused; that client simply starts from now.
+
 ### Report snapshots
 
 A snapshot freezes a rendered report: the numbers of that period, stored with the date they were

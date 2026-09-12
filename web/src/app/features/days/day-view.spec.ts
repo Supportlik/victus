@@ -1,4 +1,6 @@
 // T-WEB-001: day view renders meals, totals, ⚠️ on estimates, draft tint and band gauges from a fixture.
+// T-WEB-071: the day keeps up with the change stream, and stays out of the way of whoever
+// is in the middle of typing into it.
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
@@ -6,6 +8,7 @@ import { By } from '@angular/platform-browser';
 import { provideRouter } from '@angular/router';
 import { DayLog, Product } from '../../api';
 import { FormatService } from '../../core/format.service';
+import { ChangeTarget, LiveService } from '../../core/live.service';
 import { LineItemForm } from '../../shared/line-item-form';
 import { DayView } from './day-view';
 
@@ -318,6 +321,72 @@ describe('DayView', () => {
     expect(req.request.body).toEqual({ amount: 396, unit_code: 'g', portion_id: null, estimated: false, amount_estimated: false });
     req.flush({});
     http.match(() => true).forEach((r) => r.flush(r.request.method === 'GET' ? [] : {}));
+  });
+
+  /**
+   * One `change` message off the stream. Set on the signal the page reads, because that is
+   * the page's contract — the socket underneath it belongs to `live.service.spec.ts`.
+   */
+  function change(...targets: ChangeTarget[]): void {
+    TestBed.inject(LiveService).lastChange.set({ cursor: 1, targets });
+  }
+
+  const CHANGED_DAY: DayLog = {
+    ...day,
+    macros: { ...day.macros, kcal: 1700 },
+    meals: [{ ...day.meals[0], name: 'Second breakfast' }],
+  };
+
+  it('fetches the day again when the stream says that day changed', async () => {
+    const fixture = await render();
+    const http = TestBed.inject(HttpTestingController);
+    change({ action: 'day.update', type: 'day_log', id: '2026-01-02' });
+    await fixture.whenStable();
+
+    http.expectOne('/api/v1/days/2026-01-02').flush(CHANGED_DAY);
+    await fixture.whenStable();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('.meal h3')?.textContent).toContain('Second breakfast');
+    // nothing was said about it: a silent refresh is the whole point where nothing is open
+    expect(el.querySelector('.stale')).toBeNull();
+    http.match(() => true).forEach((r) => r.flush([]));
+  });
+
+  it('ignores a change that names another day', async () => {
+    const fixture = await render();
+    const http = TestBed.inject(HttpTestingController);
+    change({ action: 'day.update', type: 'day_log', id: '2026-01-03' });
+    await fixture.whenStable();
+    http.expectNone('/api/v1/days/2026-01-02');
+    http.expectNone('/api/v1/days/2026-01-03');
+  });
+
+  // The one that matters: a page that replaces a half-filled form with fresh data is worse
+  // than a stale page, because the staleness is visible and the lost typing is not.
+  it('holds a change back while a form is open, and applies it when asked', async () => {
+    const fixture = await render();
+    const http = TestBed.inject(HttpTestingController);
+    const el = fixture.nativeElement as HTMLElement;
+
+    const add = Array.from(el.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Add item') as HTMLButtonElement;
+    add.click();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.adding()).not.toBeNull();
+
+    change({ action: 'line_item.create', type: 'line_item', id: '77' });
+    await fixture.whenStable();
+    http.expectNone('/api/v1/days/2026-01-02');
+    expect(el.querySelector('.meal h3')?.textContent).toContain('Breakfast'), 'nothing was replaced';
+    const hint = el.querySelector('.stale');
+    expect(hint?.textContent).toContain('There is newer data.');
+
+    const show = Array.from(hint!.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Show it') as HTMLButtonElement;
+    show.click();
+    http.expectOne('/api/v1/days/2026-01-02').flush(CHANGED_DAY);
+    await fixture.whenStable();
+    expect(el.querySelector('.meal h3')?.textContent).toContain('Second breakfast');
+    expect(el.querySelector('.stale')).toBeNull();
+    http.match(() => true).forEach((r) => r.flush([]));
   });
 
   it('offers the product’s own portions and logs the item against the chosen one', async () => {

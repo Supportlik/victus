@@ -111,6 +111,16 @@
         }
       }
     },
+    "events": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Server-sent events at GET /api/v1/events: an open page is told that its tenant's data changed instead of polling for it.",
+      "properties": {
+        "enabled": { "type": "boolean", "default": true, "description": "Serve the stream. When false the endpoint refuses with 503 and clients fall back to polling." },
+        "poll_seconds": { "type": "number", "minimum": 0.05, "default": 2, "description": "How often a connection looks at the tenant's audit cursor (one cheap MAX(id) per connected client)." },
+        "heartbeat_seconds": { "type": "number", "minimum": 1, "default": 20, "description": "A heartbeat is sent after this much silence so proxies do not close an idle connection." }
+      }
+    },
     "mcp": {
       "type": "object",
       "additionalProperties": false,

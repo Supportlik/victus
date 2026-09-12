@@ -28,6 +28,9 @@ export const DE: Record<string, string> = {
   'Main navigation': 'Hauptnavigation',
   'checking API…': 'API wird geprüft…',
   'API unreachable': 'API nicht erreichbar',
+  'Reconnecting…': 'Neu verbinden…',
+  'There is newer data.': 'Es gibt neuere Daten.',
+  'Show it': 'Anzeigen',
   Dismiss: 'Schließen',
   'You have one passkey. Add a second one on another device so a lost phone does not lock you out.':
     'Du hast einen Passkey. Lege einen zweiten auf einem anderen Gerät an, damit ein verlorenes Handy dich nicht aussperrt.',

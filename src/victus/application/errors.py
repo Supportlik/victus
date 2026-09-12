@@ -51,6 +51,18 @@ class NotImplementedYet(ApplicationError):
     title = "Not implemented"
 
 
+class FeatureDisabled(ApplicationError):
+    """The feature exists but is switched off in the server configuration.
+
+    503 rather than 404: hiding it would send a client hunting for a fault of its
+    own, and a caller that can fall back — polling instead of a push channel —
+    has to hear the difference between "off here" and "not a thing".
+    """
+
+    status = 503
+    title = "Feature disabled"
+
+
 class ExternalServiceError(ApplicationError):
     """A provider call (transcription, model) failed; the request may be retried."""
 

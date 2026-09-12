@@ -87,6 +87,18 @@ Env prefix `VICTUS_AGENT__…` (nested keys with `__`, e.g. `VICTUS_AGENT__BUDGE
 | `agent.budget.max_images_per_run` | int | no | `12` | Images per run, downscaled to 1024 px before they reach the model |
 | `agent.pricing.<model>.input_per_mtok` / `.output_per_mtok` | float | no | opus-5 5/25, sonnet-5 2/10, haiku-4-5 1/5 | USD per million tokens used to book `agent_run.cost_usd` / `agent_session.cost_usd`. Unknown model ids fall back to the opus-5 rates |
 
+### `events`
+
+The push channel behind `GET /api/v1/events` (R83). It costs one `MAX(audit_log.id)` per
+connected client per `poll_seconds`; with it the web app stops polling four endpoints a
+minute and the page a person is looking at stops showing stale data.
+
+| Key | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `events.enabled` | bool | no | `true` | Serve the stream. With `false` the endpoint answers `503` and clients fall back to polling — a refusal, never a connection that hangs |
+| `events.poll_seconds` | float | no | `2` | How often a connection looks at the tenant's audit cursor. Lower means a faster page and more queries, one per connected client |
+| `events.heartbeat_seconds` | float | no | `20` | A `heartbeat` event is sent after this much silence, so a reverse proxy does not close an idle connection. Keep it below the proxy's read timeout (nginx: 60 s by default) |
+
 ### `mcp`
 
 | Key | Type | Required | Default | Notes |

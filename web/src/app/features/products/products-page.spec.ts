@@ -3,12 +3,14 @@
 // T-WEB-060: a listed correction carries the value it replaces and the value it proposes,
 // the product's other numbers beside them, and the buttons to decide it.
 // T-WEB-061: a new product the agent met links to the day and the meal it was eaten in.
+// T-WEB-074: a proposal filed while the page is open appears on it, off the change stream.
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { Product, ProductProposal, ProductUsage } from '../../api';
+import { LiveService } from '../../core/live.service';
 import { ProductsPage } from './products-page';
 
 /** A correction to one macro of a product that exists. */
@@ -270,6 +272,38 @@ describe('ProductsPage', () => {
     expect(flat(entry.querySelector('.facts'))).toContain('kcal 380');
     expect(text).toContain('Foodspring');
     expect(text).toContain('bar 60 g');
+    http.verify();
+  });
+
+  // A proposal the agent files while this page is open belongs on it. Finding out about it
+  // by reloading the page is exactly what the change stream exists to replace.
+  it('takes a proposal filed while the page is open off the stream', async () => {
+    const f = TestBed.createComponent(ProductsPage);
+    f.detectChanges();
+    http.expectOne((r) => r.url === '/api/v1/products').flush([CHIA]);
+    http.expectOne((r) => r.url === '/api/v1/proposals').flush([]);
+    f.detectChanges();
+    await f.whenStable();
+    const el = f.nativeElement as HTMLElement;
+    expect(el.querySelector('.pending')).toBeNull();
+
+    TestBed.inject(LiveService).lastChange.set({
+      cursor: 2,
+      targets: [{ action: 'proposal.create', type: 'product_proposal', id: 'pr-1' }],
+    });
+    await f.whenStable();
+    http.expectOne((r) => r.url === '/api/v1/products').flush([CHIA]);
+    http.expectOne((r) => r.url === '/api/v1/proposals').flush([CORRECTION]);
+    f.detectChanges();
+    await f.whenStable();
+    http.expectOne((r) => r.url === '/api/v1/products/7').flush(CHIA);
+    http.expectOne((r) => r.url === '/api/v1/products/7/usage').flush(usage(7, [], 12));
+    f.detectChanges();
+    await f.whenStable();
+
+    // nothing was being decided here, so it simply appeared: no notice, no reload
+    expect(flat(el.querySelector('.pending'))).toContain('Chia seeds');
+    expect(el.querySelector('.stale')).toBeNull();
     http.verify();
   });
 });

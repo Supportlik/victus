@@ -6,6 +6,32 @@ All notable changes to Victus are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-09-12
+
+### Added
+- **The page you are looking at now notices when the data under it changes.** Until now only
+  the counts in the navigation refreshed, once a minute; the day itself kept whatever it had
+  loaded, so a draft the agent wrote into the open day was invisible until a reload.
+  `GET /api/v1/events` is a Server-Sent Events stream that says what changed — `hello` on
+  connect, `change` per write, a heartbeat in between — and the open page fetches just that.
+  The change source is the audit log, which every write goes through, so a write from the
+  worker container or over MCP reaches the page exactly like one made in it. What changed is
+  named (action, type, id); what it changed is never sent.
+- The stream carries the four counts the navigation badges show, so while it is connected the
+  badges follow it instead of polling, and fall back to the minute poll when it is not.
+- Settings `events.enabled`, `events.poll_seconds` and `events.heartbeat_seconds`; with the
+  stream switched off the endpoint refuses cleanly (503) instead of hanging, and the app keeps
+  its old polling behaviour.
+
+### Changed
+- **Nothing is pulled out from under you.** A page with an open form, typed text, an open edit
+  panel or a half-written capture is not replaced: a quiet line says there is newer data and
+  waits for the click. Everywhere else the refresh is silent. It is never a page reload.
+- The API line at the foot of the navigation rail now says whether the connection stands:
+  the version when it does, "reconnecting" when it does not. It was fetched exactly once at
+  startup before, so a failure stayed on screen until a reload even after the API came back —
+  it now heals itself, and everything already on screen stays there while the API is away.
+
 ## [1.6.1] - 2026-09-10
 
 ### Fixed

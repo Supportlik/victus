@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from victus.infrastructure.db import orm
 from victus.infrastructure.db.repositories._base import Repo
@@ -39,3 +39,11 @@ class ProposalRepo(Repo):
         return self.session.scalars(
             stmt.order_by(orm.ProductProposal.created_at.desc()).limit(limit)
         ).all()
+
+    def count(self, status: str | None = None) -> int:
+        stmt = self.scoped(
+            select(func.count()).select_from(orm.ProductProposal), orm.ProductProposal
+        )
+        if status:
+            stmt = stmt.where(orm.ProductProposal.status == status)
+        return self.session.scalar(stmt) or 0

@@ -1,17 +1,23 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ApiClient, DayLog, LineItem, MACRO_KEYS, MACRO_LABEL, MACRO_UNIT, MacroKey, Meal, Product, TrainingType, Unit } from '../../api';
 import { HttpErrorResponse } from '@angular/common/http';
 import { I18nService } from '../../core/i18n.service';
+import { liveRefresh } from '../../core/live-refresh';
+import { ChangeTarget } from '../../core/live.service';
 import { describeError } from '../../core/problem';
 import { BandGauge } from '../../shared/band-gauge';
 import { DayNamePipe, MacroPipe, formatAmount, formatUnit, shiftDate } from '../../shared/format';
 import { LineItemForm } from '../../shared/line-item-form';
 import { ProductSearch } from '../../shared/product-search';
+import { RefreshHint } from '../../shared/refresh-hint';
 import { StatusTag } from '../../shared/status-tag';
 import { FoodIcon } from '../../shared/food-icon';
 import { DayThread } from './day-thread';
+
+/** What a change to this day looks like on the stream; anything else is another page's. */
+const DAY_TARGETS = ['day_log', 'meal', 'line_item', 'capture', 'agent_run'];
 
 /**
  * The day as a ledger: meals with their line items and running totals, the band gauges
@@ -20,7 +26,7 @@ import { DayThread } from './day-thread';
 @Component({
   selector: 'v-day-view',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, FormsModule, BandGauge, StatusTag, MacroPipe, DayNamePipe, ProductSearch, DayThread, FoodIcon, LineItemForm],
+  imports: [RouterLink, FormsModule, BandGauge, StatusTag, MacroPipe, DayNamePipe, ProductSearch, DayThread, FoodIcon, LineItemForm, RefreshHint],
   template: `
     <div class="v-page">
       <header class="v-page-head">
@@ -67,6 +73,8 @@ import { DayThread } from './day-thread';
           </div>
         }
       </header>
+
+      <v-refresh-hint [live]="stale" />
 
       @if (missing()) {
         <section class="v-panel create-day">
@@ -356,6 +364,17 @@ export class DayView {
   /** The item whose edit panel is open, under its row. */
   readonly editing = signal<number | null>(null);
   readonly pending = signal<Product | null>(null);
+  /** The thread beside the ledger; it knows whether a capture is half written in it. */
+  private readonly thread = viewChild(DayThread);
+  /**
+   * Keeps the ledger level with the server without taking anything away from whoever is
+   * using it: silent while nothing is open, a hint while something is (R80).
+   */
+  readonly stale = liveRefresh({
+    accepts: (targets) => this.concernsThisDay(targets),
+    refresh: () => this.refetch(),
+    busy: () => this.beingEdited(),
+  });
   readonly prev = computed(() => shiftDate(this.date(), -1));
   readonly next = computed(() => shiftDate(this.date(), 1));
   /** Grams and millilitres always work; they need no portion. */
@@ -417,6 +436,45 @@ export class DayView {
 
   bandFor(d: DayLog, k: MacroKey) {
     return d.target_band ? d.target_band[k] ?? null : null;
+  }
+
+  /**
+   * Whether a batch of changes is about the day on screen.
+   *
+   * A batch is one transaction. When it names days — a `day_log` target carries the ISO
+   * date as its id — then those are the days it is about, and a batch for the day next
+   * door is none of this page's business. When it names none, the ids belong to meals,
+   * items or captures and say nothing about which day they sit in; taking it costs one
+   * request, and dropping it would leave the page showing numbers that no longer hold.
+   */
+  private concernsThisDay(targets: ChangeTarget[]): boolean {
+    const mine = targets.filter((t) => DAY_TARGETS.includes(t.type));
+    if (!mine.length) return false;
+    const days = mine.filter((t) => t.type === 'day_log').map((t) => t.id);
+    return days.length ? days.includes(this.date()) : true;
+  }
+
+  /**
+   * Whether fetching again would take something away.
+   *
+   * Broad on purpose: an open add-item form, an open edit panel, a meal being renamed, a
+   * meal name half typed, and a capture half written in the thread beside the ledger.
+   */
+  private beingEdited(): boolean {
+    return (
+      this.adding() !== null ||
+      this.editing() !== null ||
+      this.editingMeal() !== null ||
+      this.pending() !== null ||
+      this.newMeal.trim() !== '' ||
+      (this.thread()?.dirty() ?? false)
+    );
+  }
+
+  /** Everything this page shows, again: the ledger and the thread beside it. */
+  private refetch(): void {
+    this.reload();
+    this.threadRevision.update((n) => n + 1);
   }
 
   reload(): void {
@@ -491,24 +549,19 @@ export class DayView {
     });
   }
 
+  /** An approval touches the day, the captures behind it and the inbox count. */
   acceptItem(it: LineItem): void {
     this.api.approveLineItem(it.id).subscribe({
-      next: () => this.approved(),
+      next: () => this.refetch(),
       error: (e: unknown) => this.error.set(describeError(e)),
     });
   }
 
   acceptAll(): void {
     this.api.approveDraft(this.date(), { corrections: [], close: false }).subscribe({
-      next: () => this.approved(),
+      next: () => this.refetch(),
       error: (e: unknown) => this.error.set(describeError(e)),
     });
-  }
-
-  /** An approval touches the day, the captures behind it and the inbox count. */
-  private approved(): void {
-    this.reload();
-    this.threadRevision.update((n) => n + 1);
   }
 
   addMeal(): void {
