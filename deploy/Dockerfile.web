@@ -5,7 +5,7 @@
 # (`.github/dependabot.yml`, ecosystem docker) proposes bumps.
 
 # ── Stage 1: build the Angular bundle ───────────────────────────────────────
-FROM node:26.8-alpine3.24 AS build
+FROM node:26.10-alpine3.24 AS build
 
 WORKDIR /web
 COPY web/package.json web/package-lock.json ./
