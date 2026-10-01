@@ -6,6 +6,21 @@ All notable changes to Victus are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.8.1] - 2026-10-01
+
+### Security
+- **PyJWT 2.15.1.** 2.13 and 2.14 carry known vulnerabilities, one of them critical; the token
+  handling Victus pulls in through its dependencies now resolves to the fixed release.
+- **Angular 22.2.** The 22.1 packages carried a denial-of-service advisory for server-side
+  rendering. Victus does not render on the server, but the package is in the bundle and the audit
+  is right to refuse it.
+- `ip-address`, flagged in the web build tooling, is no longer pulled in at all after the update.
+
+### Changed
+- Dependencies at their newest compatible releases, among them SQLAlchemy 2.1, Alembic 1.20,
+  FastAPI 0.142, Starlette 1.7 and uvicorn 0.54. The suite passes on SQLite and PostgreSQL with
+  them; 1.8.0 already carried the two adjustments SQLAlchemy 2.1 needs.
+
 ## [1.8.0] - 2026-10-01
 
 ### Security
