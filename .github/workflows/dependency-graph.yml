@@ -30,9 +30,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # Pip covers uv.lock (UvLockComponentDetector, stable); Npm covers web/package-lock.json.
+      # Python covers uv.lock (UvLockComponentDetector, stable — not in the Pip category);
+      # Npm covers web/package-lock.json.
       # Nothing is installed first, so the snapshot is the lockfiles, not a node_modules tree.
       - name: Detect and submit
         uses: advanced-security/component-detection-dependency-submission-action@v0.1.6
         with:
-          detectorsCategories: Pip,Npm
+          detectorsCategories: Python,Npm
