@@ -638,7 +638,9 @@ class CreateDraft(UseCase):
                             time=_parse_time(meal_in.get("time")),
                         )
                     )
-                    if meal not in d.meals:
+                    # no branch: d.meals was loaded by _find_meal, and a meal built from
+                    # day_log_id alone never joins it, so this guard is always true
+                    if meal not in d.meals:  # pragma: no branch
                         d.meals.append(meal)
                 for item in meal_in["line_items"]:
                     _li, is_ad_hoc = self._line_item(uow, meal, item)
@@ -782,7 +784,9 @@ class CreateDraft(UseCase):
                 ],
             )
         )
-        if li not in meal.line_items:
+        # no branch: meal.line_items was loaded by the max() above, and an item built from
+        # meal_id alone never joins it, so this guard is always true
+        if li not in meal.line_items:  # pragma: no branch
             # keep the in-memory collection current so the returned day view sees the item
             meal.line_items.append(li)
         return li, is_ad_hoc

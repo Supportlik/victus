@@ -7,8 +7,8 @@ Everything below is planned for Stage 1 unless marked otherwise.
 
 | Mode | Used by | How | Scopes |
 |---|---|---|---|
-| **Session cookie** | Web app | Passkey login → `victus_session` cookie (HttpOnly, Secure, SameSite=Lax). Writes require header `X-CSRF-Token` (value from `GET /auth/me`). | full access of the user's role |
-| **Bearer token** | Scripts, MCP over HTTP, external agents | `Authorization: Bearer vct_<8 chars>.<secret>`; created in the app or via `victus token create` | as granted at creation |
+| **Session cookie** | Web app | Passkey login → `victus_session` cookie (HttpOnly, Secure, SameSite=Lax). Writes require header `X-CSRF-Token` (value from `GET /auth/me`). | the scopes of the user's role: an `owner` holds every scope, a `member` every scope except `admin` |
+| **Bearer token** | Scripts, MCP over HTTP, external agents | `Authorization: Bearer vct_<8 chars>.<secret>`; created in the app or via `victus token create` | as granted at creation, and never more than its user's role holds |
 
 The tenant is always derived from the principal (session or token); it never appears in the URL.
 
@@ -16,14 +16,138 @@ The tenant is always derived from the principal (session or token); it never app
 
 | Scope | Grants |
 |---|---|
-| `read` | All GET endpoints except captures and attachments (agent runs and locks are readable) |
-| `write` | Create/update/delete products, portions, recipes, batches, day logs, meals, line items, manual weight |
-| `approve` | Approve or discard drafts, close/reopen days |
-| `capture:read` / `capture:write` | Read captures and attachments / upload and change capture status |
-| `agent:write` | Start and finish agent runs, create drafts |
-| `settings` | Target bands, tenant settings, report definitions |
-| `backup` | Trigger export/import, read backup jobs |
-| `admin` | Tenant users, invitations, tokens of other users |
+| `read` | All GET endpoints except captures and attachments (agent runs and locks are readable), report rendering and product matching |
+| `write` | Day logs, meals, line items (as **drafts** without `approve`), day messages, manual weight and body measurements, recipes and batches, categories, settings, rules and target bands, storing and deleting report snapshots; product, version and portion writes, which without `approve` are **filed as proposals** |
+| `approve` | Together with `write`: decide — approve or discard drafts, approve a proposal, close/reopen a day, set `reliable`, change or remove an approved line item, write the catalogue directly |
+| `capture:read` / `capture:write` | Read captures and attachments / upload, re-target, transcribe and delete captures |
+| `agent:write` | Start and finish agent runs, create drafts, withdraw a draft item, file product proposals and report assessments |
+| `admin` | Tenant and its users, creating users, every token of the tenant (passes every other check too) |
+
+There are no other scopes: `victus token create` and `POST /auth/tokens` refuse an unknown one.
+Every route's full requirement is declared in one table (`api/scopes.py`) and checked before the
+route runs; the use case checks the same scopes again. [SCOPES.md](SCOPES.md) is the generated
+matrix of every route and MCP tool against the profiles below. A refusal is `403` with
+`detail: "scope '…' required"`.
+
+### Who manages tokens and users
+
+| Action | Session of an `owner` | Session of a `member` | Token with `admin` | Any other token |
+|---|---|---|---|---|
+| `GET /auth/tokens`, `DELETE /auth/tokens/{id}` | every token of the tenant | own tokens only (another user's is `404`) | every token of the tenant | `403` |
+| `POST /auth/tokens` | any scope | any scope but `admin` — nobody grants a scope they do not hold | scopes it holds | `403` |
+| `GET /tenant`, `GET /tenant/users`, `POST /tenant/users` | yes | `403` | yes | `403` |
+
+A token's scopes are capped by its user's role each time it is used, so a member's token never
+carries `admin`, whenever it was created.
+
+### Scope profiles
+
+The table above says what each scope grants on its own. A profile is the other way round: what a
+client should be able to do, and which boxes to tick for it. The settings page offers these as
+presets next to the scope checkboxes, and [SCOPES.md](SCOPES.md) lists every tool and route for
+each. A profile is checked by the tests exactly as written here: each is minted as a token and
+every name under *Can*, *Becomes a proposal or a draft* and *Refused* is called against the
+server's declarations.
+
+"Without `approve`, nothing is a fact" (ADR 0013, SPEC R81) is what separates the profiles: a
+client without `approve` may draft and propose as much as it likes, and every result waits for a
+person.
+
+#### Read-only
+
+Scopes: `read` — reports, days, catalogue; nothing written.
+
+```bash
+victus token create --tenant alice --name "reports" --scopes read --days 90
+```
+
+- **Can:** `day_get`, `days_list`, `drafts_list`, `draft_summary`, `product_search`, `product_get`, `product_versions`, `product_usage`, `recipe_get`, `report_render`, `report_snapshots_list`, `report_snapshot_get`, `rules_list`, `body_measurements`, `GET /days/{day}`, `GET /products`, `POST /reports/{name}/render`, `GET /reports/checkup`, `GET /proposals`
+- **Becomes a proposal or a draft:** nothing
+- **Refused:** `day_thread_get` (it carries captures), `captures_open`, `capture_get`, `line_item_create`, `draft_create`, `product_propose`, `report_snapshot_create`, `weight_add`, `day_approve`, `GET /captures`, `GET /events`, `POST /products`, `POST /reports/{name}/snapshots`
+
+#### Assistant that proposes
+
+Scopes: `read,write,capture:read,capture:write,agent:write` — reads everything, including
+captures, drafts days and files catalogue proposals, refines its own drafts, and creates no fact:
+nothing approved, no day closed, no product written directly. This is the token to give Claude as
+a connector, or Claude Code over HTTP.
+
+```bash
+victus token create --tenant alice --name "claude" --scopes read,write,capture:read,capture:write,agent:write --days 90
+```
+
+- **Can:** `day_thread_get`, `captures_open`, `capture_get`, `capture_mark`, `agent_run_start`, `draft_create`, `agent_message_add`, `agent_run_finish`, `line_item_update`, `line_item_delete`, `product_propose`, `report_snapshot_create`, `report_assess`, `day_message_add`, `rule_upsert`, `weight_add`, `body_add`, `GET /captures`, `GET /events`, `POST /reports/{name}/snapshots`
+- **Becomes a proposal or a draft:** `line_item_create`, `product_create`, `product_update`, `product_version_create`, `portion_create`, `portion_update`, `portion_delete`, `POST /meals/{meal_id}/line-items`, `POST /products`, `PATCH /products/{product_id}`, `POST /products/{product_id}/versions`, `POST /products/{product_id}/portions`, `PATCH /portions/{portion_id}`, `DELETE /portions/{portion_id}`
+- **Refused:** `day_approve`, `line_item_approve`, `draft_discard`, `POST /days/{day}/close`, `POST /days/{day}/reopen`, `POST /drafts/{day}/approve`, `POST /proposals/{proposal_id}/approve`, `POST /proposals/{proposal_id}/reject`, `DELETE /products/{product_id}`, `GET /tenant`
+
+What "work on suggestions" covers, precisely:
+
+- **Its drafts.** `line_item_update` changes a draft item's amount, unit, portion or product;
+  `line_item_delete` withdraws a draft item; `draft_create` again replaces the day's draft. These
+  apply to every **draft** item of the tenant, whoever drafted it — a draft is nobody's fact yet,
+  and a person's own entries are never drafts, because a person's session holds `approve`. An
+  **approved** item is refused (`scope 'approve' required`), as is setting `reliable` and closing
+  or reopening a day.
+- **Its proposals.** Every catalogue write is filed as a pending proposal (`202` over REST, the
+  proposal as the tool result over MCP); `product_create` also returns
+  `log_against_consumable_id`, so the day can log the new food before a person approves it.
+  Deciding a proposal is refused. `proposal_update` (or `PATCH /proposals/{id}`) corrects a
+  pending proposal this token filed, as long as no person has corrected it yet; it never applies
+  one, and a proposal another token or a person touched answers `409` or `403` (R84).
+- **The deliberate exceptions** of ADR 0013 are written directly, because they are a person's
+  dictated numbers or instructions rather than inferences: `weight_add`, `body_add`,
+  `rule_upsert`/`rule_delete`, `day_message_add`, and over REST recipes, categories, settings and
+  target bands. A client that must not touch these needs a narrower token than this profile.
+
+#### Capture uploader
+
+Scopes: `capture:write` — a phone shortcut that uploads photos and recordings and nothing else.
+
+```bash
+victus token create --tenant alice --name "phone shortcut" --scopes capture:write --days 365
+```
+
+- **Can:** `POST /captures`, `PATCH /captures/{capture_id}`, `capture_mark`
+- **Becomes a proposal or a draft:** nothing
+- **Refused:** `GET /captures`, `GET /captures/{capture_id}`, `GET /attachments/{attachment_id}`, `captures_open`, `capture_get`, `GET /days/{day}`, `GET /auth/tokens`, `DELETE /auth/tokens/{token_id}`
+
+It cannot read back what it uploaded, so a leaked shortcut token discloses nothing. The upload
+answers with the new capture all the same, its status included when transcription failed.
+
+#### In-house worker
+
+Scopes: `read,write,capture:read,capture:write,agent:write` — what `victus worker` runs with. The
+worker holds no token: it builds its context in-process with the assistant's scopes
+(`agent/runner.py::WORKER_SCOPES`), and hands the model only `WORKER_TOOLS`, a smaller set. It
+needs `read` and `capture:read` for the day thread, `agent:write` to draft and propose,
+`capture:write` to mark captures processed and transcribe audio, and `write` to freeze report
+snapshots and record the weigh-ins and measurements a capture dictates. It never holds `approve`.
+
+```bash
+victus worker --tenant alice
+```
+
+- **Can:** `day_thread_get`, `captures_open`, `capture_get`, `capture_mark`, `draft_create`, `agent_message_add`, `product_search`, `product_propose`, `report_render`, `report_snapshot_create`, `report_assess`, `weight_add`, `body_add`
+- **Becomes a proposal or a draft:** `product_create`, `portion_create`, `portion_update`, `portion_delete`
+- **Refused:** `day_approve`, `line_item_approve`, `draft_discard`, `line_item_create`, `line_item_delete`, `product_update`, `product_version_create`, `agent_run_start`
+
+`agent_run_start` and `agent_run_finish` are refused only in the sense that the worker does not
+hand them to the model: it starts and finishes the run itself.
+
+#### Full delegate
+
+Scopes: `read,write,approve,capture:read,capture:write,agent:write` — can also decide. **Whatever
+this client writes is a fact**: items are approved as they are logged, catalogue writes are
+applied, days can be approved and closed. Give it only to a client you trust exactly as much as
+yourself; `admin` stays out of every profile.
+
+```bash
+victus token create --tenant alice --name "delegate" --scopes read,write,approve,capture:read,capture:write,agent:write --days 30
+```
+
+- **Can:** `day_approve`, `line_item_approve`, `draft_discard`, `line_item_create`, `product_create`, `product_update`, `portion_delete`, `POST /days/{day}/close`, `POST /proposals/{proposal_id}/approve`, `DELETE /products/{product_id}`
+- **Becomes a proposal or a draft:** nothing
+- **Refused:** `GET /tenant`, `GET /tenant/users`, `POST /tenant/users`
 
 ## Resources
 
@@ -39,36 +163,37 @@ The tenant is always derived from the principal (session or token); it never app
 | GET | `/auth/me` | Current user, tenant, role, CSRF token |
 | POST | `/auth/recovery` | Recovery code → short-lived session that may only add a passkey |
 | GET / POST / DELETE | `/auth/passkeys[/{id}]` | Manage own passkeys |
-| GET / POST / DELETE | `/auth/tokens[/{id}]` | Manage own API tokens (secret shown once) |
+| GET / POST / DELETE | `/auth/tokens[/{id}]` | Own API tokens (secret shown once); an owner or `admin` sees and revokes every token of the tenant — see *Who manages tokens and users* |
 
 ### Tenant
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET / PATCH | `/tenant` | Name, slug |
-| GET / POST / DELETE | `/tenant/users[/{id}]` | Members and roles |
-| POST | `/tenant/invites` | Invitation link for a new member |
+| GET | `/tenant` | Name, slug — owner or `admin` |
+| GET / POST | `/tenant/users` | Members and roles / create a user and return its one-time recovery code — owner or `admin` |
+
+Changing the tenant, removing users and invitation links are not implemented yet.
 
 ### Master data
 
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/units` | Global units |
-| GET / POST / PATCH | `/categories[/{id}]` | Product categories |
+| GET / POST | `/categories` | Product categories |
 | GET | `/products?q=&category=&limit=&offset=` | Search, ranked by the name: exact, prefix, word prefix, substring, then fuzzy candidates. An empty `q` lists the catalogue A–Z, and `offset` pages through it  `on=<day>` returns the version of each product that applied on that day |
-| POST | `/products` | Create product |
-| GET / PATCH / DELETE | `/products/{id}` | Product detail |
+| POST | `/products` | Create a product: `201` with `write` + `approve`; without `approve` a `new` proposal is filed instead and the answer is `202` with the proposal (ADR 0013) |
+| GET / PATCH / DELETE | `/products/{id}` | Product detail / correct it (`200`, or `202` with a proposal without `approve`) / delete it (`write` + `approve`) |
 | GET | `/products/{id}/versions` | Every version of the product, oldest first, with the days each one covers (R70) |
-| POST | `/products/{id}/versions` | Record changed values from a day on `{valid_from, changes}`; the previous version is closed the day before and keeps its numbers |
+| POST | `/products/{id}/versions` | Record changed values from a day on `{valid_from, changes}`; the previous version is closed the day before and keeps its numbers. Without `approve`: a `version` proposal, `202` |
 | GET | `/products/{id}/usage?limit=` | The days this product was logged on, newest first, with amounts, kcal and draft flags, plus `item_count` over all of them rather than only the ones returned (R60). `{id}` may also be the one-off consumable a pending `new` proposal is logged against, which is how that proposal shows the day and meal it was eaten in |
-| GET / POST | `/products/{id}/portions` | Portions of a product |
-| PATCH / DELETE | `/portions/{id}` | Edit portion |
+| GET / POST | `/products/{id}/portions` | Portions of a product / add one (`201`, or `202` with a proposal without `approve`) |
+| PATCH / DELETE | `/portions/{id}` | Edit / remove a portion (`200`/`204`, or `202` with a proposal without `approve`) |
 | POST | `/products/match` | Free text → ranked candidates `{id, name, stage, score}` (same function the agent uses) |
 | GET / POST | `/recipes` | Recipes |
-| GET / PATCH / DELETE | `/recipes/{id}` | Recipe detail |
+| GET / PATCH | `/recipes/{id}` | Recipe detail |
 | PUT | `/recipes/{id}/ingredients` | Replace ingredient list |
 | POST | `/recipes/{id}/batches` | Cook a batch (freezes nutrients) |
-| GET / PATCH | `/batches/{id}` | Batch detail, mark used up |
+| GET | `/batches/{id}` | Batch detail |
 
 ### Day logs
 
@@ -77,14 +202,14 @@ The tenant is always derived from the principal (session or token); it never app
 | GET | `/days?from=&to=&status=` | List days with computed macros |
 | GET | `/days/{date}` | Day with meals, line items, computed macros, target band, findings, and `verdict` — the agent's short word on the day, its newest `summary` thread message. A finding's `message` is `{key, params}`, not a sentence: the client translates it (R78) |
 | POST | `/days/{date}` | Create the day (`reliable` required, `training_type`, `notes`) |
-| PUT | `/days/{date}` | Flags (`reliable`, `training_type`), notes; 404 if the day does not exist |
+| PUT | `/days/{date}` | Flags (`reliable`, `training_type`), notes; 404 if the day does not exist. Setting `reliable` needs `approve` |
 | POST | `/days/{date}/meals` | Add meal |
 | PATCH | `/meals/{id}` | Rename a meal or change its time (`{name?, time?}`) |
 | DELETE | `/meals/{id}` | Delete an **empty** meal; `409` while it still has line items (R53) |
-| POST | `/meals/{id}/line-items` | Add line item |
-| PATCH / DELETE | `/line-items/{id}` | Edit (`amount`, `unit_code`, `portion_id`, `consumable_id`, `estimated`, `amount_estimated`; a mark can be set back to `false`) / remove line item |
-| POST | `/days/{date}/close` | `open → closed`, freeze `target_band_id` |
-| POST | `/days/{date}/reopen` | Back to `open` |
+| POST | `/meals/{id}/line-items` | Add line item; without `approve` it arrives as a draft |
+| PATCH / DELETE | `/line-items/{id}` | Edit (`amount`, `unit_code`, `portion_id`, `consumable_id`, `estimated`, `amount_estimated`; a mark can be set back to `false`; `meal_id` moves the item to another meal of the **same** day — `422` with `errors[].field = meal_id` for another day's meal, `404` for none) / remove line item. A draft needs `write`, an approved item `approve`; a draft item is withdrawn with `write` + `agent:write`. A person's change to the agent's draft is said in the day thread (R84) |
+| POST | `/days/{date}/close` | `open → closed`, freeze `target_band_id` (`write` + `approve`) |
+| POST | `/days/{date}/reopen` | Back to `open` (`write` + `approve`) |
 | GET | `/days/{date}/messages` | The day's thread: captures and agent messages in order, with processing state |
 | POST | `/days/{date}/messages` | Add a text message to the day (a capture with `target_date`); queues a `follow_up` run if the day already has a draft or is locked |
 
@@ -98,6 +223,8 @@ The tenant is always derived from the principal (session or token); it never app
 | POST | `/drafts/{date}/approve` | Body: corrections, `close` flag → `ApproveDay` |
 | POST | `/drafts/{date}/discard` | Discard draft line items |
 
+Every route of this table but the two reads is a decision and needs `write` + `approve`.
+
 ### Weight
 
 | Method | Path | Purpose |
@@ -107,15 +234,12 @@ The tenant is always derived from the principal (session or token); it never app
 | GET / POST | `/body-measurements?from=&to=&limit=` | Tape-measure sessions, oldest first; POST records one, every circumference optional and at least one required (R76) |
 | DELETE | `/body-measurements/{id}` | Remove a session |
 | DELETE | `/weight/{id}` | Only `manual` rows |
-| POST | `/weight/import/scale` | Trigger scale cloud sync |
-| POST | `/weight/import/csv` | Upload `timestamp;weight_kg` CSV |
 
 ### Settings
 
 | Method | Path | Purpose |
 |---|---|---|
 | GET / POST | `/target-bands` | Target-band profiles |
-| PATCH | `/target-bands/{id}` | Edit a profile (creates a new version if already used) |
 | GET | `/settings/rules` | Your own instructions for the agent (R61), most important first |
 | PUT | `/settings/rules` | Add a rule or replace the one with the same name; creates a settings version |
 | DELETE | `/settings/rules/{name}` | Remove a rule |
@@ -183,23 +307,26 @@ numbers it actually saw.
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/reports/{name}/snapshots?from=&to=&label=` | Render and freeze; `201` with the snapshot |
+| POST | `/reports/{name}/snapshots?from=&to=&label=` | Render and freeze; `201` with the snapshot. Storing one is a write: `read` + `write` |
 | GET | `/reports/snapshots?report=&limit=` | Snapshots, newest first, without the frozen payload |
 | GET | `/reports/snapshots/{id}` | One snapshot including its frozen `result` and its assessment |
-| POST | `/reports/snapshots/{id}/assess` | Attach the assessment `{markdown}`; `409` when it already has one |
+| POST | `/reports/snapshots/{id}/assess` | Attach the assessment `{markdown}`; `409` when it already has one. `agent:write` or `write` |
 | DELETE | `/reports/snapshots/{id}` | Remove a snapshot |
 
 ### Product proposals
 
 The agent never changes a product on its own: what it reads from a label photo or a spoken
-correction becomes a proposal a person approves (R54).
+correction becomes a proposal a person approves, corrects or rejects (R54, R84).
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/proposals?status=pending&product_id=&limit=` | Pending proposals with `changes` and the product's `current` values |
+| GET | `/proposals?status=pending&product_id=&consumable_id=&limit=` | Pending proposals with `changes` and the product's `current` values. `consumable_id` finds the `new` proposal a one-off consumable belongs to. `proposed` holds the values as filed once a person changed one, `null` otherwise |
 | GET | `/proposals/{id}` | One proposal |
-| POST | `/proposals/{id}/approve` | Apply it (optional body `{changes}` corrects a misread value), mark the product `verified`, set the capture `processed` |
+| PATCH | `/proposals/{id}` | Amend a pending proposal without deciding it: `{changes, rationale?}`, merged into what it carries, `null` withdraws a field. Validated like the decision (`422`); `409` once decided; `404` when missing. Scope `approve` for any pending proposal, `agent:write` only for one the same token filed and no person has corrected. Audited as `product.proposal.amend`; the first change by a person keeps the filed values in `proposed` (R84) |
+| POST | `/proposals/{id}/approve` | Apply it (optional body `{changes, fields}`: `changes` corrects a value — the web app sends what a person typed — and `fields` applies only those), mark the product `verified`, set the capture `processed`; with corrections the filed values stay in `proposed` |
 | POST | `/proposals/{id}/reject` | Discard it and the capture; `409` when already decided |
+
+Approving and rejecting are decisions: `write` + `approve`. Reading needs `read`.
 
 ### Agent
 
@@ -211,32 +338,35 @@ correction becomes a proposal a person approves (R54).
 | GET | `/agent/runs/{id}` | One run incl. `sessions[]` (one per drafted day) |
 | POST | `/agent/runs/{id}/cancel` | Cancel a queued or running run; releases its locks |
 | GET | `/agent/locks` | Current per-day locks (`date`, `runner`, `run_id`, `locked_until`) |
-| DELETE | `/agent/locks/{date}` | Force-release a lock regardless of holder (operator escape hatch; scope `agent:write` or `admin`) |
+| DELETE | `/agent/locks/{date}` | Force-release a lock regardless of holder (operator escape hatch; scope `agent:write`) |
 
 ### Reports (Stage 2)
 
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/reports` | Built-in and tenant definitions |
-| POST / PUT / DELETE | `/reports/{name}` | Manage tenant definitions |
 | POST | `/reports/{name}/render?format=json|markdown&from=&to=&as_of=` | Render. `as_of` computes the whole report as of that day (R62); omitted means today |
 | GET | `/reports/checkup` | Shortcut: built-in check-up, default window |
 
 ### Backup
 
+Creating, verifying and restoring backups stays on the CLI (`victus backup …`, see
+[BACKUP.md](BACKUP.md)); the API only shows what was recorded.
+
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/backup/export` | Start export job |
-| GET | `/backup/jobs[/{id}]` | Job list / detail |
-| GET | `/backup/jobs/{id}/download` | Download archive |
-| POST | `/backup/import?dry_run=` | Upload archive; dry run reports counts only |
-| GET / PUT | `/backup/schedule` | Cron and retention |
+| GET | `/backup/jobs?limit=20` | Recorded backups, newest first: scheduled runs, `victus backup create` and host backups that reported in with `victus backup record`. This tenant's jobs and the all-tenant ones. `limit` 1–200. Needs `admin` (`401` without a token, `403` for any other scope or a recovery session) |
+
+Each job: `{id, tenant_id, started_at, finished_at, status, path, size, verified, error}`;
+`status` is `running` | `finished` | `verify_failed` | `failed`, `tenant_id` is `null` for a
+backup of every tenant, `size` is in bytes. There is no other route under `/backup`; the
+former `501` placeholder is gone, so other paths answer `404`.
 
 ### System
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/health` | `{status, db, storage, scheduler, backup_age_hours}` — no auth |
+| GET | `/health` | `{status, version, checks, backup_age_hours, backup_last_at, backup_max_age_hours}` — no auth. `checks.backup` is `degraded` when no successful backup was ever recorded or the newest is older than `backup.max_age_hours`; `status` is `degraded` when any check is. Always `200` while the process answers |
 | GET | `/version` | Package version and git SHA |
 | GET | `/openapi.json` | Contract |
 | — | `/mcp` | Streamable HTTP MCP endpoint (bearer token; Stage 3) |

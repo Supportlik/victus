@@ -29,6 +29,13 @@ server behind a reverse proxy, reachable only over a VPN (Tailscale is used in t
 Volumes: `victus_data`, `victus_blobs`, `victus_pg` (postgres profile). Backups are a **bind mount** to the backup
 disk, never a named volume.
 
+**Backups Victus knows about.** The `backup` service is the only part of the stack that backs up on a schedule.
+Without it, and without a host-level backup that reports in with
+`docker compose exec -T api victus backup record --path … --size …` ([BACKUP.md](BACKUP.md#host-level-backups)),
+the instance has **no backups that Victus knows about**: `/health` reports `checks.backup: degraded` and the settings
+page says the last backup was *never*. A stack derived from this one that drops the `backup` service needs that host
+script.
+
 ### `.env` (see `deploy/.env.example`)
 
 | Variable | Example | Note |
@@ -52,7 +59,8 @@ disk, never a named volume.
 * **Claude Code on the server or over SSH** — stdio, nothing to expose: `claude mcp add victus -- ssh … app@your-home-server`
   with a forced command that runs `docker compose … run --rm -T api victus mcp --tenant alice` (see `docs/MCP.md`).
 * **Claude Code / claude.ai from a device in the VPN** — Streamable HTTP: set `VICTUS_MCP__HTTP_ENABLED=true`, create a
-  token (`victus token create --tenant alice --name claude --scopes read,capture:read,capture:write,agent:write,approve --days 90`),
+  token with the *assistant that proposes* profile (`victus token create --tenant alice --name claude --scopes read,write,capture:read,capture:write,agent:write --days 90`;
+  what each profile can do: `docs/API.md`, *Scope profiles*),
   add `https://victus.example.com/mcp` with `Authorization: Bearer vct_…` as an MCP server / custom connector. The Caddy
   configuration below answers `403` to `/mcp` from outside the VPN range; the application checks `mcp.allowed_cidrs` too.
 * **Worker** — set `VICTUS_PROVIDERS__ANTHROPIC_API_KEY`; the **Process now** button and `POST /agent/runs` then work
@@ -99,7 +107,7 @@ docker compose exec api victus user invite --tenant alice --email alice@example.
 # open the URL again on the laptop → register passkey 2 (Settings → Passkeys)
 # Settings → Recovery code → store it offline
 docker compose exec api victus backup create --all && docker compose exec api victus backup verify --latest
-curl -s https://victus.example.com/api/v1/health | jq              # backup_age_hours < 30
+curl -s https://victus.example.com/api/v1/health | jq              # checks.backup "ok", backup_age_hours < 30
 ```
 
 ## Update

@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any
 
-from sqlalchemy import Select, func, select
+from sqlalchemy import func, select
 
 from victus.infrastructure.db import orm
-from victus.infrastructure.db.repositories._base import Repo
+from victus.infrastructure.db.repositories._base import Repo, StmtT
 
 
 class AuditRepo(Repo):
@@ -72,7 +71,7 @@ class BackupJobRepo(Repo):
     """Backup jobs may span all tenants (``tenant_id`` NULL); scoping is therefore
     "this tenant or global"."""
 
-    def _scope(self, stmt: Select[Any]) -> Select[Any]:
+    def _scope(self, stmt: StmtT) -> StmtT:
         return stmt.where(
             (orm.BackupJob.tenant_id == self.tenant_id) | (orm.BackupJob.tenant_id.is_(None))
         )

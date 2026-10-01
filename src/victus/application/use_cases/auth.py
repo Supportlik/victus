@@ -8,7 +8,12 @@ from typing import Any
 from victus.application import dto
 from victus.application.errors import Forbidden, NotFound, Unauthenticated, ValidationFailed
 from victus.application.ports.auth_lookup import AuthLookup
-from victus.application.tenant_context import ALL_SCOPES, SCOPE_ADMIN, TenantContext
+from victus.application.tenant_context import (
+    ALL_SCOPES,
+    SCOPE_ADMIN,
+    TenantContext,
+    scopes_for_role,
+)
 from victus.application.use_cases._base import UowFactory, UseCase, now
 from victus.infrastructure.auth import recovery, sessions, tokens
 from victus.infrastructure.auth.webauthn import WebAuthnService, credential_id_from_response
@@ -207,8 +212,13 @@ class ResolveSession:
         s = self.lookup.session(session_id)
         if s is None or s.expires_at <= now():
             return None
+        user = self.lookup.user(s.user_id)
+        if user is None:
+            return None
+        # A session holds what the person's role allows, not every scope: only an owner
+        # administers users and other people's tokens.
         return TenantContext(
-            tenant_id=s.tenant_id, user_id=s.user_id
+            tenant_id=s.tenant_id, user_id=s.user_id, scopes=scopes_for_role(user.role)
         ), sessions.is_recovery_session(s.user_agent)
 
 
@@ -224,13 +234,20 @@ class ResolveToken:
             return None
         if t.expires_at is not None and t.expires_at <= now():
             return None
+        scopes = frozenset(t.scopes or [])
+        if t.user_id is not None:
+            # A token never holds more than its owner's role, whatever it was minted with.
+            user = self.lookup.user(t.user_id)
+            if user is None:
+                return None
+            scopes &= scopes_for_role(user.role)
         t.last_used_at = now()
         self.lookup.commit()
         return TenantContext(
             tenant_id=t.tenant_id,
             user_id=t.user_id,
             token_id=t.id,
-            scopes=frozenset(t.scopes or []),
+            scopes=scopes,
         )
 
 
@@ -295,23 +312,40 @@ class DeletePasskey(UseCase):
             uow.commit()
 
 
+def _require_token_management(ctx: TenantContext) -> None:
+    """A token manages tokens only with ``admin``; a person's session always may."""
+    if ctx.token_id:
+        ctx.require(SCOPE_ADMIN)
+
+
+def _visible_tokens(uow: Any, ctx: TenantContext) -> list[orm.ApiToken]:
+    """Every token of the tenant for ``admin``, otherwise only the caller's own."""
+    rows = list(uow.users.tokens())
+    if ctx.has_scope(SCOPE_ADMIN):
+        return rows
+    return [t for t in rows if ctx.user_id is not None and t.user_id == ctx.user_id]
+
+
 class ListTokens(UseCase):
     def execute(self) -> list[dto.TokenView]:
+        _require_token_management(self.ctx)
         with self._uow() as uow:
-            return [_token_view(t) for t in uow.users.tokens()]
+            return [_token_view(t) for t in _visible_tokens(uow, self.ctx)]
 
 
 class CreateToken(UseCase):
     def execute(
         self, name: str, scopes: list[str], expires_at: datetime | None
     ) -> dto.TokenCreatedView:
-        if self.ctx.token_id:
-            self.ctx.require(SCOPE_ADMIN)  # tokens cannot mint tokens
+        _require_token_management(self.ctx)  # tokens cannot mint tokens without admin
         unknown = sorted(set(scopes) - KNOWN_SCOPES)
         if unknown:
             raise ValidationFailed(f"unknown scopes: {', '.join(unknown)}")
         if not scopes:
             raise ValidationFailed("at least one scope is required")
+        not_held = sorted(s for s in set(scopes) if not self.ctx.has_scope(s))
+        if not_held:
+            raise Forbidden(f"cannot grant scopes you do not hold: {', '.join(not_held)}")
         limit = now() + timedelta(days=MAX_TOKEN_DAYS)
         if expires_at is None:
             expires_at = limit
@@ -349,8 +383,9 @@ class CreateToken(UseCase):
 
 class RevokeToken(UseCase):
     def execute(self, token_id: str) -> None:
+        _require_token_management(self.ctx)
         with self._uow() as uow:
-            row = next((t for t in uow.users.tokens() if t.id == token_id), None)
+            row = next((t for t in _visible_tokens(uow, self.ctx) if t.id == token_id), None)
             if row is None:
                 raise NotFound("token not found")
             row.revoked_at = now()

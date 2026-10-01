@@ -40,8 +40,11 @@ function str(v: unknown): string {
   return v === undefined || v === null ? '' : String(v);
 }
 
-function num(v: string): number | undefined {
-  const t = v.trim();
+/** A typed value as a number. An `<input type="number">` bound with ngModel writes a
+ *  number (or null) into the model, not the string the model declares, so both arrive. */
+function num(v: string | number | null): number | undefined {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : undefined;
+  const t = (v ?? '').trim();
   if (!t) return undefined;
   const n = Number(t.replace(',', '.'));
   return Number.isFinite(n) ? n : undefined;

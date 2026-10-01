@@ -32,7 +32,8 @@ def _names(uow: Any, recipe: orm.Recipe) -> dict[int, str]:
     for ing in recipe.ingredients:
         if ing.product_id is not None:
             p = uow.products.get(ing.product_id)
-            if p is not None:
+            # the ingredient's product FK is ON DELETE RESTRICT, so the product is always there
+            if p is not None:  # pragma: no branch
                 names[ing.product_id] = p.name
     return names
 
@@ -104,7 +105,7 @@ def _base_for(uow: Any, ing: IngredientInput) -> tuple[float | None, str | None]
     # Cooking freezes the totals, so an ingredient in the other unit has to be converted
     # before it is weighed against per-100 values (R75), not when the batch is read back.
     product = uow.products.get(ing.product_id)
-    if product is None:
+    if product is None:  # pragma: no cover - SetIngredients refuses an unknown product first
         return base, unit
     return in_product_unit(product, base, unit)
 
@@ -179,7 +180,8 @@ class CookBatch(UseCase):
                 if ing.product_id is None or ing.base_amount is None:
                     continue
                 p = uow.products.get(ing.product_id)
-                if p is None:
+                # the ingredient's product FK is ON DELETE RESTRICT, so the product is there
+                if p is None:  # pragma: no cover
                     continue
                 per_item.append(
                     line_item_macros(

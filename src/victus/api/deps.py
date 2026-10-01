@@ -9,6 +9,7 @@ from typing import Annotated
 from fastapi import Depends, Request
 from sqlalchemy.orm import Session, sessionmaker
 
+from victus.api.scopes import declared
 from victus.application.errors import Forbidden, Unauthenticated
 from victus.application.ports.blob_storage import BlobStorage
 from victus.application.ports.transcription import TranscriptionPort
@@ -121,7 +122,25 @@ def current_principal(
     return principal
 
 
-def current_context(principal: Annotated[Principal, Depends(current_principal)]) -> TenantContext:
+def check_route_scopes(request: Request, ctx: TenantContext) -> None:
+    """Refuse the request when the context lacks what the matched route declares.
+
+    The declaration lives in :mod:`victus.api.scopes`; the use case checks the same scopes
+    again, so this is the early answer, not the only one.
+    """
+    route = request.scope.get("route")
+    path = getattr(route, "path_format", None) or getattr(route, "path", None)
+    if path is None:
+        return
+    spec = declared(request.method, path)
+    if spec is not None:
+        spec.requires.check(ctx)
+
+
+def current_context(
+    request: Request, principal: Annotated[Principal, Depends(current_principal)]
+) -> TenantContext:
+    check_route_scopes(request, principal.ctx)
     return principal.ctx
 
 

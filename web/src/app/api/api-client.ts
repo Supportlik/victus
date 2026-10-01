@@ -20,6 +20,7 @@ import {
   Health,
   LineItem,
   LineItemInput,
+  LineItemPatch,
   MatchCandidate,
   Me,
   Meal,
@@ -27,6 +28,7 @@ import {
   Portion,
   Product,
   ProductProposal,
+  ProposalAmendment,
   ProductUsage,
   ProductInput,
   Recipe,
@@ -35,6 +37,7 @@ import {
   ReportDefinition,
   ReportResult,
   AgentStatus,
+  BackupJob,
   BodyMeasurement,
   BodyMeasurementInput,
   ReportSnapshot,
@@ -68,6 +71,11 @@ export class ApiClient {
   // system
   health(): Observable<Health> {
     return this.http.get<Health>(`${API_BASE}/health`);
+  }
+
+  // backup (read-only, needs admin)
+  backupJobs(limit?: number): Observable<BackupJob[]> {
+    return this.http.get<BackupJob[]>(`${API_BASE}/backup/jobs`, { params: params({ limit }) });
   }
 
   // auth
@@ -190,7 +198,7 @@ export class ApiClient {
   addLineItem(mealId: number, body: LineItemInput): Observable<LineItem> {
     return this.http.post<LineItem>(`${API_BASE}/meals/${mealId}/line-items`, body);
   }
-  updateLineItem(id: number, body: Partial<LineItemInput>): Observable<LineItem> {
+  updateLineItem(id: number, body: LineItemPatch): Observable<LineItem> {
     return this.http.patch<LineItem>(`${API_BASE}/line-items/${id}`, body);
   }
   approveLineItem(id: number, body: Record<string, unknown> = {}): Observable<LineItem> {
@@ -301,8 +309,12 @@ export class ApiClient {
   deleteSnapshot(id: string): Observable<void> {
     return this.http.delete<void>(`${API_BASE}/reports/snapshots/${id}`);
   }
-  proposals(params_: { status?: string; product_id?: number } = {}): Observable<ProductProposal[]> {
-    return this.http.get<ProductProposal[]>(`${API_BASE}/proposals`, { params: params({ status: params_.status ?? 'pending', product_id: params_.product_id }) });
+  proposals(params_: { status?: string; product_id?: number; consumable_id?: number } = {}): Observable<ProductProposal[]> {
+    return this.http.get<ProductProposal[]>(`${API_BASE}/proposals`, { params: params({ status: params_.status ?? 'pending', product_id: params_.product_id, consumable_id: params_.consumable_id }) });
+  }
+  /** Correct a pending proposal without deciding it (R84). */
+  amendProposal(id: string, body: ProposalAmendment): Observable<ProductProposal> {
+    return this.http.patch<ProductProposal>(`${API_BASE}/proposals/${id}`, body);
   }
   approveProposal(id: string, body: { changes?: Record<string, unknown>; fields?: string[] } = {}): Observable<ProductProposal> {
     return this.http.post<ProductProposal>(`${API_BASE}/proposals/${id}/approve`, body);

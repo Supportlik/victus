@@ -9,7 +9,7 @@ import { ChangeTarget } from '../../core/live.service';
 import { describeError } from '../../core/problem';
 import { BandGauge } from '../../shared/band-gauge';
 import { DayNamePipe, MacroPipe, formatAmount, formatUnit, shiftDate } from '../../shared/format';
-import { LineItemForm } from '../../shared/line-item-form';
+import { LineItemForm, MealChoice } from '../../shared/line-item-form';
 import { ProductSearch } from '../../shared/product-search';
 import { RefreshHint } from '../../shared/refresh-hint';
 import { StatusTag } from '../../shared/status-tag';
@@ -228,7 +228,7 @@ const DAY_TARGETS = ['day_log', 'meal', 'line_item', 'capture', 'agent_run'];
                         @if (editing() === it.id) {
                           <tr class="editor">
                             <td colspan="9">
-                              <v-line-item-form [item]="it" [units]="units()" (saved)="itemSaved()" (cancelled)="editing.set(null)" />
+                              <v-line-item-form [item]="it" [units]="units()" [meals]="mealChoices()" [day]="date()" (saved)="itemSaved()" (cancelled)="editing.set(null)" />
                             </td>
                           </tr>
                         }
@@ -375,6 +375,10 @@ export class DayView {
     refresh: () => this.refetch(),
     busy: () => this.beingEdited(),
   });
+  /** The meals of this day, for moving an item between them in its edit panel. */
+  readonly mealChoices = computed<MealChoice[]>(() =>
+    (this.day()?.meals ?? []).map((m) => ({ id: m.id, name: m.name })),
+  );
   readonly prev = computed(() => shiftDate(this.date(), -1));
   readonly next = computed(() => shiftDate(this.date(), 1));
   /** Grams and millilitres always work; they need no portion. */

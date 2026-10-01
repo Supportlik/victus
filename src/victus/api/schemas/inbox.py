@@ -142,6 +142,8 @@ class ProposalOut(Out):
     decided_at: datetime | None = None
     #: what the proposed portions would do; filled while the proposal is pending
     portion_plan: list[PortionOperationOut] = Field(default_factory=list)
+    #: the values as the actor proposed them, once a person changed one; null otherwise
+    proposed: dict[str, Any] | None = None
 
 
 class ProposalDecisionIn(BaseModel):
@@ -149,3 +151,10 @@ class ProposalDecisionIn(BaseModel):
 
     changes: dict[str, Any] | None = None
     fields: list[str] | None = None
+
+
+class ProposalAmendIn(BaseModel):
+    """Values to correct on a pending proposal without deciding it; ``null`` withdraws one."""
+
+    changes: dict[str, Any] = Field(min_length=1)
+    rationale: str | None = Field(default=None, max_length=2000)

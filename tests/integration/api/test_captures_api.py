@@ -24,6 +24,7 @@ def _upload_text(client: TestClient, headers: dict[str, str], text: str, day: st
     return client.post("/api/v1/captures", data=data, headers=headers)
 
 
+@pytest.mark.covers("POST /api/v1/captures")
 def test_text_capture_upload_and_duplicate(client: TestClient, alice_token: dict[str, str]) -> None:
     r = _upload_text(client, alice_token, "lunch: 400 g quark", DAY)
     assert r.status_code == 201, r.text
@@ -37,6 +38,7 @@ def test_text_capture_upload_and_duplicate(client: TestClient, alice_token: dict
     assert empty.status_code == 422
 
 
+@pytest.mark.covers("POST /api/v1/captures", "GET /api/v1/days/{day}/messages")
 def test_the_day_thread_lists_every_file_of_a_capture(
     client: TestClient, alice_token: dict[str, str]
 ) -> None:
@@ -67,6 +69,14 @@ def test_the_day_thread_lists_every_file_of_a_capture(
     assert mimes.count("image/png") == 2 and "audio/webm" in mimes
 
 
+@pytest.mark.covers(
+    "POST /api/v1/captures",
+    "GET /api/v1/attachments/{attachment_id}",
+    "GET /api/v1/captures/{capture_id}",
+    "PATCH /api/v1/captures/{capture_id}",
+    "POST /api/v1/captures/{capture_id}/transcribe",
+    "GET /api/v1/captures",
+)
 def test_image_upload_and_attachment_download(
     client: TestClient, alice_token: dict[str, str], bob_token: dict[str, str]
 ) -> None:
@@ -108,6 +118,7 @@ def test_image_upload_and_attachment_download(
     assert unsupported.status_code == 422
 
 
+@pytest.mark.covers("POST /api/v1/captures", "POST /api/v1/captures/{capture_id}/transcribe")
 def test_audio_upload_is_transcribed_when_configured(
     api_app: FastAPI, client: TestClient, alice_token: dict[str, str]
 ) -> None:
@@ -171,6 +182,11 @@ def test_audio_upload_is_transcribed_when_configured(
     assert r2.headers["content-type"].startswith("application/problem+json")
 
 
+@pytest.mark.covers(
+    "GET /api/v1/captures",
+    "PATCH /api/v1/captures/{capture_id}",
+    "GET /api/v1/captures/{capture_id}",
+)
 def test_list_filter_patch(client: TestClient, alice_token: dict[str, str]) -> None:
     a = _upload_text(client, alice_token, "one", DAY).json()
     b = _upload_text(client, alice_token, "two").json()
@@ -198,6 +214,7 @@ def test_list_filter_patch(client: TestClient, alice_token: dict[str, str]) -> N
     assert client.get("/api/v1/captures/missing", headers=alice_token).status_code == 404
 
 
+@pytest.mark.covers("GET /api/v1/captures")
 def test_capture_routes_require_scopes(
     client: TestClient,
     api_factory,

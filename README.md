@@ -109,12 +109,15 @@ validated examples.
 
 ```bash
 claude mcp add victus -- victus mcp --tenant alice                      # stdio, same machine (or via SSH forced command)
-victus token create --tenant alice --name claude --scopes read,capture:read,capture:write,agent:write,approve --days 90
+victus token create --tenant alice --name claude --scopes read,write,capture:read,capture:write,agent:write --days 90
 claude mcp add --transport http victus https://victus.example.com/mcp --header "Authorization: Bearer vct_…"
 ```
 
 The same tools drive the built-in worker (`providers.anthropic_api_key`) and an external Claude; tokens carry
-scopes, `/mcp` is meant for your VPN only. Details: [`docs/MCP.md`](docs/MCP.md), [`docs/AGENT.md`](docs/AGENT.md).
+scopes, `/mcp` is meant for your VPN only. The token above is the *assistant that proposes*: it reads, drafts and
+proposes, and every result waits for you in the app. Which scopes to grant for which client — read-only, phone
+shortcut, full delegate — is in [`docs/API.md` → Scope profiles](docs/API.md#scope-profiles); the full matrix of
+tools and routes per profile is [`docs/SCOPES.md`](docs/SCOPES.md). Details: [`docs/MCP.md`](docs/MCP.md), [`docs/AGENT.md`](docs/AGENT.md).
 
 ## Documentation
 

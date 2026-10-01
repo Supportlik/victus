@@ -17,6 +17,18 @@ DAYS_6M = 182.62
 ETA_MIN_SLOPE = -0.001
 
 
+def eta(remaining_kg: float, slope_per_day: float | None, today: date) -> date | None:
+    """The day ``remaining_kg`` above the goal is gone at ``slope_per_day``.
+
+    ``None`` when the slope is unknown, flat or rising (``slope >= ETA_MIN_SLOPE``)
+    or nothing remains. The forecast ETA and the burndown projection both come
+    from here, so the two blocks cannot name different days for one window.
+    """
+    if slope_per_day is None or not slope_per_day < ETA_MIN_SLOPE or remaining_kg <= 0:
+        return None
+    return today + timedelta(days=int(remaining_kg / -slope_per_day))
+
+
 def forecast(
     trends: Sequence[TrendRow],
     current_kg: float,
@@ -30,9 +42,6 @@ def forecast(
         if slope is None:
             out.append(ForecastRow(t.window, t.kg_per_week, None, None, None, None, None))
             continue
-        eta: date | None = None
-        if slope < ETA_MIN_SLOPE and current_kg > goal_kg:
-            eta = today + timedelta(days=int((current_kg - goal_kg) / -slope))
         out.append(
             ForecastRow(
                 window=t.window,
@@ -41,7 +50,7 @@ def forecast(
                 m3=current_kg + slope * DAYS_3M,
                 m6=current_kg + slope * DAYS_6M,
                 at_goal_date=current_kg + slope * max((goal_date - today).days, 0),
-                eta=eta,
+                eta=eta(current_kg - goal_kg, slope, today),
             )
         )
     return out

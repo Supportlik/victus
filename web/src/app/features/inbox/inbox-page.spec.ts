@@ -1,6 +1,7 @@
 // T-WEB-032: the inbox screen carries captures and drafts together; a drafted item shows the
 // capture it came from and can be accepted on its own.
 // T-WEB-075: a capture half written here survives a change arriving on the stream.
+// T-WEB-217: a drafted row being corrected holds a change back; Show it keeps the correction.
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
@@ -201,6 +202,43 @@ describe('InboxPage', () => {
     const show = Array.from(el.querySelectorAll('.stale button')).find((b) => b.textContent?.trim() === 'Show it') as HTMLButtonElement;
     show.click();
     expect(http.match((r) => r.url === '/api/v1/captures')).toHaveLength(1);
+    http.match(() => true).forEach((r) => r.flush([]));
+  });
+  it('T-WEB-217: holds a change back while a drafted row is corrected, and keeps the correction', async () => {
+    const f = TestBed.createComponent(InboxPage);
+    f.detectChanges();
+    flush(http);
+    f.detectChanges();
+    await f.whenStable();
+    http.match((r) => r.url === '/api/v1/drafts/2026-01-05/summary').forEach((r) => r.flush(SUMMARY));
+    f.detectChanges();
+    await f.whenStable();
+    http.match((r) => r.url === '/api/v1/products/42').forEach((r) => r.flush({ id: 42, name: 'Skyr natural', reference_amount: 100, reference_unit: 'g', verified: true, portions: [] }));
+    http.match(() => true).forEach((r) => r.flush([]));
+    f.detectChanges();
+
+    const el = f.nativeElement as HTMLElement;
+    const amount = el.querySelector('[data-item="11"] [aria-label="Amount"]') as HTMLInputElement;
+    amount.value = '2';
+    amount.dispatchEvent(new Event('input'));
+    f.detectChanges();
+
+    TestBed.inject(LiveService).lastChange.set({
+      cursor: 10,
+      targets: [{ action: 'line_item.update', type: 'day_log', id: '2026-01-05' }],
+    });
+    await f.whenStable();
+    http.expectNone((r) => r.url === '/api/v1/drafts');
+    expect(el.querySelector('.stale')?.textContent).toContain('There is newer data.');
+
+    const show = Array.from(el.querySelectorAll('.stale button')).find((b) => b.textContent?.trim() === 'Show it') as HTMLButtonElement;
+    show.click();
+    flush(http);
+    f.detectChanges();
+    await f.whenStable();
+    // the card was handed a newer entry, but a corrected row keeps it from reading again
+    http.expectNone('/api/v1/drafts/2026-01-05/summary');
+    expect((el.querySelector('[data-item="11"] [aria-label="Amount"]') as HTMLInputElement).value).toBe('2');
     http.match(() => true).forEach((r) => r.flush([]));
   });
 });

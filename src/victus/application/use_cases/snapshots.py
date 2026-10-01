@@ -65,6 +65,7 @@ class FreezeReport(UseCase):
         label: str | None = None,
     ) -> dto.ReportSnapshotView:
         self.ctx.require(SCOPE_READ)
+        self.ctx.require(SCOPE_WRITE)  # storing a snapshot is a write, not a read
         if not result:
             raise ValidationFailed("a snapshot needs a rendered report")
         with self._uow() as uow:

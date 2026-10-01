@@ -1,4 +1,10 @@
-"""Products, portions and text matching."""
+"""Products, portions and text matching.
+
+Catalogue writes go through the doors of :mod:`victus.application.use_cases.proposals`
+(ADR 0013): with ``write`` and ``approve`` the value is written (``201``/``200``/``204``),
+without ``approve`` the same request is filed as a proposal a person decides and the
+answer is ``202 Accepted`` with the proposal, the way the MCP tools behave.
+"""
 
 from __future__ import annotations
 
@@ -7,6 +13,7 @@ from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Query, Response, status
+from fastapi.responses import JSONResponse
 
 from victus.api.deps import Ctx, Uow
 from victus.api.schemas.common import (
@@ -15,6 +22,7 @@ from victus.api.schemas.common import (
     ProductOut,
     ProductUsageOut,
 )
+from victus.api.schemas.inbox import ProposalOut
 from victus.api.schemas.requests import (
     MatchIn,
     PortionIn,
@@ -23,13 +31,32 @@ from victus.api.schemas.requests import (
     ProductPatch,
     ProductVersionIn,
 )
+from victus.application import dto
 from victus.application.use_cases import products as uc
+from victus.application.use_cases import proposals as doors
+from victus.application.use_cases._base import can_decide
 
 router = APIRouter(tags=["products"])
 
 
 def _out(p: object) -> ProductOut:
     return ProductOut.model_validate(asdict(p))  # type: ignore[call-overload]
+
+
+#: How a catalogue write answers when it was filed as a proposal instead of applied.
+_PROPOSED: dict[int | str, dict[str, object]] = {
+    status.HTTP_202_ACCEPTED: {
+        "model": ProposalOut,
+        "description": "Filed as a proposal: the caller holds no `approve` (ADR 0013).",
+    }
+}
+
+
+def _proposed(view: dto.ProductProposalView) -> JSONResponse:
+    return JSONResponse(
+        ProposalOut.model_validate(view).model_dump(mode="json"),
+        status_code=status.HTTP_202_ACCEPTED,
+    )
 
 
 @router.get("/products", response_model=list[ProductOut])
@@ -60,9 +87,18 @@ def search_products(
     return [_out(p) for p in rows]
 
 
-@router.post("/products", response_model=ProductOut, status_code=status.HTTP_201_CREATED)
-def create_product(body: ProductIn, ctx: Ctx, uow: Uow) -> ProductOut:
-    return _out(uc.CreateProduct(uow, ctx).execute(uc.ProductInput(**body.model_dump())))
+@router.post(
+    "/products",
+    response_model=ProductOut,
+    status_code=status.HTTP_201_CREATED,
+    responses=_PROPOSED,
+)
+def create_product(body: ProductIn, ctx: Ctx, uow: Uow) -> ProductOut | JSONResponse:
+    """Create a product; without `approve` a `new` proposal is filed instead (`202`)."""
+    view = doors.create_or_propose_product(uow, ctx, uc.ProductInput(**body.model_dump()))
+    if isinstance(view, dto.ProductProposalView):
+        return _proposed(view)
+    return _out(view)
 
 
 @router.post("/products/match", response_model=list[MatchCandidateOut])
@@ -95,12 +131,21 @@ def product_versions(product_id: int, ctx: Ctx, uow: Uow) -> list[ProductOut]:
     "/products/{product_id}/versions",
     response_model=ProductOut,
     status_code=status.HTTP_201_CREATED,
+    responses=_PROPOSED,
 )
-def new_product_version(product_id: int, body: ProductVersionIn, ctx: Ctx, uow: Uow) -> ProductOut:
-    """Record changed values from a day on; the old version keeps the days before it."""
-    return _out(
-        uc.NewProductVersion(uow, ctx).execute(product_id, body.valid_from, body.changes or {})
+def new_product_version(
+    product_id: int, body: ProductVersionIn, ctx: Ctx, uow: Uow
+) -> ProductOut | JSONResponse:
+    """Record changed values from a day on; the old version keeps the days before it.
+
+    Without `approve` the new version is filed as a proposal (`202`).
+    """
+    view = doors.version_or_propose_product_version(
+        uow, ctx, product_id, body.valid_from, dict(body.changes or {})
     )
+    if isinstance(view, dto.ProductProposalView):
+        return _proposed(view)
+    return _out(view)
 
 
 @router.get("/products/{product_id}/usage", response_model=ProductUsageOut)
@@ -120,9 +165,17 @@ def product_usage(
     )
 
 
-@router.patch("/products/{product_id}", response_model=ProductOut)
-def update_product(product_id: int, body: ProductPatch, ctx: Ctx, uow: Uow) -> ProductOut:
-    return _out(uc.UpdateProduct(uow, ctx).execute(product_id, body.model_dump(exclude_unset=True)))
+@router.patch("/products/{product_id}", response_model=ProductOut, responses=_PROPOSED)
+def update_product(
+    product_id: int, body: ProductPatch, ctx: Ctx, uow: Uow
+) -> ProductOut | JSONResponse:
+    """Correct a product; without `approve` the correction is filed as a proposal (`202`)."""
+    view = doors.update_or_propose_product(
+        uow, ctx, product_id, body.model_dump(exclude_unset=True)
+    )
+    if isinstance(view, dto.ProductProposalView):
+        return _proposed(view)
+    return _out(view)
 
 
 @router.delete("/products/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -142,21 +195,37 @@ def list_portions(product_id: int, ctx: Ctx, uow: Uow) -> list[PortionOut]:
     "/products/{product_id}/portions",
     response_model=PortionOut,
     status_code=status.HTTP_201_CREATED,
+    responses=_PROPOSED,
 )
-def add_portion(product_id: int, body: PortionIn, ctx: Ctx, uow: Uow) -> PortionOut:
-    return PortionOut.model_validate(
-        uc.AddPortion(uow, ctx).execute(product_id, uc.PortionInput(**body.model_dump()))
-    )
+def add_portion(product_id: int, body: PortionIn, ctx: Ctx, uow: Uow) -> PortionOut | JSONResponse:
+    """Add a portion; without `approve` the addition is filed as a proposal (`202`)."""
+    view = doors.add_or_propose_portion(uow, ctx, product_id, body.model_dump())
+    if isinstance(view, dto.ProductProposalView):
+        return _proposed(view)
+    return PortionOut.model_validate(view)
 
 
-@router.patch("/portions/{portion_id}", response_model=PortionOut)
-def update_portion(portion_id: int, body: PortionPatch, ctx: Ctx, uow: Uow) -> PortionOut:
-    return PortionOut.model_validate(
-        uc.UpdatePortion(uow, ctx).execute(portion_id, body.model_dump(exclude_unset=True))
-    )
+@router.patch("/portions/{portion_id}", response_model=PortionOut, responses=_PROPOSED)
+def update_portion(
+    portion_id: int, body: PortionPatch, ctx: Ctx, uow: Uow
+) -> PortionOut | JSONResponse:
+    """Correct a portion; without `approve` the correction is filed as a proposal (`202`)."""
+    changes = body.model_dump(exclude_unset=True)
+    if can_decide(ctx):
+        # Applied directly so an explicit null (clearing a description) is kept.
+        return PortionOut.model_validate(uc.UpdatePortion(uow, ctx).execute(portion_id, changes))
+    view = doors.update_or_propose_portion(uow, ctx, portion_id, changes)
+    if isinstance(view, dto.ProductProposalView):
+        return _proposed(view)
+    return PortionOut.model_validate(view)
 
 
-@router.delete("/portions/{portion_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/portions/{portion_id}", status_code=status.HTTP_204_NO_CONTENT, responses=_PROPOSED
+)
 def delete_portion(portion_id: int, ctx: Ctx, uow: Uow) -> Response:
-    uc.DeletePortion(uow, ctx).execute(portion_id)
+    """Remove a portion; without `approve` the removal is filed as a proposal (`202`)."""
+    view = doors.delete_or_propose_portion(uow, ctx, portion_id)
+    if view is not None:
+        return _proposed(view)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

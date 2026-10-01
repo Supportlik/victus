@@ -4,12 +4,27 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from typing import Any
+from typing import Any, Protocol, Self, TypeVar
 
-from sqlalchemy import Select
+from sqlalchemy import ColumnElement
 from sqlalchemy.orm import Session
 
 from victus.application.tenant_context import TenantContext
+
+
+class Filterable(Protocol):
+    """Anything with a ``where`` that returns its own type, e.g. ``Select``.
+
+    The scoping helpers are generic over this instead of taking ``Select[Any]``:
+    SQLAlchemy 2.1 made ``Select`` variadic in its column types, so ``Select[Any]``
+    there means "a select of exactly one column" and a two-column select no longer
+    matches. A bound type variable keeps the caller's own row type on both versions.
+    """
+
+    def where(self, *whereclause: ColumnElement[bool]) -> Self: ...
+
+
+StmtT = TypeVar("StmtT", bound=Filterable)
 
 
 class TenantMismatchError(PermissionError):
@@ -25,7 +40,7 @@ class Repo:
     def tenant_id(self) -> str:
         return self.ctx.tenant_id
 
-    def scoped(self, stmt: Select[Any], model: Any) -> Select[Any]:
+    def scoped(self, stmt: StmtT, model: Any) -> StmtT:
         """Add ``model.tenant_id == ctx.tenant_id`` to a select."""
         return stmt.where(model.tenant_id == self.tenant_id)
 

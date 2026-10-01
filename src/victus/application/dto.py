@@ -364,6 +364,25 @@ class HealthView:
     version: str
     checks: dict[str, str]
     backup_age_hours: float | None
+    #: When the newest successful backup finished; ``None`` when there has never been one.
+    backup_last_at: datetime | None = None
+    #: ``backup.max_age_hours``: beyond this age ``checks.backup`` reads ``degraded``.
+    backup_max_age_hours: int = 30
+
+
+@dataclass(frozen=True, slots=True)
+class BackupJobView:
+    """One recorded backup: a scheduled run, ``backup create`` or a host backup that reported in."""
+
+    id: str
+    tenant_id: str | None
+    started_at: datetime
+    finished_at: datetime | None
+    status: str
+    path: str | None
+    size: int | None
+    verified: bool
+    error: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -465,6 +484,9 @@ class ProductProposalView:
     #: What the proposed ``portions`` would do; filled while the proposal is pending,
     #: since after the decision it would describe the catalogue it has already changed.
     portion_plan: list[PortionOperationView] = field(default_factory=list)
+    #: The values as the actor proposed them, once a person changed one; ``None`` while the
+    #: proposal stands as it was filed. ``changes`` then holds what will be applied (R84).
+    proposed: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -35,7 +35,26 @@ export interface Health {
   status: string;
   version: string;
   checks: Record<string, string>;
+  /** Hours since the newest successful backup; null when Victus knows of none. */
   backup_age_hours?: number | null;
+  /** When the newest successful backup finished (UTC); null when Victus knows of none. */
+  backup_last_at?: string | null;
+  /** `backup.max_age_hours`: older than this, or none at all, and `checks.backup` is `degraded`. */
+  backup_max_age_hours?: number;
+}
+
+/** One recorded backup: a scheduled run, `backup create`, or a host backup that reported in. */
+export interface BackupJob {
+  id: string;
+  /** null for a backup of every tenant. */
+  tenant_id: string | null;
+  started_at: string;
+  finished_at: string | null;
+  status: 'running' | 'finished' | 'verify_failed' | 'failed';
+  path: string | null;
+  size: number | null;
+  verified: boolean;
+  error: string | null;
 }
 
 // ── Auth ─────────────────────────────────────────────────────────────────
@@ -275,6 +294,11 @@ export interface LineItemInput {
   amount_estimated?: boolean;
 }
 
+/** What `PATCH /line-items/{id}` changes; `meal_id` moves it within its day. */
+export interface LineItemPatch extends Partial<LineItemInput> {
+  meal_id?: number;
+}
+
 export interface DayMessage {
   id: string;
   role: 'user' | 'agent' | 'system';
@@ -399,6 +423,14 @@ export interface ProductProposal {
   status: 'pending' | 'approved' | 'rejected';
   created_at: string;
   decided_at?: string | null;
+  /** The values as the actor filed them, once a person corrected one; null otherwise. */
+  proposed?: Record<string, unknown> | null;
+}
+
+/** A correction to a pending proposal that decides nothing; `null` withdraws a field. */
+export interface ProposalAmendment {
+  changes: Record<string, unknown>;
+  rationale?: string | null;
 }
 
 // ── Drafts ───────────────────────────────────────────────────────────────
@@ -672,6 +704,25 @@ export interface StageRow {
   eat_kcal_per_day: number | null;
   feasible: boolean;
 }
+/** How far a projected crossing lands from one stage date: positive is late. */
+export interface StageOffset {
+  name: string;
+  date: string;
+  days: number;
+}
+/** Today's remaining amount carried forward at one trend window's pace (R85). */
+export interface ProjectionRow {
+  window: number;
+  slope_per_day: number | null;
+  kg_per_week: number | null;
+  /** The day the line reaches zero, the forecast ETA of the same window; null: not at this pace. */
+  crossing: string | null;
+  /** crossing minus goal date in days: positive is late, negative is early. */
+  days_vs_goal: number | null;
+  stages: StageOffset[];
+  /** The dashed line: [date, remaining kg], empty when there is no crossing. */
+  path: [string, number][];
+}
 export interface BurndownResult {
   anchor: string;
   remaining_at_anchor: number;
@@ -686,6 +737,8 @@ export interface BurndownResult {
   target_path: [string, number][];
   actual: [string, number][];
   stages: StageRow[];
+  /** Absent in snapshots frozen before R85, empty when the definition switches it off. */
+  projections?: ProjectionRow[];
 }
 export interface BurndownBlock extends BlockBase {
   result: BurndownResult;

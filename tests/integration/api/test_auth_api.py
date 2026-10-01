@@ -44,6 +44,7 @@ def _login(
     return client.post("/api/v1/auth/webauthn/login/verify", json=assertion)
 
 
+@pytest.mark.covers("POST /api/v1/auth/recovery", "GET /api/v1/auth/me", "GET /api/v1/products")
 def test_t_api_006_recovery_session_is_restricted(api_app: FastAPI, alice_account: Account) -> None:
     """T-API-006: a recovery session may only manage passkeys and read /auth/me."""
     session = Session(api_app, alice_account)
@@ -54,6 +55,16 @@ def test_t_api_006_recovery_session_is_restricted(api_app: FastAPI, alice_accoun
     assert r.headers["content-type"].startswith("application/problem+json")
 
 
+@pytest.mark.covers(
+    "POST /api/v1/auth/recovery",
+    "POST /api/v1/auth/webauthn/register/options",
+    "POST /api/v1/auth/webauthn/register/verify",
+    "POST /api/v1/auth/webauthn/login/options",
+    "POST /api/v1/auth/webauthn/login/verify",
+    "GET /api/v1/auth/me",
+    "GET /api/v1/products",
+    "POST /api/v1/auth/logout",
+)
 def test_t_api_001_002_003_passkey_register_login_replay(
     api_app: FastAPI, alice_account: Account
 ) -> None:
@@ -100,6 +111,7 @@ def test_t_api_001_002_003_passkey_register_login_replay(
     assert client.get("/api/v1/auth/me").status_code == 401
 
 
+@pytest.mark.covers("POST /api/v1/days/{day}", "POST /api/v1/auth/webauthn/login/verify")
 def test_t_api_004_csrf_required_for_cookie_writes(
     api_app: FastAPI, alice_account: Account
 ) -> None:
@@ -117,6 +129,11 @@ def test_t_api_004_csrf_required_for_cookie_writes(
     assert r.status_code == 201
 
 
+@pytest.mark.covers(
+    "GET /api/v1/auth/passkeys",
+    "DELETE /api/v1/auth/passkeys/{passkey_id}",
+    "POST /api/v1/auth/webauthn/register/verify",
+)
 def test_second_passkey_and_delete_last_refused(api_app: FastAPI, alice_account: Account) -> None:
     session = Session(api_app, alice_account)
     first = _register(session, SoftAuthenticator(RP_ID, ORIGIN), "Phone")
@@ -130,6 +147,13 @@ def test_second_passkey_and_delete_last_refused(api_app: FastAPI, alice_account:
     assert r.status_code == 422
 
 
+@pytest.mark.covers(
+    "POST /api/v1/auth/tokens",
+    "GET /api/v1/auth/tokens",
+    "DELETE /api/v1/auth/tokens/{token_id}",
+    "GET /api/v1/products",
+    "POST /api/v1/products",
+)
 def test_t_api_007_010_tokens_over_http(
     api_app: FastAPI, alice_account: Account, api_factory: UowFactory
 ) -> None:
@@ -153,12 +177,13 @@ def test_t_api_007_010_tokens_over_http(
     assert client.get("/api/v1/products?q=", headers=read_only).status_code == 200
     r = client.post("/api/v1/products", json={"name": "Oat milk"}, headers=read_only)
     assert r.status_code == 403
-    assert r.json()["detail"].startswith("scope 'write'")
+    assert r.json()["detail"].startswith("scope 'agent:write' or 'write'")
 
     assert client.delete(f"/api/v1/auth/tokens/{created['id']}", headers=admin).status_code == 204
     assert client.get("/api/v1/products?q=", headers=read_only).status_code == 401  # T-API-010
 
 
+@pytest.mark.covers("GET /api/v1/products")
 def test_t_api_009_expired_token(
     api_app: FastAPI, alice_account: Account, api_factory: UowFactory
 ) -> None:

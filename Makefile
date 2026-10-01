@@ -7,7 +7,7 @@ COMPOSE_CMD   = $(COMPOSE) $(COMPOSE_ENV)
 TENANT       ?= demo
 
 .DEFAULT_GOAL := help
-.PHONY: help install lint format test test-all privacy web-build web-start up down logs ps pull backup verify restore shell mcp
+.PHONY: help install lint format test test-all coverage web-test web-coverage privacy web-build web-start up down logs ps pull backup verify restore shell mcp
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage: make <target>\n\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
@@ -35,6 +35,15 @@ test-all: ## pytest against SQLite and PostgreSQL (starts the postgres profile)
 	$(COMPOSE_CMD) --profile postgres up -d postgres
 	VICTUS_TEST_DATABASE_URL=postgresql+psycopg://victus:$${POSTGRES_PASSWORD:-victus}@localhost:5432/victus uv run pytest -q
 	$(COMPOSE_CMD) --profile postgres stop postgres
+
+coverage: ## pytest under branch coverage with the gate (fail_under), HTML report in htmlcov/
+	uv run pytest -q --cov-report=term-missing:skip-covered --cov-report=html
+
+web-test: ## Angular unit tests (Vitest), single run
+	cd web && npm test -- --watch=false
+
+web-coverage: ## Angular unit tests under V8 coverage with the thresholds in angular.json (web/coverage/)
+	cd web && npm run test:coverage
 
 web-build: ## Angular production build
 	cd web && npm run build -- --configuration production

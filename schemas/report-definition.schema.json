@@ -211,6 +211,20 @@
             }
           ],
           "default": "from_settings"
+        },
+        "projection_windows": {
+          "description": "Trend windows (days) whose pace carries today's remaining amount forward to zero; [] switches the projection off.",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 2
+          },
+          "uniqueItems": true,
+          "default": [
+            7,
+            14,
+            30
+          ]
         }
       }
     },

@@ -11,7 +11,15 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from datetime import date, timedelta
 
-from victus.domain.model.reporting import BurndownResult, Stage, StageRow
+from victus.domain.model.reporting import (
+    BurndownResult,
+    ProjectionRow,
+    Stage,
+    StageOffset,
+    StageRow,
+    TrendRow,
+)
+from victus.domain.services.forecast import eta
 
 MUSCLE_LOSS_PCT_PER_WEEK = 1.1  # % of body weight per week, with tolerance
 MIN_EAT_KCAL = 1200.0
@@ -38,6 +46,47 @@ def planned_path(
     return pts
 
 
+def projections(
+    trends: Sequence[TrendRow],
+    remaining_today: float,
+    today: date,
+    goal_date: date,
+    stages: Sequence[Stage],
+    horizon: date | None,
+) -> list[ProjectionRow]:
+    """Today's remaining amount carried forward at each trend's slope, one row per trend.
+
+    The line runs from ``(today, remaining_today)`` to zero on the crossing day, or
+    stops at ``horizon`` (the chart's right edge) when zero lies beyond it. A slope
+    that is unknown, flat or rising has no crossing and no line ("not at this pace").
+    Day differences are crossing minus the goal or stage date: positive is late.
+    """
+    rows: list[ProjectionRow] = []
+    for t in trends:
+        slope = t.slope_per_day
+        crossing = eta(remaining_today, slope, today)
+        if crossing is None or slope is None:
+            rows.append(ProjectionRow(t.window, slope, t.kg_per_week, None, None))
+            continue
+        end = crossing if horizon is None or horizon <= today or crossing <= horizon else horizon
+        value = 0.0 if end == crossing else remaining_today + slope * (end - today).days
+        rows.append(
+            ProjectionRow(
+                window=t.window,
+                slope_per_day=slope,
+                kg_per_week=t.kg_per_week,
+                crossing=crossing,
+                days_vs_goal=(crossing - goal_date).days,
+                stages=[
+                    StageOffset(st.name, st.date, (crossing - st.date).days)
+                    for st in sorted(stages, key=lambda s: s.date)
+                ],
+                path=[(today, remaining_today), (end, value)],
+            )
+        )
+    return rows
+
+
 def burndown(
     ma: Mapping[date, float],
     start: date,
@@ -48,11 +97,15 @@ def burndown(
     kcal_per_kg: float,
     tdee_ref: int | None = None,
     end: date | None = None,
+    trends: Sequence[TrendRow] = (),
+    as_of: date | None = None,
 ) -> BurndownResult | None:
     """Compute the burndown from the first MA point at or after ``start``.
 
     Returns ``None`` when there is no anchor or the current weight is already at
     or below the goal. ``end`` limits which stages are shown (default: no limit).
+    ``trends`` are projected forward from ``as_of`` (default ``today``, the last MA
+    day) — the report passes its own ``as_of`` so the crossing is the forecast ETA.
     """
     anchor = min((d for d in ma if d >= start), default=None)
     if anchor is None or today not in ma:
@@ -92,6 +145,16 @@ def burndown(
             )
         )
 
+    horizon = max([goal_date, *(r.date for r in rows)])
+    projected = projections(
+        trends,
+        remaining_today,
+        as_of or today,
+        goal_date,
+        [Stage(r.name, r.date) for r in rows],
+        horizon,
+    )
+
     return BurndownResult(
         anchor=anchor,
         remaining_at_anchor=remaining0,
@@ -106,4 +169,5 @@ def burndown(
         target_path=planned_path(anchor, remaining0, goal_date),
         actual=[(d, v - goal_kg) for d, v in sorted(ma.items()) if anchor <= d <= today],
         stages=rows,
+        projections=projected,
     )

@@ -37,8 +37,10 @@ from victus.application.tenant_context import (
     SCOPE_APPROVE,
     SCOPE_READ,
     SCOPE_WRITE,
+    ScopeError,
+    TenantContext,
 )
-from victus.application.use_cases._base import UseCase, now, require_decision
+from victus.application.use_cases._base import UseCase, can_decide, now, require_decision
 from victus.application.use_cases._mappers import portion_view
 from victus.application.use_cases.products import (
     PRODUCT_FIELDS,
@@ -107,6 +109,14 @@ def _current_values(p: orm.Product, keys: list[str]) -> dict[str, Any]:
 def _product_of(uow: UnitOfWork, pr: orm.ProductProposal) -> orm.Product | None:
     """A pending ``new`` proposal has no product yet."""
     return uow.products.get(pr.product_id) if pr.product_id is not None else None
+
+
+def author_of(ctx: TenantContext) -> str:
+    """Who files a proposal, as stored: the token, the user, or ``system`` for the worker.
+
+    Cut to the column's width, so the value compared later is the one stored now.
+    """
+    return (ctx.actor_id or ctx.actor_kind)[:32]
 
 
 def _op_of(entry: dict[str, Any]) -> str:
@@ -413,6 +423,7 @@ def proposal_view(
         kind=pr.kind,
         consumable_id=pr.consumable_id,
         portion_plan=plan or [],
+        proposed=dict(pr.proposed_changes) if pr.proposed_changes is not None else None,
     )
 
 
@@ -456,6 +467,7 @@ class ProposeProductChange(UseCase):
                     rationale=rationale,
                     source=source,
                     status=PENDING,
+                    created_by=author_of(self.ctx),
                 )
             )
             _assign_capture(cap, run_id)
@@ -551,6 +563,7 @@ class ProposeNewProduct(UseCase):
                     rationale=rationale,
                     source=data.source,
                     status=PENDING,
+                    created_by=author_of(self.ctx),
                 )
             )
             _assign_capture(cap, run_id)
@@ -615,6 +628,7 @@ class ProposeProductVersion(UseCase):
                     rationale=rationale,
                     source=source,
                     status=PENDING,
+                    created_by=author_of(self.ctx),
                 )
             )
             _assign_capture(cap, run_id)
@@ -632,11 +646,18 @@ class ProposeProductVersion(UseCase):
 
 class ListProposals(UseCase):
     def execute(
-        self, *, status: str | None = PENDING, product_id: int | None = None, limit: int = 200
+        self,
+        *,
+        status: str | None = PENDING,
+        product_id: int | None = None,
+        limit: int = 200,
+        consumable_id: int | None = None,
     ) -> list[dto.ProductProposalView]:
         self.ctx.require(SCOPE_READ)
         with self._uow() as uow:
-            rows = uow.proposals.list(status=status, product_id=product_id, limit=limit)
+            rows = uow.proposals.list(
+                status=status, product_id=product_id, limit=limit, consumable_id=consumable_id
+            )
             return [proposal_view(pr, _product_of(uow, pr), _plan_of(uow, pr)) for pr in rows]
 
 
@@ -714,7 +735,8 @@ class DecideProposal(UseCase):
                     raise Conflict("; ".join(refused))
             if approve and pr.kind == VERSION:
                 previous = _product_of(uow, pr)
-                if previous is None:
+                # the proposal's product FK is ON DELETE CASCADE: no product, no proposal
+                if previous is None:  # pragma: no cover
                     raise NotFound(f"product {pr.product_id} not found")
                 # Read while drafting too; the catalogue may have moved on since then.
                 check_new_version(uow, previous, _version_day(applied.get("valid_from")))
@@ -722,6 +744,9 @@ class DecideProposal(UseCase):
             pr.decided_at = now()
             pr.decided_by = self.ctx.actor_id
             if approve and (changes or fields is not None):
+                if pr.proposed_changes is None and applied != (pr.changes or {}):
+                    # what the actor read survives what the person applied instead (R84)
+                    pr.proposed_changes = dict(pr.changes or {})
                 pr.changes = applied
             cap = uow.captures.get(pr.capture_id) if pr.capture_id else None
             if cap is not None:
@@ -817,9 +842,12 @@ class DecideProposal(UseCase):
         name = str(values.pop("name", "")).strip()
         with self._uow() as uow:
             consumable = uow.products.get_consumable(consumable_id)
-            if consumable is None:
+            # the proposal's consumable FK is ON DELETE CASCADE, and a decided proposal is
+            # refused before it gets here, so neither guard can fire; both stay as the last
+            # word should those rules change
+            if consumable is None:  # pragma: no cover
                 raise NotFound(f"consumable {consumable_id} not found")
-            if consumable.kind == "product":  # a second decision on the same proposal
+            if consumable.kind == "product":  # pragma: no cover
                 raise Conflict(f"consumable {consumable_id} is already a product")
             if not name:
                 name = consumable.name
@@ -842,15 +870,192 @@ class DecideProposal(UseCase):
         return product_id
 
 
+#: The numbers of a product that may not be negative, whoever types them.
+_NUTRIENTS = ("kcal", "protein", "carbs", "fat", "fiber", "salt")
+#: What a pending one-off carries itself, so the day it was logged on follows a correction.
+_AD_HOC_FIELDS = ("reference_amount", "reference_unit", *_NUTRIENTS)
+
+
+def _number(key: str, value: Any, *, positive: bool = False) -> float:
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise ValidationFailed(
+            f"{key} must be a number", errors=[{"field": key, "message": "not a number"}]
+        )
+    if value < 0 or (positive and value == 0):
+        word = "positive" if positive else "zero or more"
+        raise ValidationFailed(f"{key} must be {word}", errors=[{"field": key, "message": word}])
+    return float(value)
+
+
+def _check_values(values: dict[str, Any]) -> None:
+    """The refusals approving would meet for these values, raised while they are typed.
+
+    Only the keys given are read: an amendment names what it corrects, and a key it does
+    not name keeps the value the proposal already carries.
+    """
+    if "name" in values:
+        name = values["name"]
+        if not isinstance(name, str) or not name.strip() or len(name.strip()) > 300:
+            raise ValidationFailed(
+                "name is required", errors=[{"field": "name", "message": "required"}]
+            )
+    if "reference_unit" in values and values["reference_unit"] not in ("g", "ml"):
+        raise ValidationFailed("reference_unit must be g or ml")
+    if "reference_amount" in values:
+        _number("reference_amount", values["reference_amount"], positive=True)
+    if values.get("density_g_per_ml") is not None:
+        _number("density_g_per_ml", values["density_g_per_ml"], positive=True)
+    for key in _NUTRIENTS:
+        if values.get(key) is not None:
+            _number(key, values[key])
+    if "valid_from" in values:
+        _version_day(values["valid_from"])
+
+
+class AmendProposal(UseCase):
+    """Correct a pending proposal without deciding it (R81, R84).
+
+    A proposal that is nearly right used to be rejected and typed again, or approved with
+    the one wrong value in it. Amending changes what the proposal will apply and nothing
+    else: the catalogue is untouched until a decision, and the decision stays a person's.
+
+    - A **person** (``approve``) may amend any pending proposal. The first time they do, the
+      values as the actor filed them are kept in ``proposed_changes``, so the history shows
+      the agent's reading beside the correction.
+    - An **actor** without ``approve`` (``agent:write``) may amend only a proposal it filed
+      itself, and only while no person has corrected it: from then on it is no longer only
+      the actor's suggestion, and overwriting the person's value would be the silent fact
+      ADR 0013 rules out.
+
+    ``changes`` merges into the proposal; ``None`` withdraws a field from it. The result is
+    validated against the fields the proposal's kind may carry, the way the decision
+    validates it. For a ``new`` proposal the pending one-off takes the corrected values as
+    well, so the day it was already logged on counts what will be approved.
+    """
+
+    def execute(
+        self,
+        proposal_id: str,
+        changes: dict[str, Any],
+        *,
+        rationale: str | None = None,
+    ) -> dto.ProductProposalView:
+        person = self.ctx.has_scope(SCOPE_APPROVE)
+        if person or not self.ctx.has_scope(SCOPE_AGENT_WRITE):
+            # a person decides; anyone holding neither scope hears what is missing
+            require_decision(self.ctx)
+        if not isinstance(changes, dict) or not changes:
+            raise ValidationFailed("an amendment needs at least one field")
+        with self._uow() as uow:
+            pr = uow.proposals.get(proposal_id)
+            if pr is None:
+                raise NotFound(f"proposal {proposal_id} not found")
+            if pr.status != PENDING:
+                raise Conflict(f"proposal {proposal_id} is already {pr.status}")
+            if not person:
+                if pr.created_by is None or pr.created_by != author_of(self.ctx):
+                    raise ScopeError(
+                        "scope 'approve' required to amend a proposal you did not file"
+                    )
+                if pr.proposed_changes is not None:
+                    raise Conflict(
+                        f"proposal {proposal_id} was corrected by a person; "
+                        "file a new proposal instead"
+                    )
+            after, touched = self._merged(uow, pr, changes)
+            before: dict[str, Any] = dict(pr.changes or {})
+            if touched or (rationale is not None and rationale != pr.rationale):
+                if person and pr.proposed_changes is None and touched:
+                    pr.proposed_changes = before
+                pr.changes = after
+                if rationale is not None:
+                    pr.rationale = rationale
+                if pr.kind == NEW and pr.consumable_id is not None:
+                    self._follow(uow, pr.consumable_id, after)
+                uow.audit.record(
+                    "product.proposal.amend",
+                    "consumable" if pr.kind == NEW else "product",
+                    str(pr.consumable_id if pr.kind == NEW else pr.product_id),
+                    {
+                        "proposal": pr.id,
+                        "kind": pr.kind,
+                        "by": "person" if person else "actor",
+                        "before": {k: before.get(k) for k in touched},
+                        "after": {k: after.get(k) for k in touched},
+                    },
+                )
+                uow.flush()
+            view = proposal_view(pr, _product_of(uow, pr), _plan_of(uow, pr))
+            uow.commit()
+            return view
+
+    @staticmethod
+    def _merged(
+        uow: UnitOfWork, pr: orm.ProductProposal, changes: dict[str, Any]
+    ) -> tuple[dict[str, Any], list[str]]:
+        """The proposal's values after the amendment, checked, and the keys that moved."""
+        allowed = {NEW: NEW_PRODUCT_FIELDS, VERSION: VERSION_FIELDS}.get(pr.kind, PROPOSABLE_FIELDS)
+        unknown = sorted(set(changes) - allowed)
+        if unknown:
+            raise ValidationFailed(f"fields cannot be proposed: {', '.join(unknown)}")
+        before: dict[str, Any] = dict(pr.changes or {})
+        after = dict(before)
+        for key, value in changes.items():
+            if value is None:
+                after.pop(key, None)
+            else:
+                after[key] = value
+        given = {k: v for k, v in changes.items() if v is not None}
+        _check_values(given)
+        if "name" in given:
+            after["name"] = str(given["name"]).strip()
+        if pr.kind == NEW and not str(after.get("name") or "").strip():
+            raise ValidationFailed(
+                "a new product keeps its name", errors=[{"field": "name", "message": "required"}]
+            )
+        if pr.kind == VERSION:
+            if "valid_from" not in after:
+                raise ValidationFailed("a new version keeps the day it starts on")
+            day = _version_day(after["valid_from"])
+            after["valid_from"] = day.isoformat()
+            previous = _product_of(uow, pr)
+            if previous is None:
+                raise NotFound(f"product {pr.product_id} not found")
+            check_new_version(uow, previous, day)
+        if after.get("portions"):
+            after["portions"] = _validated_portions(after["portions"], adds_only=pr.kind == NEW)
+        else:
+            after.pop("portions", None)
+        if not any(k != "valid_from" for k in after):
+            raise ValidationFailed("a proposal needs at least one changed field")
+        touched = sorted(k for k in set(before) | set(after) if before.get(k) != after.get(k))
+        return after, touched
+
+    @staticmethod
+    def _follow(uow: UnitOfWork, consumable_id: int, values: dict[str, Any]) -> None:
+        """The one-off of a ``new`` proposal carries the values the day counts with."""
+        consumable = uow.products.get_consumable(consumable_id)
+        item = uow.products.get_ad_hoc_item(consumable_id)
+        if consumable is None or item is None:
+            return  # promoted or removed meanwhile; the proposal alone carries the values
+        consumable.name = str(values.get("name") or consumable.name)[:300]
+        for key in _AD_HOC_FIELDS:
+            if key in values:
+                setattr(item, key, values[key])
+            elif key in _NUTRIENTS:
+                setattr(item, key, None)  # withdrawn from the proposal, so unknown again
+
+
 def pending_count(uow: UnitOfWork) -> int:
     return len(uow.proposals.list(status=PENDING, limit=10_000))
 
 
 # ── the one door for catalogue writes (R81) ─────────────────────────────────
 #
-# Adapters call these instead of the use cases directly: with ``approve`` the value
-# is written, without it the same call becomes a proposal a person decides. That way
-# the rule lives in the application layer and no adapter has to remember it.
+# Adapters call these instead of the use cases directly: with ``write`` and ``approve``
+# the value is written, without them the same call becomes a proposal a person decides
+# (which ``write`` or ``agent:write`` may file). That way the rule lives in the
+# application layer and no adapter — MCP tool or REST route — has to remember it.
 
 
 def create_or_propose_product(
@@ -863,7 +1068,7 @@ def create_or_propose_product(
     capture_id: str | None = None,
     run_id: str | None = None,
 ) -> dto.ProductView | dto.ProductProposalView:
-    if ctx.has_scope(SCOPE_APPROVE):
+    if can_decide(ctx):
         product = CreateProduct(uow_factory, ctx).execute(data)
         for portion in portions or []:
             AddPortion(uow_factory, ctx).execute(
@@ -893,7 +1098,7 @@ def update_or_propose_product(
     capture_id: str | None = None,
     run_id: str | None = None,
 ) -> dto.ProductView | dto.ProductProposalView:
-    if ctx.has_scope(SCOPE_APPROVE):
+    if can_decide(ctx):
         return UpdateProduct(uow_factory, ctx).execute(product_id, changes)
     return ProposeProductChange(uow_factory, ctx).execute(
         product_id,
@@ -915,7 +1120,7 @@ def add_or_propose_portion(
     capture_id: str | None = None,
     run_id: str | None = None,
 ) -> dto.PortionView | dto.ProductProposalView:
-    if ctx.has_scope(SCOPE_APPROVE):
+    if can_decide(ctx):
         return AddPortion(
             uow_factory,
             ctx,
@@ -957,7 +1162,7 @@ def version_or_propose_product_version(
     day before the change already counted. That the drafting had no road here while the
     deciding did is exactly what ADR 0013 warns about.
     """
-    if ctx.has_scope(SCOPE_APPROVE):
+    if can_decide(ctx):
         return NewProductVersion(uow_factory, ctx).execute(product_id, valid_from, changes)
     return ProposeProductVersion(uow_factory, ctx).execute(
         product_id,
@@ -998,7 +1203,7 @@ def update_or_propose_portion(
     clean = {k: v for k, v in changes.items() if v is not None and k in PORTION_FIELDS}
     if not clean:
         raise ValidationFailed(f"a portion change needs one of: {', '.join(PORTION_FIELDS)}")
-    if ctx.has_scope(SCOPE_APPROVE):
+    if can_decide(ctx):
         return UpdatePortion(uow_factory, ctx).execute(portion_id, clean)
     return ProposeProductChange(uow_factory, ctx).execute(
         _product_of_portion(uow_factory, ctx, portion_id),
@@ -1025,7 +1230,7 @@ def delete_or_propose_portion(
     allowed — that a portion is in use is itself worth reporting, and the proposal's plan
     says so — but the approval is refused instead of failing halfway through.
     """
-    if ctx.has_scope(SCOPE_APPROVE):
+    if can_decide(ctx):
         DeletePortion(uow_factory, ctx).execute(portion_id)
         return None
     return ProposeProductChange(uow_factory, ctx).execute(

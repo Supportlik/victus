@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, signal, viewChildren } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ApiClient, Product, ProductProposal, ProductUsage, ProductUsageEntry } from '../../api';
@@ -11,6 +11,7 @@ import { formatAmount, MacroPipe } from '../../shared/format';
 import { FoodIcon } from '../../shared/food-icon';
 import { ProductSearch } from '../../shared/product-search';
 import { RefreshHint } from '../../shared/refresh-hint';
+import { ProposalEditor } from './proposal-editor';
 
 /** Rows per request. Large enough that most catalogues arrive in one or two. */
 const PAGE_SIZE = 50;
@@ -24,32 +25,16 @@ const USAGE_SHOWN = 5;
 /** The numbers a label carries, in the order it carries them. */
 const MACROS = ['kcal', 'protein', 'carbs', 'fat', 'fiber', 'salt'] as const;
 
-/** One field a correction changes, with the value it would replace. */
-interface Change {
-  field: string;
-  label: string;
-  before: string;
-  after: string;
-  unit: string;
-}
-
 /** One of the subject's own numbers, translated and formatted for a single line. */
 interface Fact {
   label: string;
   value: string;
 }
 
-/** The unit a field is stated in; the field name already says "kcal". */
-function unitOf(field: string, referenceUnit: string): string {
-  if ((MACROS as readonly string[]).includes(field)) return field === 'kcal' ? '' : 'g';
-  if (field === 'density_g_per_ml') return 'g/ml';
-  return field === 'reference_amount' ? referenceUnit : '';
-}
-
 @Component({
   selector: 'v-products-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, FormsModule, MacroPipe, ProductSearch, FoodIcon, RefreshHint],
+  imports: [RouterLink, FormsModule, MacroPipe, ProductSearch, FoodIcon, RefreshHint, ProposalEditor],
   template: `
     <div class="v-page">
       <header class="v-page-head">
@@ -76,21 +61,14 @@ function unitOf(field: string, referenceUnit: string): string {
               @if (pr.kind === 'version') {
                 <p class="from v-small">{{ i18n.t('Opens a new version from {day}. Every day before it keeps what it counted.', { day: format.day(versionDay(pr)) }) }}</p>
               }
-              <ul class="changes">
-                @for (c of changes(pr); track c.field) {
-                  <li><span class="v-muted">{{ c.label }}</span> <span class="before">{{ c.before }}</span> → <strong>{{ c.after }}</strong>@if (c.unit) { <span class="v-muted"> {{ c.unit }}</span> }</li>
-                }
-              </ul>
               <p class="facts v-small"><span class="v-muted">{{ perText(pr) }}</span>@for (f of facts(pr); track f.label) {<span class="fact"><span class="v-muted">{{ f.label }}</span> {{ f.value }}</span>}</p>
               <p class="v-small v-muted">{{ countText(pr) }}</p>
               @if (pr.rationale) { <p class="v-small">{{ pr.rationale }}</p> }
-              <div class="v-actions">
-                <button type="button" class="v-btn primary" (click)="decide(pr, true)" [disabled]="deciding()">{{ i18n.t(pr.kind === 'version' ? 'Open the version' : 'Approve all') }}</button>
-                <button type="button" class="v-btn" (click)="decide(pr, false)" [disabled]="deciding()">{{ i18n.t('Reject') }}</button>
-                @if (pr.kind !== 'version') {
-                  <a class="v-btn quiet" [routerLink]="['/products', pr.product_id]" [fragment]="'proposal-' + pr.id">{{ i18n.t('Decide field by field…') }}</a>
-                }
-              </div>
+              <!-- the proposed values are inputs: Save amends, Approve sends them as changes -->
+              <v-proposal-editor [proposal]="pr" [approveText]="i18n.t(pr.kind === 'version' ? 'Open the version' : 'Approve all')" (amended)="amended($event)" (decided)="decided($event)" />
+              @if (pr.kind !== 'version') {
+                <a class="v-btn quiet deeper" [routerLink]="['/products', pr.product_id]" [fragment]="'proposal-' + pr.id">{{ i18n.t('Decide field by field…') }}</a>
+              }
             </div>
           }
         </section>
@@ -107,10 +85,6 @@ function unitOf(field: string, referenceUnit: string): string {
                 @if (pr.source) { <span class="v-muted v-small">{{ pr.source }}</span> }
                 <time class="v-muted v-small" [attr.datetime]="pr.created_at">{{ format.moment(pr.created_at) }}</time>
               </div>
-              <p class="facts v-small"><span class="v-muted">{{ perText(pr) }}</span>@for (f of facts(pr); track f.label) {<span class="fact"><span class="v-muted">{{ f.label }}</span> {{ f.value }}</span>}</p>
-              @if (portions(pr).length) {
-                <p class="v-small v-muted">{{ i18n.t('Portions') }}: {{ portions(pr).join(' · ') }}</p>
-              }
               @if (usageOf(pr); as u) {
                 @if (u.entries.length) {
                   <p class="v-small v-muted">{{ i18n.t('Where it was logged') }}</p>
@@ -128,10 +102,8 @@ function unitOf(field: string, referenceUnit: string): string {
                 }
               }
               @if (pr.rationale) { <p class="v-small">{{ pr.rationale }}</p> }
-              <div class="v-actions">
-                <button type="button" class="v-btn primary" (click)="decide(pr, true)" [disabled]="deciding()">{{ i18n.t('Approve') }}</button>
-                <button type="button" class="v-btn" (click)="decide(pr, false)" [disabled]="deciding()">{{ i18n.t('Reject') }}</button>
-              </div>
+              <!-- a one-off has no product page, so this is where its values are corrected -->
+              <v-proposal-editor [proposal]="pr" (amended)="amended($event)" (decided)="decided($event)" />
             </div>
           }
         </section>
@@ -200,19 +172,20 @@ export class ProductsPage {
   /** Where a proposal's subject was logged, by proposal id. */
   readonly usage = signal<Map<string, ProductUsage>>(new Map());
   readonly error = signal<string | null>(null);
-  readonly deciding = signal(false);
   readonly loading = signal(false);
   readonly more = signal(false);
   /**
    * A proposal the agent files, or a product it meets, appears here without a reload —
-   * unless a decision is in flight, in which case the list would change under the button
-   * that is being pressed (R80).
+   * unless a correction is typed or a decision is in flight: the list would change under
+   * the inputs being filled or the button being pressed (R83).
    */
   readonly stale = liveRefresh({
     accepts: (targets: ChangeTarget[]) => targets.some((t) => PRODUCT_TARGETS.includes(t.type)),
     refresh: () => this.reload(),
-    busy: () => this.deciding(),
+    busy: () => this.editors().some((e) => e.dirty() || e.busy()),
   });
+  /** Each pending proposal's inputs; a typed correction holds the refresh back (R83). */
+  private readonly editors = viewChildren(ProposalEditor);
   constructor() {
     this.reload();
   }
@@ -323,21 +296,6 @@ export class ProductsPage {
     const values = this.valuesOf(pr);
     return MACROS.map((key) => ({ label: this.i18n.t(key), value: this.text(values[key]) }));
   }
-  /** The fields a correction changes, each with the value it replaces. */
-  changes(pr: ProductProposal): Change[] {
-    const unit = String(this.valuesOf(pr)['reference_unit'] ?? 'g');
-    // `valid_from` is when a version starts, not a value under review; it is stated above
-    // the list, so listing it again as a changed field would read as one
-    return Object.keys(pr.changes)
-      .filter((field) => field !== 'valid_from')
-      .map((field) => ({
-        field,
-        label: this.i18n.t(field),
-        before: this.text(pr.current[field]),
-        after: this.text(pr.changes[field]),
-        unit: unitOf(field, unit),
-      }));
-  }
   usageOf(pr: ProductProposal): ProductUsage | null {
     return this.usage().get(pr.id) ?? null;
   }
@@ -353,15 +311,6 @@ export class ProductsPage {
   amountText(e: ProductUsageEntry): string {
     return `${formatAmount(e.amount ?? e.base_amount)} ${this.i18n.t(e.unit_code ?? e.base_unit)}`;
   }
-  /** Piece weights a `new` proposal brings with it, so "1 bar" means something after approval. */
-  portions(pr: ProductProposal): string[] {
-    const proposed = pr.changes['portions'];
-    if (!Array.isArray(proposed)) return [];
-    return (proposed as Record<string, unknown>[]).map((po) => {
-      const label = this.i18n.t(String(po['label'] ?? po['unit_code'] ?? ''));
-      return `${label} ${formatAmount(Number(po['amount']))} ${String(po['amount_unit'] ?? 'g')}`;
-    });
-  }
   /** A decided proposal keeps nothing: its evidence would outlive the row it belonged to. */
   private forget(pr: ProductProposal): void {
     this.subjects.update((all) => {
@@ -375,24 +324,17 @@ export class ProductsPage {
       return next;
     });
   }
-  decide(pr: ProductProposal, approve: boolean): void {
-    this.deciding.set(true);
-    const call = approve ? this.api.approveProposal(pr.id) : this.api.rejectProposal(pr.id);
-    call.subscribe({
-      next: () => {
-        this.proposals.update((all) => all.filter((x) => x.id !== pr.id));
-        this.forget(pr);
-        this.deciding.set(false);
-        if (approve) {
-          // the approved product joins the catalogue: reload what is on screen, plus it
-          this.load(0, Math.max(PAGE_SIZE, this.recent().length + 1));
-        }
-      },
-      error: (e: unknown) => {
-        this.error.set(describeError(e));
-        this.deciding.set(false);
-      },
-    });
+  /** A correction was saved: the proposal stays, with the person's values. */
+  amended(pr: ProductProposal): void {
+    this.proposals.update((all) => all.map((x) => (x.id === pr.id ? pr : x)));
+  }
+  /** Approved or rejected: the proposal leaves the list, an approved product joins the catalogue. */
+  decided(pr: ProductProposal): void {
+    this.proposals.update((all) => all.filter((x) => x.id !== pr.id));
+    this.forget(pr);
+    if (pr.status === 'approved') {
+      this.load(0, Math.max(PAGE_SIZE, this.recent().length + 1));
+    }
   }
   open(p: Product): void {
     window.location.assign(`/products/${p.id}`);

@@ -4,14 +4,14 @@ import { FormsModule } from '@angular/forms';
 import { LANDINGS, PrefsService } from '../../core/prefs.service';
 import { ThemeService } from '../../core/theme.service';
 import { TenantSettingsForm } from './settings-form';
+import { BackupStatus } from './backup-status';
 import { ApiClient, ApiToken, ApiTokenCreated, Health, Passkey, Rule, TargetBand, TenantSettingsVersion } from '../../api';
 import { AuthService } from '../../core/auth/auth.service';
 import { FormatService } from '../../core/format.service';
 import { I18nService } from '../../core/i18n.service';
 import { NoticeService } from '../../core/notice.service';
 import { describeError } from '../../core/problem';
-
-const SCOPES = ['read', 'write', 'approve', 'capture:read', 'capture:write', 'agent:write', 'settings', 'backup', 'admin'];
+import { SCOPE_PRESETS, SCOPE_PROFILES_DOC, SCOPES, ScopePreset, presetFor } from './scope-profiles';
 
 interface SchemaLike {
   properties?: Record<string, unknown>;
@@ -21,7 +21,7 @@ interface SchemaLike {
 @Component({
   selector: 'v-settings-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, TenantSettingsForm],
+  imports: [FormsModule, TenantSettingsForm, BackupStatus],
   template: `
     <div class="v-page settings">
       <header class="v-page-head"><div><h2>{{ i18n.t('Settings') }}</h2><p class="sub">{{ auth.me()?.tenant?.name }} · {{ i18n.t('signed in as {name}', { name: auth.me()?.user?.display_name ?? '' }) }}</p></div></header>
@@ -149,8 +149,16 @@ interface SchemaLike {
             <label class="v-field"><span>{{ i18n.t('Name') }}</span><input name="tn" [(ngModel)]="tokenName" [placeholder]="i18n.t('Claude Code on laptop')" required /></label>
             <label class="v-field"><span>{{ i18n.t('Expires') }}</span><input name="te" type="date" [(ngModel)]="tokenExpires" /></label>
           </div>
+          <div class="presets" role="group" [attr.aria-label]="i18n.t('Scope profiles')">
+            <span class="v-small v-muted">{{ i18n.t('Scope profiles') }}</span>
+            @for (p of presets; track p.key) {
+              <button type="button" class="v-btn quiet small preset" [class.active]="activePreset()?.key === p.key" [attr.data-preset]="p.key" [attr.aria-pressed]="activePreset()?.key === p.key" [title]="i18n.t(p.intent)" (click)="applyPreset(p)">{{ i18n.t(p.title) }}</button>
+            }
+            <a class="v-small profiles-doc" [href]="profilesDoc" target="_blank" rel="noopener">{{ i18n.t('Which scopes does a client need?') }}</a>
+          </div>
+          @if (activePreset(); as p) { <p class="v-small v-muted preset-intent">{{ i18n.t(p.intent) }}</p> }
           <fieldset class="scopes"><legend class="v-small v-muted">{{ i18n.t('Scopes') }}</legend>
-            @for (s of scopes; track s) { <label><input type="checkbox" [name]="s" [ngModel]="tokenScopes.has(s)" (ngModelChange)="toggleScope(s, $event)" /> {{ s }}</label> }
+            @for (s of scopes; track s) { <label><input type="checkbox" [name]="s" [attr.data-scope]="s" [ngModel]="tokenScopes.has(s)" (ngModelChange)="toggleScope(s, $event)" /> {{ s }}</label> }
           </fieldset>
           <button type="submit" class="v-btn primary" [disabled]="!tokenName.trim() || tokenScopes.size === 0">{{ i18n.t('Create token') }}</button>
         </form>
@@ -159,8 +167,8 @@ interface SchemaLike {
       <section class="v-panel">
         <h3>{{ i18n.t('System') }}</h3>
         @if (health(); as h) {
-          <dl class="sys"><div><dt>{{ i18n.t('Version') }}</dt><dd>{{ h.version }}</dd></div>@for (c of checks(h); track c[0]) { <div><dt>{{ i18n.t(c[0]) }}</dt><dd>{{ i18n.t(c[1]) }}</dd></div> }
-            @if (h.backup_age_hours != null) { <div><dt>{{ i18n.t('Last backup') }}</dt><dd>{{ i18n.t('{n} h ago', { n: h.backup_age_hours }) }}</dd></div> }</dl>
+          <dl class="sys"><div><dt>{{ i18n.t('Version') }}</dt><dd>{{ h.version }}</dd></div>@for (c of checks(h); track c[0]) { <div><dt>{{ i18n.t(c[0]) }}</dt><dd>{{ i18n.t(c[1]) }}</dd></div> }</dl>
+          <v-backup-status [health]="h" />
         } @else { <p class="v-muted">{{ i18n.t('API health unavailable.') }}</p> }
       </section>
     </div>
@@ -175,6 +183,9 @@ interface SchemaLike {
     .dot { width: 0.8rem; height: 0.8rem; border-radius: 50%; display: inline-block; }
     .advanced { margin-top: 1rem; } .advanced summary { cursor: pointer; color: var(--v-ink-2); font-size: var(--v-fs-s); }
     .json { width: 100%; font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; font-size: var(--v-fs-s); padding: 0.6rem; border: 1px solid var(--v-line-strong); border-radius: var(--v-radius); background: var(--v-surface); margin: 0.5rem 0; }
+    .presets { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem; }
+    .preset.active { border-color: var(--v-primary); box-shadow: 0 0 0 1px var(--v-primary) inset; }
+    .preset-intent { margin: 0; }
     .scopes { border: 1px solid var(--v-line); border-radius: var(--v-radius); padding: 0.5rem 0.75rem; display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; }
     .revoked td { opacity: 0.5; }
     .sys { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 0.5rem; } dt { font-size: var(--v-fs-xs); color: var(--v-ink-3); } dd { margin: 0; }
@@ -206,6 +217,8 @@ export class SettingsPage {
   readonly error = signal<string | null>(null);
   readonly jsonError = signal<string | null>(null);
   readonly scopes = SCOPES;
+  readonly presets = SCOPE_PRESETS;
+  readonly profilesDoc = SCOPE_PROFILES_DOC;
   private schema: SchemaLike | null = null;
   settingsJson = '';
   passkeyName = '';
@@ -345,6 +358,14 @@ export class SettingsPage {
   toggleScope(s: string, on: boolean): void {
     if (on) this.tokenScopes.add(s);
     else this.tokenScopes.delete(s);
+  }
+  /** Tick exactly the profile's scopes; the boxes stay editable afterwards. */
+  applyPreset(p: ScopePreset): void {
+    this.tokenScopes = new Set(p.scopes);
+  }
+  /** The profile the ticked boxes amount to, so the page can say what such a token is for. */
+  activePreset(): ScopePreset | undefined {
+    return presetFor(this.tokenScopes);
   }
   createToken(): void {
     this.api.createToken({ name: this.tokenName.trim(), scopes: [...this.tokenScopes], expires_at: this.tokenExpires || null }).subscribe({

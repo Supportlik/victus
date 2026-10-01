@@ -1,4 +1,4 @@
-import { beforeEach } from 'vitest';
+import { afterEach, beforeEach } from 'vitest';
 
 // Vitest setup: jsdom lacks ResizeObserver, which ECharts needs to mount a chart host.
 class ResizeObserverStub {
@@ -81,12 +81,22 @@ for (const name of ['localStorage', 'sessionStorage'] as const) {
 // worker, not in the document, so a language or locale a spec pins would otherwise still
 // be set when the next file renders a component — which is how a suite that asserts
 // English text started failing after an unrelated spec switched to German.
-beforeEach(() => {
-  for (const name of ['localStorage', 'sessionStorage'] as const) {
-    try {
-      ((globalThis as unknown as Record<string, Storage>)[name]).clear();
-    } catch {
-      /* nothing to clear */
+// Cleared before and after every spec, through `window` as well as `globalThis`, so a spec
+// that swaps the store (blocked storage) and puts it back cannot leave a key behind in
+// either one. Each spec file also runs in its own worker (`isolate` in angular.json): in a
+// shared worker, a late callback of one file reached the next one's TestBed and storage.
+function clearStorage(): void {
+  const holders = [globalThis, typeof window === 'undefined' ? undefined : window];
+  for (const holder of holders) {
+    if (!holder) continue;
+    for (const name of ['localStorage', 'sessionStorage'] as const) {
+      try {
+        ((holder as unknown as Record<string, Storage>)[name]).clear();
+      } catch {
+        /* nothing to clear */
+      }
     }
   }
-});
+}
+beforeEach(clearStorage);
+afterEach(clearStorage);

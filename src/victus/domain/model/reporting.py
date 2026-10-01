@@ -134,6 +134,36 @@ class StageRow:
 
 
 @dataclass(frozen=True, slots=True)
+class StageOffset:
+    """How far a projected crossing lands from one stage date."""
+
+    name: str
+    date: dt.date
+    #: crossing minus stage date in days: positive is late, negative is early
+    days: int
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectionRow:
+    """Today's remaining amount carried forward at one trend window's pace.
+
+    ``crossing`` is the day the line reaches zero, the same day the forecast block
+    names as its ETA for that window; ``None`` means "not at this pace" (the slope
+    is flat, rising or unknown) and then there is no ``path`` either.
+    """
+
+    window: int
+    slope_per_day: float | None
+    kg_per_week: float | None
+    crossing: dt.date | None
+    #: crossing minus goal date in days: positive is late, negative is early
+    days_vs_goal: int | None
+    stages: list[StageOffset] = field(default_factory=list)
+    #: the dashed line for the chart: [today, remaining] to zero or to the horizon
+    path: list[tuple[dt.date, float]] = field(default_factory=list)
+
+
+@dataclass(frozen=True, slots=True)
 class BurndownResult:
     anchor: date
     remaining_at_anchor: float
@@ -148,3 +178,5 @@ class BurndownResult:
     target_path: list[tuple[date, float]] = field(default_factory=list)
     actual: list[tuple[date, float]] = field(default_factory=list)
     stages: list[StageRow] = field(default_factory=list)
+    #: one row per projection window (R85); empty when projections are switched off
+    projections: list[ProjectionRow] = field(default_factory=list)

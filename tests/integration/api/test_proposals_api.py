@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 
 from tests.integration.api.conftest import Account
@@ -20,6 +21,15 @@ def _product(client: TestClient, headers: dict[str, str]) -> int:
     return int(r.json()["id"])
 
 
+@pytest.mark.covers(
+    "POST /api/v1/products",
+    "POST /api/v1/captures",
+    "GET /api/v1/proposals",
+    "POST /api/v1/proposals/{proposal_id}/approve",
+    "GET /api/v1/products/{product_id}",
+    "GET /api/v1/captures/{capture_id}",
+    "POST /api/v1/proposals/{proposal_id}/reject",
+)
 def test_proposal_flow(
     client: TestClient,
     alice_token: dict[str, str],
@@ -58,6 +68,7 @@ def test_proposal_flow(
     assert again.status_code == 409
 
 
+@pytest.mark.covers("GET /api/v1/proposals", "GET /api/v1/proposals/{proposal_id}")
 def test_proposals_are_tenant_scoped(
     client: TestClient, alice_token: dict[str, str], bob_token: dict[str, str]
 ) -> None:
@@ -65,6 +76,11 @@ def test_proposals_are_tenant_scoped(
     assert client.get("/api/v1/proposals/does-not-exist", headers=alice_token).status_code == 404
 
 
+@pytest.mark.covers(
+    "GET /api/v1/proposals",
+    "POST /api/v1/proposals/{proposal_id}/approve",
+    "GET /api/v1/products/{product_id}",
+)
 def test_t_api_073_a_portion_operation_is_listed_with_its_plan(
     client: TestClient,
     alice_token: dict[str, str],

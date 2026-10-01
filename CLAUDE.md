@@ -31,6 +31,10 @@ Read `docs/PLAN.md` (roadmap and stage status) and `docs/SPEC.md` before changin
 - Tests first for domain services; reference values for TDEE/trend/forecast live in
   `tests/fixtures/tdee_reference.json` and are never "adjusted to pass" — a mismatch is a finding.
 - Every test case has an ID from `docs/TESTPLAN.md` in its docstring; new behaviour adds a row there.
+- **Full test coverage is required.** Every feature and every API endpoint (REST route and MCP tool,
+  including each scope it accepts and refuses) is covered by tests. In the web app, every interaction
+  between frontend and backend (each `ApiClient` call, its success and its error path, and the UI that
+  triggers it) is covered too. A change without these tests is not finished.
 - **A green suite is not a check.** Whatever area was touched is opened in a browser and looked at
   afterwards — the fault that a test with a wrong fixture hides, or that only exists in a real
   recording, is found there and nowhere else. See "Look at what you changed" in `docs/TESTPLAN.md`.

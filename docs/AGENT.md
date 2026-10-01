@@ -11,9 +11,9 @@ Implemented in Stage 3 (`src/victus/agent/`, `src/victus/mcp/tools.py`, `src/vic
 | Where | `worker` container on your server (`victus worker`) | Claude Code (`/schedule`, cron) or claude.ai with the Victus MCP connected |
 | Model access | Anthropic SDK + `providers.anthropic_api_key` | The user's Claude subscription |
 | Trigger | On demand (`POST /agent/runs`, the app's **Process now** button) or optional `agent.cron` | Scheduled prompt or a chat message ("process my captures") |
-| Tools | The Victus tool registry, in-process | The same registry over MCP (stdio or Streamable HTTP; scopes `read`, `capture:read`, `capture:write`, `agent:write`) |
+| Tools | The Victus tool registry, in-process (`WORKER_TOOLS`, scopes of the *in-house worker* profile) | The same registry over MCP (stdio or Streamable HTTP; a token with the *assistant that proposes* profile, `read,write,capture:read,capture:write,agent:write`) |
 | Summary delivery | `agent_run.summary_md`, shown on the Agent page and after **Process now** | The chat reply *is* the summary |
-| Approval | User opens the app or answers in a chat that has the MCP | User answers in the same chat → `day_approve` |
+| Approval | User opens the app or answers in a chat that has the MCP | In the app; or in the same chat → `day_approve`, which needs `write` + `approve` (stdio, or a *full delegate* token) |
 
 ## Triggers
 
@@ -53,6 +53,7 @@ agent_run_finish(run_id, status, summary)  → locks released, run recorded
 | Images | Downscaled to 1024 px before being passed to the model; counted against `agent.budget.max_images_per_run`. |
 | Matching | The agent must call `product_search` for every item and pick from the candidates; free-text items become `ad_hoc_item` rows (with the nutrition values the agent states per 100 g) only when no candidate scores ≥ 0.62. |
 | New products | A food with no catalogue entry and known label values goes through `product_create`, which without `approve` files a `kind='new'` proposal and returns `log_against_consumable_id` for the draft. Approving it promotes that one-off into the product, keeping every item logged against it (R81, ADR 0013). |
+| Corrections | The person does not only approve or reject: before deciding, they may correct any drafted item (product, amount, unit, portion, marks, meal) and any proposed value. A correction to the agent's draft appears in the day thread as a `correction` message, so a follow-up session sees "1 tub → 300 g" rather than its own guess; a corrected proposal keeps the agent's values in `proposed`. The agent may fix a value it misread in its **own** pending proposal with `proposal_update` (`agent:write`) until a person has changed that proposal — from then on it files a new proposal instead (R84). |
 | Draft | `day_log(status='draft', created_by_kind='agent')` if the day is new, otherwise `line_item(is_draft=1)` on the existing day (a closed day must be reopened first). Every item carries `confidence`, `rationale`, `source_capture_id`, `source_kind`, `alternatives` (top 3), `raw_text`. |
 | Captures | `status = assigned` after drafting, `processed` only after approval. |
 | Idempotency | `capture.content_hash` is unique per tenant; a capture that already has draft items is not drafted again. Finishing a finished run is a no-op. |
@@ -191,6 +192,11 @@ Approve? Reply "approve 2026-09-07" or give corrections (e.g. "chicken 300 g").
 The same per-day section is posted to the day thread as an agent `summary` message.
 
 ## Approval dialogue
+
+The chat can only approve when its MCP connection may decide: over stdio, or with a token of the
+*full delegate* profile. With the recommended *assistant that proposes* token, `day_approve`, `line_item_approve`
+and `draft_discard` are not even listed; the reply then points the user to the app. Which token to hand to which
+client is described in [API.md → Scope profiles](API.md#scope-profiles).
 
 | User says | Tool call |
 |---|---|

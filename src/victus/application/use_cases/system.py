@@ -14,18 +14,38 @@ from victus.application import dto
 from victus.infrastructure.db import orm
 from victus.infrastructure.migrations import runner
 
+#: What ``checks.backup`` reads when the newest successful backup is recent enough.
+BACKUP_OK = "ok"
+#: No successful backup ever, or the newest one older than ``backup.max_age_hours``.
+BACKUP_DEGRADED = "degraded"
+
 
 class Health:
+    """Every check is ``ok`` or says what is wrong; ``status`` is ``ok`` only if all are.
+
+    The backup counts like the others: an instance without a backup Victus knows about is
+    one that loses its data on the next disk failure, and ``/health`` is where that shows.
+    """
+
     def __init__(
-        self, engine: Engine, session_factory: sessionmaker[Session], storage_path: Path
+        self,
+        engine: Engine,
+        session_factory: sessionmaker[Session],
+        storage_path: Path,
+        *,
+        backup_max_age_hours: int = 30,
+        now: datetime | None = None,
     ) -> None:
         self.engine = engine
         self.session_factory = session_factory
         self.storage_path = storage_path
+        self.backup_max_age_hours = backup_max_age_hours
+        self.now = now
 
     def execute(self) -> dto.HealthView:
         checks: dict[str, str] = {"process": "ok"}
         backup_age: float | None = None
+        backup_last_at: datetime | None = None
         try:
             with self.engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
@@ -53,21 +73,23 @@ class Health:
                     .limit(1)
                 )
             if latest is not None and latest.finished_at is not None:
-                backup_age = round(
-                    (datetime.now(UTC) - latest.finished_at).total_seconds() / 3600, 1
-                )
-                checks["backup"] = "ok" if backup_age <= 30 else "stale"
+                backup_last_at = latest.finished_at
+                now = self.now or datetime.now(UTC)
+                backup_age = round(max(0.0, (now - backup_last_at).total_seconds()) / 3600, 1)
+                fresh = backup_age <= self.backup_max_age_hours
+                checks["backup"] = BACKUP_OK if fresh else BACKUP_DEGRADED
             else:
-                checks["backup"] = "none"
+                checks["backup"] = BACKUP_DEGRADED
         except Exception:  # pragma: no cover
             checks["backup"] = "unknown"
-        status = (
-            "ok"
-            if all(v in ("ok", "none") for k, v in checks.items() if k != "backup")
-            else "degraded"
-        )
+        status = "ok" if all(v == "ok" for v in checks.values()) else "degraded"
         if os.environ.get("VICTUS_HEALTH_FORCE_DEGRADED"):
             status = "degraded"
         return dto.HealthView(
-            status=status, version=__version__, checks=checks, backup_age_hours=backup_age
+            status=status,
+            version=__version__,
+            checks=checks,
+            backup_age_hours=backup_age,
+            backup_last_at=backup_last_at,
+            backup_max_age_hours=self.backup_max_age_hours,
         )

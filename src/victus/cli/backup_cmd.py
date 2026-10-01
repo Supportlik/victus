@@ -1,4 +1,4 @@
-"""``victus backup …`` — create, verify, restore, list, prune and schedule backups.
+"""``victus backup …`` — create, verify, restore, list, prune, schedule and record backups.
 
 Exit codes: 0 ok · 1 verification/restore mismatch · 2 input error.
 Database and paths come from the server configuration (``victus.yaml`` / ``VICTUS_*``).
@@ -6,12 +6,14 @@ Database and paths come from the server configuration (``victus.yaml`` / ``VICTU
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
 import typer
 
 from victus.backup.export import ExportError, create_backup, list_archives
+from victus.backup.jobs import RecordError, parse_timestamp, record_job, tenant_id_for
 from victus.backup.manifest import ManifestError
 from victus.backup.restore import RestoreError, restore_backup
 from victus.backup.retention import plan_retention
@@ -79,6 +81,15 @@ def create(
             tenant,
             include_sqlite_snapshot=snapshot,
             storage_path=cfg.storage.path,
+        )
+        # A backup made by hand counts as much as a scheduled one: without this row
+        # /health would go on saying there is none.
+        record_job(
+            engine,
+            path=str(archive.path),
+            size=archive.size,
+            tenant_id=archive.manifest.tenant.id if archive.manifest.tenant else None,
+            finished_at=datetime.now(UTC),
         )
     except ExportError as exc:
         typer.echo(str(exc), err=True)
@@ -232,3 +243,58 @@ def schedule(
         engine.dispose()
     if once and outcomes and not outcomes[0].ok:
         raise typer.Exit(EXIT_MISMATCH)
+
+
+@backup_app.command("record")
+def record(
+    path: Annotated[
+        str, typer.Option("--path", help="Where the backup was written (as the host sees it).")
+    ],
+    size: Annotated[
+        int | None,
+        typer.Option(
+            "--size", min=0, help="Size in bytes; read from --path when omitted and visible."
+        ),
+    ] = None,
+    at: Annotated[
+        str | None,
+        typer.Option("--at", help="When it finished, ISO 8601 with offset (default: now)."),
+    ] = None,
+    tenant: Annotated[
+        str | None, typer.Option(help="Tenant slug; omit when the backup covers every tenant.")
+    ] = None,
+    error: Annotated[
+        str | None,
+        typer.Option("--error", help="Record a failed backup with this message instead."),
+    ] = None,
+) -> None:
+    """Record a backup made outside Victus, so /health and the settings page know about it.
+
+    A host script calls this after its own backup, e.g. an encrypted tar of the data volume:
+    docker compose exec -T api victus backup record --path /mnt/backup/victus-data.tar.gpg
+    --size 123456789
+    """
+    cfg = _cfg()
+    engine = make_engine(cfg.database.url)
+    try:
+        finished_at = parse_timestamp(at) if at else datetime.now(UTC)
+        if size is None:
+            local = Path(path).expanduser()
+            size = local.stat().st_size if local.is_file() else None
+        job = record_job(
+            engine,
+            path=path,
+            size=size,
+            finished_at=finished_at,
+            tenant_id=tenant_id_for(engine, tenant) if tenant else None,
+            status="failed" if error is not None else "finished",
+            error=error,
+        )
+    except RecordError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(EXIT_INPUT) from exc
+    finally:
+        engine.dispose()
+    size_text = f"{size:,} bytes" if size is not None else "size unknown"
+    when = f"{job.finished_at:%Y-%m-%dT%H:%M:%SZ}"
+    typer.echo(f"recorded {job.status} backup {job.id}: {path} ({size_text}, {when})")

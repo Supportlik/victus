@@ -899,6 +899,12 @@ class ProductProposal(Base):
     created_at: Mapped[datetime] = mapped_column(TS, nullable=False, default=utcnow)
     decided_at: Mapped[datetime | None] = mapped_column(TS)
     decided_by: Mapped[str | None] = mapped_column(ID)
+    #: Who filed it: the token, the user, or ``system`` for the in-house worker. It decides
+    #: which pending proposals an actor without ``approve`` may still amend as its own.
+    created_by: Mapped[str | None] = mapped_column(ID)
+    #: The values as the actor proposed them, kept the first time a person changes one. NULL
+    #: while the proposal stands as it was filed, so the history can show both (R81, R84).
+    proposed_changes: Mapped[dict[str, Any] | None] = mapped_column(JSON)
 
 
 class ReportSnapshot(Base):

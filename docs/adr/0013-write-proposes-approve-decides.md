@@ -58,8 +58,11 @@ person dictated, not an inference about it, and there is no draft state for a me
 - An agent token can log, draft and propose, and cannot make anything count. The failure mode is a visible pending
   item, never a silent fact.
 - The web app is unaffected: a browser session holds every scope, so a person's own edits stay immediate.
-- API tokens holding only `write` now get `403` on `POST /products` and on the proposal decision endpoints. That is
-  the intended answer: propose through MCP, decide in the app.
+- API tokens holding only `write` get `403` on the proposal decision endpoints. That is the intended answer:
+  propose, decide in the app. The REST catalogue writes (`POST /products`, `PATCH /products/{id}`, versions and
+  portions) take the same doors as the MCP tools: without `approve` they answer `202` with the proposal they filed.
+- A browser session holds the scopes of the person's role, not every scope: a member decides like an owner but holds
+  no `admin`.
 - One-off consumables gain a second life as "pending products", which keeps the day's numbers honest while the
   catalogue stays curated.
 - The drafting surface has to be as wide as the deciding one, or the difference gets filled by handing out

@@ -30,6 +30,7 @@ blocks:
   - type: burndown
     start: "2026-01-01"
     stages: from_settings
+    projection_windows: [7, 14, 30]
   - type: day_list
     columns: [kcal, protein, fiber, weight, status]
   - type: text_finding

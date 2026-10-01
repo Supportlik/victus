@@ -63,6 +63,17 @@ jobs:
       - name: Run the test suite
         run: uv run --no-sync pytest -q
 
+      # The suite runs under coverage with the gate from pyproject.toml (fail_under); this
+      # step puts the report into the job summary, so every run shows where it stands.
+      - name: Coverage report in the job summary
+        if: always()
+        run: |
+          {
+            echo "### Backend coverage (Python ${{ matrix.python-version }}, ${{ matrix.db }})"
+            echo
+            uv run --no-sync coverage report --format=markdown || echo "No coverage data."
+          } >> "$GITHUB_STEP_SUMMARY"
+
   schemas:
     name: JSON schemas & examples
     runs-on: ubuntu-latest

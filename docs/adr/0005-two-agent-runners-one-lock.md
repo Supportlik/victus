@@ -24,8 +24,9 @@ zero-marginal-cost processing and interactive approval. Running both naively wou
 ## Consequences
 
 - No double drafts even when both runners are enabled and overlap.
-- The external runner needs a token with `agent:write`, `capture:read` and `read`; approval additionally needs
-  `approve`.
+- The external runner needs a token with the *assistant that proposes* profile (`read,write,capture:read,capture:write,agent:write`, see API.md →
+  Scope profiles): it drafts and proposes and decides nothing. Approval additionally needs `approve` (together with
+  `write`), which turns the token into a full delegate.
 - Cost visibility is uniform: the worker reports API cost, the external runner reports usage as provided by the client
   (may be zero for subscription use).
 - Skipped days are not errors; the summary lists them as "locked by <runner>".

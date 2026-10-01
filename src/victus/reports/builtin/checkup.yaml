@@ -42,6 +42,7 @@ blocks:
     with_eta: true
   - type: burndown
     stages: from_settings
+    projection_windows: [7, 14, 30]
   - type: day_list
     columns: [kcal, protein, fiber, weight, status]
   - type: body_composition

@@ -2,6 +2,8 @@
 // of the stored ISO string, which showed the wrong hour and, after midnight, the wrong day.
 // T-WEB-066: the density is on the page, so a reader can see whether this product has one.
 // T-WEB-067: a portion refused for its unit offers the density field instead of naming it.
+// T-WEB-214, T-WEB-215: the proposed values are inputs with a tick each; Approve sends the
+// corrections as `changes` beside the ticked `fields`, Save amends without deciding (R84).
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
@@ -302,6 +304,122 @@ describe('ProductDetail', () => {
     expect(document.activeElement).toBe(field);
     // and the refusal has nothing left to say once its remedy is on screen
     expect(el.querySelector('.needs-density')).toBeNull();
+    http.verify();
+  });
+  /** The page with one pending proposal on it; every request is answered. */
+  async function withProposal(proposal: ProductProposal): Promise<ComponentFixture<ProductDetail>> {
+    const f = TestBed.createComponent(ProductDetail);
+    f.componentRef.setInput('id', '7');
+    f.componentInstance.units.set([
+      { code: 'piece', singular: 'piece', plural: 'pieces', unit_type: 'count' },
+    ] as unknown as Unit[]);
+    f.detectChanges();
+    http.expectOne((r) => r.url === '/api/v1/products/7').flush(CHIA);
+    http.expectOne((r) => r.url === '/api/v1/products/7/versions').flush([CHIA]);
+    http.expectOne((r) => r.url === '/api/v1/products/7/usage').flush({
+      product_id: 7, entries: [], days: 0, total_base_amount: 0, total_kcal: 0, item_count: 0,
+    });
+    http.expectOne((r) => r.url === '/api/v1/captures').flush([]);
+    http.expectOne((r) => r.url === '/api/v1/proposals').flush([proposal]);
+    f.detectChanges();
+    await f.whenStable();
+    return f;
+  }
+
+  function type(input: HTMLInputElement, value: string): void {
+    input.value = value;
+    input.dispatchEvent(new Event('input'));
+  }
+
+  function button(el: Element, label: RegExp): HTMLButtonElement {
+    return Array.from(el.querySelectorAll('button')).find((b) => label.test(text(b))) as HTMLButtonElement;
+  }
+
+  const LABEL = {
+    id: 'pr-9',
+    product_id: 7,
+    kind: 'update',
+    product_name: 'Chia seeds',
+    changes: { carbs: 8, fat: 30, brand: 'Davert Bio' },
+    current: { carbs: 42, fat: 31, brand: 'Davert' },
+    source: 'label photo',
+    status: 'pending',
+    created_at: '2026-09-09T12:00:00Z',
+  } as unknown as ProductProposal;
+
+  it('T-WEB-214: approves the ticked fields with the values a person corrected', async () => {
+    const f = await withProposal(LABEL);
+    const el = f.nativeElement as HTMLElement;
+    const editor = el.querySelector('#proposal-pr-9 v-proposal-editor')!;
+    // every proposed value is an input, beside what the product says now
+    expect((editor.querySelector('[aria-label="carbs"]') as HTMLInputElement).value).toBe('8');
+    expect((editor.querySelector('[aria-label="brand"]') as HTMLInputElement).value).toBe('Davert Bio');
+    type(editor.querySelector('[aria-label="carbs"]') as HTMLInputElement, '7.5');
+    (editor.querySelector('[aria-label="apply brand"]') as HTMLInputElement).click();
+    f.detectChanges();
+    const approve = button(editor, /^Apply 2 of 3$/);
+    approve.click();
+    const req = http.expectOne('/api/v1/proposals/pr-9/approve');
+    expect(req.request.body).toEqual({ changes: { carbs: 7.5 }, fields: ['carbs', 'fat'] });
+    req.flush({ ...LABEL, status: 'approved' });
+    // decided: the page reads the product and what is still pending again
+    for (const r of http.match(() => true)) r.flush(r.request.url.endsWith('usage') ? { product_id: 7, entries: [], days: 0, total_base_amount: 0, total_kcal: 0, item_count: 0 } : r.request.url === '/api/v1/products/7' ? CHIA : []);
+    f.detectChanges();
+    await f.whenStable();
+    expect(el.querySelector('#proposal-pr-9')).toBeNull();
+    http.verify();
+  });
+
+  it('T-WEB-215: saves a correction without deciding, and says when it was refused', async () => {
+    const f = await withProposal(LABEL);
+    const el = f.nativeElement as HTMLElement;
+    const editor = el.querySelector('#proposal-pr-9 v-proposal-editor')!;
+    // nothing typed, nothing to save
+    expect(button(editor, /^Save corrections$/).disabled).toBe(true);
+    type(editor.querySelector('[aria-label="fat"]') as HTMLInputElement, '-1');
+    f.detectChanges();
+    button(editor, /^Save corrections$/).click();
+    const refused = http.expectOne('/api/v1/proposals/pr-9');
+    expect(refused.request.method).toBe('PATCH');
+    expect(refused.request.body).toEqual({ changes: { fat: -1 } });
+    refused.flush({ title: 'Validation failed', status: 422, detail: 'fat must be zero or more' }, { status: 422, statusText: 'Unprocessable' });
+    f.detectChanges();
+    expect(text(editor.querySelector('.v-error'))).toContain('fat must be zero or more');
+
+    type(editor.querySelector('[aria-label="fat"]') as HTMLInputElement, '29');
+    f.detectChanges();
+    button(editor, /^Save corrections$/).click();
+    http.expectOne('/api/v1/proposals/pr-9').flush({
+      ...LABEL,
+      changes: { ...LABEL.changes, fat: 29 },
+      proposed: LABEL.changes,
+    });
+    f.detectChanges();
+    await f.whenStable();
+    // still pending, now with the person's value and the agent's beside it
+    expect((editor.querySelector('[aria-label="fat"]') as HTMLInputElement).value).toBe('29');
+    expect(text(editor)).toContain('agent: 30');
+    expect(button(editor, /^Save corrections$/).disabled).toBe(true);
+    http.verify();
+  });
+
+  it('T-WEB-215: a portion line loaded as filed is no correction; a typed weight is', async () => {
+    const f = await withProposal({
+      ...LABEL,
+      id: 'pr-10',
+      changes: { portions: [{ op: 'update', portion_id: 12, amount: 30 }] },
+      current: {},
+    } as unknown as ProductProposal);
+    const el = f.nativeElement as HTMLElement;
+    const editor = el.querySelector('#proposal-pr-10 v-proposal-editor')!;
+    expect(button(editor, /^Save corrections$/).disabled).toBe(true);
+    type(editor.querySelector('[data-portion="0"] [aria-label="Weight"]') as HTMLInputElement, '32');
+    f.detectChanges();
+    button(editor, /^Save corrections$/).click();
+    const req = http.expectOne('/api/v1/proposals/pr-10');
+    // the update line names only what it changes, as it was filed
+    expect(req.request.body).toEqual({ changes: { portions: [{ op: 'update', portion_id: 12, amount: 32 }] } });
+    req.flush({ ...LABEL, id: 'pr-10', changes: req.request.body.changes, current: {} });
     http.verify();
   });
 });

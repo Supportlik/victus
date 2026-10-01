@@ -8,13 +8,15 @@ from datetime import date, datetime
 from victus.application import dto
 from victus.application.errors import Conflict, NotFound, ValidationFailed
 from victus.application.ports.unit_of_work import UnitOfWork
-from victus.application.tenant_context import SCOPE_APPROVE, SCOPE_READ
-from victus.application.use_cases._base import UseCase, now
+from victus.application.tenant_context import SCOPE_READ
+from victus.application.use_cases._base import UseCase, now, require_decision
 from victus.application.use_cases._mappers import line_item_view
 from victus.application.use_cases.day_logs import (
     LineItemInput,
     build_day_view,
     freeze_band,
+    item_words,
+    note_correction,
     resolve_base,
 )
 from victus.domain.values import CaptureStatus, DayStatus
@@ -150,13 +152,24 @@ class ApproveDay(UseCase):
     """Apply corrections, clear draft flags, freeze the band, mark captures processed."""
 
     def execute(self, day: date, corrections: list[DraftCorrection], *, close: bool) -> dto.DayView:
-        self.ctx.require(SCOPE_APPROVE)
+        require_decision(self.ctx)  # a decision is write + approve (R81)
         with self._uow() as uow:
             d = uow.day_logs.get_by_date(day)
             if d is None:
                 raise NotFound(f"no day log for {day.isoformat()}")
+            items = {li.id: li for m in d.meals for li in m.line_items}
+            was = {
+                c.line_item_id: item_words(items[c.line_item_id])
+                for c in corrections
+                if not c.delete and c.line_item_id in items and items[c.line_item_id].is_draft
+            }
             applied = _apply_corrections(uow, d, corrections)
             uow.flush()
+            for item_id, before in was.items():
+                if items[item_id].origin == "agent":
+                    note_correction(
+                        uow, self.ctx.tenant_id, d.date, before, item_words(items[item_id])
+                    )
             for m in d.meals:
                 for li in m.line_items:
                     li.is_draft = False  # `estimated` stays: the estimate was checked, not removed
@@ -243,7 +256,7 @@ class ApproveLineItem(UseCase):
         meal_id: int | None = None,
         meal_name: str | None = None,
     ) -> dto.LineItemView:
-        self.ctx.require(SCOPE_APPROVE)
+        require_decision(self.ctx)  # a decision is write + approve (R81)
         with self._uow() as uow:
             li = uow.day_logs.get_line_item(item_id)
             if li is None:
@@ -251,6 +264,7 @@ class ApproveLineItem(UseCase):
             if not li.is_draft:
                 raise Conflict(f"line item {item_id} is not a draft")
             d = li.meal.day_log
+            was = item_words(li)
             target = _resolve_meal(uow, d, meal_id, meal_name)
             if target is not None and target.id != li.meal_id:
                 li.position = (max((x.position for x in target.line_items), default=0)) + 1
@@ -269,6 +283,8 @@ class ApproveLineItem(UseCase):
                 _apply_corrections(uow, d, [fixed])
             li.is_draft = False
             uow.flush()
+            if li.origin == "agent":
+                note_correction(uow, self.ctx.tenant_id, d.date, was, item_words(li))
             settled = _settle_captures(uow, d, now())
             _leave_draft_status(uow, d)
             uow.audit.record(
@@ -292,7 +308,7 @@ class ApproveLineItem(UseCase):
 
 class DiscardDraft(UseCase):
     def execute(self, day: date) -> int:
-        self.ctx.require(SCOPE_APPROVE)
+        require_decision(self.ctx)  # a decision is write + approve (R81)
         with self._uow() as uow:
             d = uow.day_logs.get_by_date(day)
             if d is None:

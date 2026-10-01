@@ -18,12 +18,12 @@ from victus.api.middleware import RateLimitMiddleware, SecurityHeadersMiddleware
 from victus.api.routers import (
     agent,
     auth,
+    backup,
     captures,
     days,
     drafts,
     events,
     master_data,
-    placeholders,
     products,
     proposals,
     recipes,
@@ -101,7 +101,7 @@ def create_app(config: ServerConfig | None = None) -> FastAPI:
         agent.router,
         weight.router,
         settings.router,
-        placeholders.router,
+        backup.router,
     ):
         app.include_router(router, prefix=API_PREFIX)
     if cfg.mcp.http_enabled:

@@ -1,9 +1,12 @@
 // T-WEB-003: draft approval — only changed items become corrections; close flag is sent.
+// T-WEB-209: an edit panel left open with a correction is saved before the day is approved.
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter, Router } from '@angular/router';
+import { By } from '@angular/platform-browser';
 import { DraftSummary } from '../../api';
+import { LineItemForm } from '../../shared/line-item-form';
 import { DraftApproval } from './draft-approval';
 
 const summary: DraftSummary = {
@@ -111,5 +114,39 @@ describe('DraftApproval', () => {
     expect(el.querySelector('.summary table')).not.toBeNull();
     expect(el.querySelectorAll('tbody select').length).toBe(1);
     expect(el.textContent).toContain('62 %');
+  });
+  it('T-WEB-209: saves an open panel’s correction before approving, and stops when it is refused', async () => {
+    const fixture = TestBed.createComponent(DraftApproval);
+    fixture.componentRef.setInput('date', '2026-01-02');
+    await fixture.whenStable();
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/units').flush([{ code: 'g', singular: 'g', plural: 'g', unit_type: 'mass' }]);
+    http.expectOne('/api/v1/drafts/2026-01-02/summary').flush(summary);
+    await fixture.whenStable();
+    const cmp = fixture.componentInstance;
+    cmp.edit(summary.day.meals[0].line_items[1]);
+    fixture.detectChanges();
+    http.expectOne('/api/v1/products/6').flush({ id: 6, name: 'Rice', reference_amount: 100, reference_unit: 'g', verified: true, portions: [] });
+    await fixture.whenStable();
+    const panel = fixture.debugElement.query(By.directive(LineItemForm)).componentInstance as LineItemForm;
+    // the panel offers the day's meals, so the item can move before it is approved
+    expect(panel.meals().map((m) => m.name)).toEqual(['Dinner']);
+    panel.amount = 120;
+
+    vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    cmp.approve();
+    const refused = http.expectOne('/api/v1/line-items/22');
+    expect(refused.request.body).toMatchObject({ amount: 120 });
+    refused.flush({ title: 'Forbidden', status: 403, detail: "scope 'approve' required" }, { status: 403, statusText: 'Forbidden' });
+    http.expectNone('/api/v1/drafts/2026-01-02/approve');
+    expect(cmp.error()).toContain("scope 'approve' required");
+    expect(cmp.busy()).toBe(false);
+
+    cmp.approve();
+    http.expectOne('/api/v1/line-items/22').flush({});
+    const approved = http.expectOne('/api/v1/drafts/2026-01-02/approve');
+    // the panel's write already carries the correction; the rows add none of their own
+    expect(approved.request.body.corrections).toEqual([]);
+    approved.flush(summary.day);
   });
 });

@@ -117,7 +117,7 @@ minute and the page a person is looking at stops showing stale data.
 | `backup.retention.weekly` | int | no | `8` | Keep last *n* weekly |
 | `backup.retention.monthly` | int | no | `12` | Keep last *n* monthly |
 | `backup.include_sqlite_snapshot` | bool | no | `true` | Add `VACUUM INTO` copy to the archive (SQLite only) |
-| `backup.max_age_hours` | int | no | `30` | `/health` turns `backup_age_hours` into a warning beyond this |
+| `backup.max_age_hours` | int (≥ 1) | no | `30` | `/health` reports `checks.backup: degraded` (and `status: degraded`) once the newest successful backup is older than this, and also when there has never been one. Any recorded backup counts: the scheduler's, `victus backup create`, or a host backup reported with `victus backup record` |
 
 ### Example `victus.yaml`
 

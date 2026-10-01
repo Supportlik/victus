@@ -58,6 +58,13 @@ class ProductRepo(Repo):
         self.session.flush()
         return item
 
+    def get_ad_hoc_item(self, consumable_id: int) -> orm.AdHocItem | None:
+        """The values of a one-off consumable of this tenant, or ``None``."""
+        consumable = self.get_consumable(consumable_id)
+        if consumable is None or consumable.kind != "ad_hoc":
+            return None
+        return self.session.get(orm.AdHocItem, consumable_id)
+
     def promote_ad_hoc(self, consumable_id: int, name: str, **fields: object) -> orm.Product:
         """Turn a one-off consumable into a catalogue product, keeping its id (R81).
 

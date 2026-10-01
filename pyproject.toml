@@ -97,8 +97,10 @@ markers = [
   "api: HTTP layer via TestClient",
   "migration: backup archive round-trips",
   "slow: long-running tests (skipped by default in pre-commit)",
+  "covers(*targets): the REST routes (\"GET /api/v1/days/{day}\") and MCP tools (\"mcp:day_get\") a test exercises; see tests/coverage_registry.py",
 ]
-addopts = "-ra"
+# Every run measures the whole package and fails below fail_under; `--no-cov` for a part.
+addopts = "-ra --cov=victus --cov-report=term:skip-covered"
 
 [tool.ruff]
 line-length = 100
@@ -127,3 +129,29 @@ module = ["victus.api.*", "victus.cli.*", "victus.infrastructure.*"]
 disallow_untyped_decorators = false
 # SQLAlchemy's Session.scalar() returns Any; the repositories declare the real type.
 warn_return_any = false
+
+# Coverage gate (TESTPLAN "Coverage policy"). Branch coverage over the whole package; the
+# threshold is the level the suite has reached and only ever goes up. An exclusion is a
+# `# pragma: no cover` with the reason written next to it.
+[tool.coverage.run]
+source = ["victus"]
+branch = true
+omit = [
+  # Alembic's env.py runs inside Alembic's own process context, not importable in a test.
+  "src/victus/infrastructure/migrations/env.py",
+]
+
+[tool.coverage.report]
+# Reached: 98.0 % on SQLite (domain, application, api, agent, cli, mcp at 100 %). The gate
+# sits one point lower because the PostgreSQL job skips the SQLite-only branches of the
+# engine and the migrations. Raise it with the suite, never lower it.
+fail_under = 97
+show_missing = true
+skip_covered = true
+exclude_also = [
+  "if TYPE_CHECKING:",
+  "raise NotImplementedError",
+  '@(abc\.)?abstractmethod',
+  '^\s*\.\.\.$',
+  "if __name__ == .__main__.:",
+]

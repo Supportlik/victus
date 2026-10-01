@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date
 
 from victus.domain.model.reporting import Stage
-from victus.domain.services import burndown
+from victus.domain.services import burndown, trend
 from victus.reports.blocks._meta import meta_for
 from victus.reports.context import ReportContext
 from victus.reports.definition import BurndownDef
@@ -39,6 +39,11 @@ def compute_burndown(block: BurndownDef, ctx: ReportContext) -> BurndownBlockRes
         stages,
         s.kcal_per_kg,
         tdee_ref=ctx.reference_tdee[0],
+        # the forecast block's slopes and its day (R62), so the crossing is its ETA
+        trends=trend.trend_windows(
+            ctx.ma, ctx.weights, list(block.projection_windows), today=anchor_day
+        ),
+        as_of=ctx.today,
     )
     if result is None:
         raise ValueError("burndown not computable: no anchor after start or goal already reached")

@@ -35,6 +35,7 @@ from victus.application.tenant_context import (
     SCOPE_CAPTURE_WRITE,
     SCOPE_READ,
     SCOPE_WRITE,
+    Requires,
     ScopeError,
     TenantContext,
 )
@@ -105,12 +106,19 @@ Handler = Callable[[ToolContext, Any], ToolResult]
 class ToolSpec:
     name: str
     description: str
-    scope: str
+    #: Every scope the tool needs, as the use case behind it checks them (the scope
+    #: consistency tests hold the two together). A token without them never sees the tool.
+    scope: Requires
     input_model: type[BaseModel]
     handler: Handler
     read_only: bool = True
     # When set, this JSON schema is published instead of the pydantic model's.
     input_schema_override: dict[str, Any] | None = None
+    #: What more some calls need, e.g. ``approve`` to change an approved item.
+    scope_note: str | None = None
+    #: What a call without ``approve`` turns into instead of a fact: ``"proposal"`` or
+    #: ``"draft"`` (ADR 0013); ``None`` when the outcome does not depend on it.
+    without_approve: str | None = None
 
     def input_schema(self) -> dict[str, Any]:
         if self.input_schema_override is not None:
@@ -386,6 +394,17 @@ class ProductProposeIn(_In):
     capture_id: str | None = Field(default=None, description="The capture this comes from.")
 
 
+class ProposalUpdateIn(_In):
+    proposal_id: str
+    changes: dict[str, Any] = Field(
+        description=(
+            "Values to correct on your pending proposal, same keys as when it was filed; "
+            "null withdraws a field. Merged into what the proposal already carries."
+        )
+    )
+    rationale: str | None = Field(default=None, description="What you read again, and where.")
+
+
 class AgentRunStartIn(_In):
     #: "assess" records that this run judged frozen reports rather than drafting days.
     mode: Literal["historical", "batch", "manual", "follow_up", "assess"] = "historical"
@@ -459,6 +478,9 @@ class LineItemUpdateIn(_In):
     portion_id: int | None = None
     estimated: bool | None = None
     amount_estimated: bool | None = None
+    meal_id: int | None = Field(
+        default=None, description="Move the item to another meal of the same day."
+    )
 
 
 class LineItemDeleteIn(_In):
@@ -570,9 +592,11 @@ class WeightAddIn(_In):
 # ── helpers ─────────────────────────────────────────────────────────────────
 
 
-def _require(tc: ToolContext, scope: str) -> None:
-    if not tc.ctx.has_scope(scope):
-        raise ToolError("forbidden", f"scope '{scope}' required")
+def _require(tc: ToolContext, scope: Requires) -> None:
+    try:
+        scope.check(tc.ctx)
+    except ScopeError as exc:
+        raise ToolError("forbidden", str(exc)) from exc
 
 
 def _timezone(tc: ToolContext) -> str:
@@ -608,6 +632,8 @@ def _compact_product(p: Any) -> dict[str, Any]:
 
 
 def _render_report(tc: ToolContext, inp: ReportRenderIn) -> ToolResult:
+    # Reads the data source directly, so the read check lives here (the REST route has it too).
+    tc.ctx.require(SCOPE_READ)
     registry = ReportRegistry()
     try:
         definition = registry.get(inp.name)
@@ -757,7 +783,14 @@ def _captures_open(tc: ToolContext, inp: CapturesOpenIn) -> ToolResult:
 
 def _capture_get(tc: ToolContext, inp: CaptureGetIn) -> ToolResult:
     cap = capture_uc.GetCapture(tc.uow_factory, tc.ctx).execute(inp.id)
-    if cap.kind == CaptureKind.AUDIO.value and cap.transcript is None and tc.transcription:
+    if (
+        cap.kind == CaptureKind.AUDIO.value
+        and cap.transcript is None
+        and tc.transcription
+        # Transcribing stores a transcript, which is a capture write: a read-only capture
+        # token gets the capture as it stands instead of a refusal.
+        and tc.ctx.has_scope(SCOPE_CAPTURE_WRITE)
+    ):
         if tc.blobs is None:
             raise ToolError("unavailable", "blob storage is not configured")
         cap = capture_uc.TranscribeCapture(
@@ -848,15 +881,9 @@ def _day_approve(tc: ToolContext, inp: DayApproveIn) -> ToolResult:
 
 
 def _line_item_create(tc: ToolContext, inp: LineItemCreateIn) -> ToolResult:
-    day = day_uc.GetDay(tc.uow_factory, tc.ctx).execute(inp.date)
-    meal = next((m for m in day.meals if m.name.strip().lower() == inp.meal.strip().lower()), None)
-    meal_id = (
-        meal.id
-        if meal is not None
-        else day_uc.AddMeal(tc.uow_factory, tc.ctx).execute(inp.date, inp.meal).id
-    )
-    view = day_uc.AddLineItem(tc.uow_factory, tc.ctx).execute(
-        meal_id,
+    view = day_uc.AddLineItemOnDate(tc.uow_factory, tc.ctx).execute(
+        inp.date,
+        inp.meal,
         day_uc.LineItemInput(
             consumable_id=inp.consumable_id,
             amount=inp.amount,
@@ -1007,6 +1034,13 @@ def _product_propose(tc: ToolContext, inp: ProductProposeIn) -> ToolResult:
     return cast(dict[str, Any], jsonable(view))
 
 
+def _proposal_update(tc: ToolContext, inp: ProposalUpdateIn) -> ToolResult:
+    view = proposal_uc.AmendProposal(tc.uow_factory, tc.ctx).execute(
+        inp.proposal_id, inp.changes, rationale=inp.rationale
+    )
+    return cast(dict[str, Any], jsonable(view))
+
+
 def _product_create(tc: ToolContext, inp: ProductCreateIn) -> ToolResult:
     fields = inp.model_dump()
     portions = fields.pop("portions", None)
@@ -1096,14 +1130,31 @@ def _draft_schema() -> dict[str, Any]:
 def _spec(
     name: str,
     description: str,
-    scope: str,
+    scope: str | Requires,
     model: type[BaseModel],
     handler: Callable[[ToolContext, Any], ToolResult],
     *,
     read_only: bool = True,
     override: dict[str, Any] | None = None,
+    note: str | None = None,
+    without_approve: str | None = None,
 ) -> ToolSpec:
-    return ToolSpec(name, description, scope, model, handler, read_only, override)
+    requires = Requires.of(scope) if isinstance(scope, str) else scope
+    if without_approve is None and note == _APPLY_OR_PROPOSE:
+        without_approve = "proposal"
+    return ToolSpec(
+        name, description, requires, model, handler, read_only, override, note, without_approve
+    )
+
+
+# Requirements with more than one scope, named once (the use cases check the same).
+_READ_CAPTURES = Requires.of(SCOPE_READ, SCOPE_CAPTURE_READ)
+_DECISION = Requires.of(SCOPE_WRITE, SCOPE_APPROVE)
+_PROPOSE = Requires.of((SCOPE_AGENT_WRITE, SCOPE_WRITE))
+_PROPOSE_ON_PORTION = Requires.of(SCOPE_READ, (SCOPE_AGENT_WRITE, SCOPE_WRITE))
+#: ``agent:write`` amends its own proposal; a person needs ``write`` + ``approve``.
+_AMEND = Requires.of((SCOPE_AGENT_WRITE, SCOPE_WRITE), (SCOPE_AGENT_WRITE, SCOPE_APPROVE))
+_APPLY_OR_PROPOSE = "applied with write + approve; otherwise filed as a proposal"
 
 
 TOOLS: tuple[ToolSpec, ...] = (
@@ -1158,10 +1209,11 @@ TOOLS: tuple[ToolSpec, ...] = (
         "changed, for example a reformulated recipe or a different supplier — correcting the "
         "current version would rewrite what those earlier days counted. Without the approve "
         "scope it becomes a proposal a person decides.",
-        SCOPE_WRITE,
+        _PROPOSE,
         ProductVersionCreateIn,
         _product_version_create,
         read_only=False,
+        note=_APPLY_OR_PROPOSE,
     ),
     _spec(
         "recipe_get",
@@ -1195,7 +1247,7 @@ TOOLS: tuple[ToolSpec, ...] = (
         "day_thread_get",
         "The day's thread: current day (draft or approved), earlier messages, and open captures "
         "with transcripts. Seed every drafting session with this.",
-        SCOPE_READ,
+        _READ_CAPTURES,
         DayThreadGetIn,
         _day_thread_get,
     ),
@@ -1246,6 +1298,7 @@ TOOLS: tuple[ToolSpec, ...] = (
         SCOPE_CAPTURE_READ,
         CaptureGetIn,
         _capture_get,
+        note="audio without a transcript is transcribed on the way only with capture:write",
     ),
     _spec(
         "capture_mark",
@@ -1286,7 +1339,7 @@ TOOLS: tuple[ToolSpec, ...] = (
     _spec(
         "draft_discard",
         "Remove all draft items of a day.",
-        SCOPE_APPROVE,
+        _DECISION,
         DraftDiscardIn,
         _draft_discard,
         read_only=False,
@@ -1295,7 +1348,7 @@ TOOLS: tuple[ToolSpec, ...] = (
         "day_approve",
         "Approve a drafted day: apply corrections, clear draft flags, freeze the target band, "
         "mark captures processed.",
-        SCOPE_APPROVE,
+        _DECISION,
         DayApproveIn,
         _day_approve,
         read_only=False,
@@ -1309,30 +1362,34 @@ TOOLS: tuple[ToolSpec, ...] = (
         LineItemCreateIn,
         _line_item_create,
         read_only=False,
+        note="without approve the item is a draft, and a missing day is created as a draft day",
+        without_approve="draft",
     ),
     _spec(
         "line_item_update",
-        "Change amount, unit, portion or consumable of a line item. Drafts only: "
+        "Change amount, unit, portion, consumable or meal of a line item. Drafts only: "
         "changing an approved item needs the approve scope.",
         SCOPE_WRITE,
         LineItemUpdateIn,
         _line_item_update,
         read_only=False,
+        note="an approved item needs approve",
     ),
     _spec(
         "line_item_delete",
         "Delete a line item. You may withdraw your own draft; removing an approved item "
         "needs the approve scope.",
-        SCOPE_WRITE,
+        Requires.of(SCOPE_WRITE, (SCOPE_AGENT_WRITE, SCOPE_APPROVE)),
         LineItemDeleteIn,
         _line_item_delete,
         read_only=False,
+        note="agent:write withdraws a draft; an approved item needs approve",
     ),
     _spec(
         "report_snapshot_create",
         "Freeze a report as a snapshot: the numbers of that period, stored with today's date. "
         "Returns the frozen result so you can assess it right away with report_assess.",
-        SCOPE_READ,
+        Requires.of(SCOPE_READ, SCOPE_WRITE),
         ReportSnapshotCreateIn,
         _report_snapshot_create,
         read_only=False,
@@ -1355,7 +1412,7 @@ TOOLS: tuple[ToolSpec, ...] = (
         "report_assess",
         "Write your assessment of a frozen snapshot. The numbers stay as they were; a snapshot "
         "carries exactly one assessment.",
-        SCOPE_AGENT_WRITE,
+        _PROPOSE,
         ReportAssessIn,
         _report_assess,
         read_only=False,
@@ -1364,7 +1421,7 @@ TOOLS: tuple[ToolSpec, ...] = (
         "line_item_approve",
         "Accept one drafted line item (optionally correcting amount, unit or product). "
         "The rest of the day stays a draft.",
-        SCOPE_APPROVE,
+        _DECISION,
         LineItemApproveIn,
         _line_item_approve,
         read_only=False,
@@ -1424,9 +1481,19 @@ TOOLS: tuple[ToolSpec, ...] = (
         "also carry a `portions` list whose entries say what they do: {'op': 'add', "
         "'unit_code': …, 'amount': …}, {'op': 'update', 'portion_id': …, …} or {'op': 'delete', "
         "'portion_id': …, 'reason': …}.",
-        SCOPE_AGENT_WRITE,
+        _PROPOSE,
         ProductProposeIn,
         _product_propose,
+        read_only=False,
+    ),
+    _spec(
+        "proposal_update",
+        "Correct your own pending proposal before a person decides it — a value you misread, "
+        "a portion you forgot. Only proposals you filed and no person has corrected yet; "
+        "nothing is applied, the proposal stays pending.",
+        _AMEND,
+        ProposalUpdateIn,
+        _proposal_update,
         read_only=False,
     ),
     _spec(
@@ -1434,10 +1501,11 @@ TOOLS: tuple[ToolSpec, ...] = (
         "Correct a product's nutrients per reference amount, e.g. from a label photo capture. "
         "Without the approve scope it becomes a proposal a person decides; with it, values "
         "propagate to every logged quantity of that product. Set `source`.",
-        SCOPE_WRITE,
+        _PROPOSE,
         ProductUpdateIn,
         _product_update,
         read_only=False,
+        note=_APPLY_OR_PROPOSE,
     ),
     _spec(
         "product_create",
@@ -1446,19 +1514,21 @@ TOOLS: tuple[ToolSpec, ...] = (
         "it files a pending proposal and returns `log_against_consumable_id`, which you "
         "use in the day draft right away. Approving it in the app turns that one-off into "
         "the catalogue entry, keeping every item already logged against it.",
-        SCOPE_WRITE,
+        _PROPOSE,
         ProductCreateIn,
         _product_create,
         read_only=False,
+        note=_APPLY_OR_PROPOSE,
     ),
     _spec(
         "portion_create",
         "Add a count portion (piece, slice, cup…) with its weight to a product. Without the "
         "approve scope it becomes a proposal a person decides.",
-        SCOPE_WRITE,
+        _PROPOSE,
         PortionCreateIn,
         _portion_create,
         read_only=False,
+        note=_APPLY_OR_PROPOSE,
     ),
     _spec(
         "portion_update",
@@ -1466,10 +1536,11 @@ TOOLS: tuple[ToolSpec, ...] = (
         "Adding the corrected portion instead leaves the wrong row in place, and where the "
         "unit is what was wrong it is refused as a duplicate. Without the approve scope this "
         "becomes a proposal a person decides.",
-        SCOPE_WRITE,
+        _PROPOSE_ON_PORTION,
         PortionUpdateIn,
         _portion_update,
         read_only=False,
+        note=_APPLY_OR_PROPOSE,
     ),
     _spec(
         "portion_delete",
@@ -1477,10 +1548,11 @@ TOOLS: tuple[ToolSpec, ...] = (
         "such thing can have. Say why in `reason`: the person reviewing sees it next to the "
         "row and how many logged items use it. Without the approve scope this becomes a "
         "proposal; a portion still in use cannot be removed at all.",
-        SCOPE_WRITE,
+        _PROPOSE_ON_PORTION,
         PortionDeleteIn,
         _portion_delete,
         read_only=False,
+        note=_APPLY_OR_PROPOSE,
     ),
     _spec(
         "weight_add",
@@ -1534,7 +1606,7 @@ def get_tool(name: str) -> ToolSpec:
 
 def tools_for(ctx: TenantContext, names: frozenset[str] | None = None) -> list[ToolSpec]:
     """Tools the context may call (by scope), optionally restricted to ``names``."""
-    return [t for t in TOOLS if ctx.has_scope(t.scope) and (names is None or t.name in names)]
+    return [t for t in TOOLS if t.scope.allows(ctx) and (names is None or t.name in names)]
 
 
 def dispatch(tc: ToolContext, name: str, arguments: dict[str, Any] | None) -> ToolResult:

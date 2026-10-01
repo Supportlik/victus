@@ -38,15 +38,22 @@ def encode_row(row: Mapping[str, Any]) -> str:
 
 
 def _python_type(table: Table, column: str) -> type[Any] | None:
-    """Python type of a column; unwraps ``TypeDecorator`` (e.g. ``UTCDateTime``)."""
+    """Python type of a column; unwraps ``TypeDecorator`` (e.g. ``UTCDateTime``).
+
+    ``object`` counts as "unknown" and falls through to the wrapped type:
+    SQLAlchemy 2.0 raises ``NotImplementedError`` for a ``TypeDecorator``'s
+    ``python_type``, 2.1 returns ``object`` instead.
+    """
     type_ = table.c[column].type
     for candidate in (type_, getattr(type_, "impl", None)):
         if candidate is None:
             continue
         try:
-            return candidate.python_type
+            ptype = candidate.python_type
         except (NotImplementedError, AttributeError):
             continue
+        if ptype is not object:
+            return ptype
     return None
 
 

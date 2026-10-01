@@ -72,6 +72,17 @@ def _seed_alice(client: TestClient, alice_token: dict[str, str]) -> dict[str, in
     }
 
 
+@pytest.mark.covers(
+    "POST /api/v1/products",
+    "POST /api/v1/products/{product_id}/portions",
+    "POST /api/v1/days/{day}",
+    "POST /api/v1/days/{day}/meals",
+    "POST /api/v1/meals/{meal_id}/line-items",
+    "POST /api/v1/recipes",
+    "POST /api/v1/weight",
+    "GET /api/v1/days/{day}",
+    "GET /api/v1/days",
+)
 def test_t_api_013_day_detail(client: TestClient, alice_token: dict[str, str]) -> None:
     """T-API-013: day detail carries computed macros, meals with items, zones and findings."""
     _seed_alice(client, alice_token)
@@ -94,6 +105,19 @@ def test_t_api_013_day_detail(client: TestClient, alice_token: dict[str, str]) -
     assert [d["date"] for d in days] == [DAY] and days[0]["macros"]["kcal"] == 252
 
 
+@pytest.mark.covers(
+    "POST /api/v1/products",
+    "POST /api/v1/products/{product_id}/portions",
+    "POST /api/v1/days/{day}",
+    "POST /api/v1/days/{day}/meals",
+    "POST /api/v1/meals/{meal_id}/line-items",
+    "POST /api/v1/recipes",
+    "POST /api/v1/weight",
+    "GET /api/v1/products",
+    "POST /api/v1/products/match",
+    "GET /api/v1/units",
+    "GET /api/v1/categories",
+)
 def test_t_api_012_search_and_match(client: TestClient, alice_token: dict[str, str]) -> None:
     """T-API-012: substring search and match candidates with tier and score."""
     _seed_alice(client, alice_token)
@@ -133,6 +157,26 @@ def test_t_api_012_search_and_match(client: TestClient, alice_token: dict[str, s
         ("GET", "/api/v1/drafts/" + DAY + "/summary", None),
     ],
 )
+@pytest.mark.covers(
+    "POST /api/v1/products",
+    "POST /api/v1/products/{product_id}/portions",
+    "POST /api/v1/days/{day}",
+    "POST /api/v1/days/{day}/meals",
+    "POST /api/v1/meals/{meal_id}/line-items",
+    "POST /api/v1/recipes",
+    "POST /api/v1/weight",
+    "GET /api/v1/products/{product_id}",
+    "PATCH /api/v1/products/{product_id}",
+    "DELETE /api/v1/products/{product_id}",
+    "PATCH /api/v1/portions/{portion_id}",
+    "GET /api/v1/days/{day}",
+    "PUT /api/v1/days/{day}",
+    "PATCH /api/v1/line-items/{item_id}",
+    "DELETE /api/v1/line-items/{item_id}",
+    "GET /api/v1/recipes/{recipe_id}",
+    "DELETE /api/v1/weight/{entry_id}",
+    "GET /api/v1/drafts/{day}/summary",
+)
 def test_t_api_011_foreign_tenant_is_404(
     client: TestClient,
     alice_token: dict[str, str],
@@ -150,6 +194,11 @@ def test_t_api_011_foreign_tenant_is_404(
     assert r.headers["content-type"].startswith("application/problem+json")
 
 
+@pytest.mark.covers(
+    "POST /api/v1/products",
+    "GET /api/v1/products/{product_id}",
+    "GET /api/v1/days/{day}",
+)
 def test_t_api_014_problem_json(client: TestClient, alice_token: dict[str, str]) -> None:
     """T-API-014: validation and application errors come as problem+json with field paths."""
     r = client.post("/api/v1/products", json={"name": ""}, headers=alice_token)
@@ -163,14 +212,16 @@ def test_t_api_014_problem_json(client: TestClient, alice_token: dict[str, str])
     assert r.status_code == 401 and r.json()["status"] == 401
 
 
+@pytest.mark.covers("GET /api/v1/health")
 def test_t_api_015_health_and_openapi(client: TestClient) -> None:
     """T-API-015: health lists db, migrations, storage and backup; OpenAPI covers the routers."""
     h = client.get("/api/v1/health")
     assert h.status_code == 200
     body = h.json()
-    assert body["status"] == "ok"
+    # a fresh instance has never been backed up, which is a warning (T-API-150)
+    assert body["status"] == "degraded"
     assert body["checks"]["db"] == "ok" and body["checks"]["migrations"] == "ok"
-    assert body["checks"]["storage"] == "ok" and body["checks"]["backup"] == "none"
+    assert body["checks"]["storage"] == "ok" and body["checks"]["backup"] == "degraded"
     assert body["backup_age_hours"] is None
     paths = client.get("/api/v1/openapi.json").json()["paths"]
     for p in (
@@ -182,15 +233,25 @@ def test_t_api_015_health_and_openapi(client: TestClient) -> None:
         "/api/v1/settings",
         "/api/v1/target-bands",
         "/api/v1/recipes",
+        "/api/v1/backup/jobs",
     ):
         assert p in paths, p
 
 
-def test_planned_routes_answer_501(client: TestClient, alice_token: dict[str, str]) -> None:
-    r = client.get("/api/v1/backup/jobs", headers=alice_token)
-    assert r.status_code == 501 and "backup" in r.json()["detail"]
-
-
+@pytest.mark.covers(
+    "POST /api/v1/products",
+    "POST /api/v1/products/{product_id}/portions",
+    "POST /api/v1/days/{day}",
+    "POST /api/v1/days/{day}/meals",
+    "POST /api/v1/meals/{meal_id}/line-items",
+    "POST /api/v1/recipes",
+    "POST /api/v1/weight",
+    "GET /api/v1/drafts",
+    "POST /api/v1/days/{day}/messages",
+    "GET /api/v1/days/{day}/messages",
+    "GET /api/v1/drafts/{day}/summary",
+    "POST /api/v1/drafts/{day}/approve",
+)
 def test_day_thread_and_drafts_over_http(client: TestClient, alice_token: dict[str, str]) -> None:
     ids = _seed_alice(client, alice_token)
     # a draft item, a message → follow-up queued, approval closes the day
@@ -231,6 +292,7 @@ def test_day_thread_and_drafts_over_http(client: TestClient, alice_token: dict[s
     assert client.get("/api/v1/drafts", headers=alice_token).json() == []
 
 
+@pytest.mark.covers("GET /api/v1/settings", "PUT /api/v1/settings", "GET /api/v1/target-bands")
 def test_settings_roundtrip_over_http(client: TestClient, alice_token: dict[str, str]) -> None:
     """PUT /settings validates against the schema, versions the document and syncs target bands."""
     import yaml
@@ -252,6 +314,19 @@ def test_settings_roundtrip_over_http(client: TestClient, alice_token: dict[str,
     assert bad.status_code == 422 and bad.json()["errors"]
 
 
+@pytest.mark.covers(
+    "POST /api/v1/products",
+    "POST /api/v1/products/{product_id}/portions",
+    "POST /api/v1/days/{day}",
+    "POST /api/v1/days/{day}/meals",
+    "POST /api/v1/meals/{meal_id}/line-items",
+    "POST /api/v1/recipes",
+    "POST /api/v1/weight",
+    "POST /api/v1/products/{product_id}/versions",
+    "GET /api/v1/products/{product_id}",
+    "GET /api/v1/products/{product_id}/versions",
+    "GET /api/v1/products",
+)
 def test_product_versions_over_http(client: TestClient, alice_token: dict[str, str]) -> None:
     """T-API-071: a product's values may change from a day on, over HTTP (R70)."""
     ids = _seed_alice(client, alice_token)
@@ -291,6 +366,7 @@ def test_product_versions_over_http(client: TestClient, alice_token: dict[str, s
     ] == [fresh["id"]]
 
 
+@pytest.mark.covers("POST /api/v1/products", "GET /api/v1/products")
 def test_products_page_and_rank_over_http(client: TestClient, alice_token: dict[str, str]) -> None:
     """T-API-072: `offset` reaches the whole catalogue, and a short query is ranked."""
     for name in ("Ei", "Eiweißmilch", "Bäckerei Brötchen", "Fleischwurst", "Reiswaffeln"):
@@ -319,6 +395,13 @@ def test_products_page_and_rank_over_http(client: TestClient, alice_token: dict[
     assert [p["name"] for p in ranked.json()] == ["Ei", "Eiweißmilch", "Bäckerei Brötchen"]
 
 
+@pytest.mark.covers(
+    "POST /api/v1/products",
+    "GET /api/v1/products/{product_id}",
+    "GET /api/v1/products",
+    "POST /api/v1/products/{product_id}/portions",
+    "PATCH /api/v1/products/{product_id}",
+)
 def test_density_over_http(client: TestClient, alice_token: dict[str, str]) -> None:
     """T-API-075: the density can be read back, and a refusal points at it.
 

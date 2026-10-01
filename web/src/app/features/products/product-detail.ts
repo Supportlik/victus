@@ -19,11 +19,12 @@ import { CaptureCard } from '../../shared/capture-card';
 import { CaptureInput } from '../../shared/capture-input';
 import { MacroPipe } from '../../shared/format';
 import { ProductForm } from './product-form';
+import { ProposalEditor } from './proposal-editor';
 
 @Component({
   selector: 'v-product-detail',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, FormsModule, MacroPipe, ProductForm, CaptureInput, CaptureCard, DecimalPipe],
+  imports: [RouterLink, FormsModule, MacroPipe, ProductForm, CaptureInput, CaptureCard, DecimalPipe, ProposalEditor],
   template: `
     <div class="v-page">
       @if (error(); as e) { <div class="v-error">{{ e }}</div> }
@@ -117,25 +118,10 @@ import { ProductForm } from './product-form';
         @if (proposals().length) {
           <section class="v-panel proposals">
             <h3>{{ i18n.t('Proposed corrections') }}</h3>
-            <p class="v-small v-muted">{{ i18n.t('The agent read these from your label photos or notes. Nothing changes until you approve.') }}</p>
+            <p class="v-small v-muted">{{ i18n.t('The agent read these from your label photos or notes. Correct any value before you approve; nothing changes until then.') }}</p>
             @for (pr of proposals(); track pr.id) {
               <!-- the products list links straight to one proposal, not to the top of the page -->
               <div class="proposal" [id]="'proposal-' + pr.id">
-                <div class="v-scroll-x">
-                  <table class="v-table diff">
-                    <thead><tr><th>{{ i18n.t('Apply') }}</th><th>{{ i18n.t('Field') }}</th><th class="num">{{ i18n.t('Now') }}</th><th class="num">{{ i18n.t('Proposed') }}</th></tr></thead>
-                    <tbody>
-                      @for (k of keys(pr); track k) {
-                        <tr>
-                          <td><input type="checkbox" [checked]="isSelected(pr, k)" (change)="toggle(pr, k)" [attr.aria-label]="i18n.t('apply {field}', { field: k })" /></td>
-                          <td>{{ k }}</td>
-                          <td class="num v-muted">{{ pr.current[k] ?? '–' }}</td>
-                          <td class="num"><strong>{{ pr.changes[k] }}</strong></td>
-                        </tr>
-                      }
-                    </tbody>
-                  </table>
-                </div>
                 @if (portionPlan(pr).length) {
                   <ul class="plan">
                     @for (line of portionPlan(pr); track $index) {
@@ -153,14 +139,10 @@ import { ProductForm } from './product-form';
                     }
                   </ul>
                 }
+                <!-- the proposed values are inputs, each with its tick; Save amends without deciding -->
+                <v-proposal-editor [proposal]="pr" [units]="units()" [selectable]="true" [disabled]="blockedCount(pr) > 0" (amended)="amended($event)" (decided)="decided($event)" />
                 @if (pr.rationale) { <p class="v-small">{{ pr.rationale }}</p> }
                 <p class="v-small v-muted">{{ pr.source }} · <time [attr.datetime]="pr.created_at">{{ format.moment(pr.created_at) }}</time></p>
-                <div class="v-actions">
-                  <button type="button" class="v-btn primary" (click)="decide(pr, true)" [disabled]="deciding() || !selectedCount(pr) || blockedCount(pr) > 0">
-                    {{ selectedCount(pr) === keys(pr).length ? i18n.t('Apply all') : i18n.t('Apply {n} of {total}', { n: selectedCount(pr), total: keys(pr).length }) }}
-                  </button>
-                  <button type="button" class="v-btn" (click)="decide(pr, false)" [disabled]="deciding()">{{ i18n.t('Reject') }}</button>
-                </div>
               </div>
             }
           </section>
@@ -337,8 +319,6 @@ export class ProductDetail {
   vfiber: number | null = null;
   vsalt: number | null = null;
   vsource = '';
-  readonly deciding = signal(false);
-  readonly unselected = signal<Set<string>>(new Set());
   np: Omit<Portion, 'id' | 'product_id'> = { label: '', unit_code: 'piece', amount: 0, amount_unit: 'g', is_default: false, weight_source: 'weighed' };
 
   constructor() {
@@ -420,22 +400,6 @@ export class ProductDetail {
   removeCapture(id: string): void {
     this.captures.update((list) => list.filter((x) => x.id !== id));
   }
-  keys(pr: ProductProposal): string[] {
-    return Object.keys(pr.changes);
-  }
-  /** Every field is selected until it is explicitly unticked. */
-  isSelected(pr: ProductProposal, key: string): boolean {
-    return !this.unselected().has(pr.id + '|' + key);
-  }
-  toggle(pr: ProductProposal, key: string): void {
-    const id = pr.id + '|' + key;
-    this.unselected.update((set) => {
-      const next = new Set(set);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
   /** The lines of a portion proposal, as the server read them against the catalogue. */
   portionPlan(pr: ProductProposal): PortionOperation[] {
     return pr.portion_plan ?? [];
@@ -468,25 +432,13 @@ export class ProductDetail {
     return `${label}${size}`;
   }
 
-  selectedCount(pr: ProductProposal): number {
-    return this.keys(pr).filter((k) => this.isSelected(pr, k)).length;
+  /** A correction was saved; the proposal stays pending with the person's values. */
+  amended(pr: ProductProposal): void {
+    this.proposals.update((all) => all.map((x) => (x.id === pr.id ? pr : x)));
   }
-  decide(pr: ProductProposal, approve: boolean): void {
-    this.deciding.set(true);
-    const fields = this.keys(pr).filter((k) => this.isSelected(pr, k));
-    const call = approve
-      ? this.api.approveProposal(pr.id, fields.length === this.keys(pr).length ? {} : { fields })
-      : this.api.rejectProposal(pr.id);
-    call.subscribe({
-      next: () => {
-        this.deciding.set(false);
-        this.load(pr.product_id ?? Number(this.id()));
-      },
-      error: (e: unknown) => {
-        this.error.set(describeError(e));
-        this.deciding.set(false);
-      },
-    });
+  /** Decided either way: the product, its versions and what is still pending are read again. */
+  decided(pr: ProductProposal): void {
+    this.load(pr.product_id ?? Number(this.id()));
   }
   openEditor(): void {
     this.focusField.set(null);

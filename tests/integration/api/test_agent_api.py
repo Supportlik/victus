@@ -23,6 +23,13 @@ def _capture(client: TestClient, headers: dict[str, str], text: str, day: str) -
     return str(r.json()["id"])
 
 
+@pytest.mark.covers(
+    "POST /api/v1/captures",
+    "POST /api/v1/agent/runs",
+    "GET /api/v1/agent/runs/{run_id}",
+    "GET /api/v1/agent/runs",
+    "POST /api/v1/agent/runs/{run_id}/cancel",
+)
 def test_queue_get_list_cancel(client: TestClient, alice_token: dict[str, str]) -> None:
     cid = _capture(client, alice_token, "skyr", DAY)
     r = client.post("/api/v1/agent/runs", json={}, headers=alice_token)
@@ -60,6 +67,15 @@ def test_queue_get_list_cancel(client: TestClient, alice_token: dict[str, str]) 
     assert unknown.status_code == 404
 
 
+@pytest.mark.covers(
+    "POST /api/v1/captures",
+    "GET /api/v1/agent/locks",
+    "DELETE /api/v1/agent/locks/{day}",
+    "GET /api/v1/agent/runs/{run_id}",
+    "POST /api/v1/agent/runs/{run_id}/cancel",
+    "GET /api/v1/agent/runs",
+    "POST /api/v1/agent/runs",
+)
 def test_locks_are_listed_and_force_released(
     client: TestClient,
     alice_token: dict[str, str],
@@ -97,6 +113,7 @@ def test_locks_are_listed_and_force_released(
     assert client.get("/api/v1/agent/runs", headers={}).status_code == 401
 
 
+@pytest.mark.covers("GET /api/v1/agent/status")
 def test_agent_status_reports_whether_a_runner_would_collect(
     client: TestClient, alice_token: dict[str, str]
 ) -> None:

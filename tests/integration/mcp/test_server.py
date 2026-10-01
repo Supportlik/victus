@@ -19,6 +19,7 @@ from victus.application.tenant_context import (
     SCOPE_APPROVE,
     SCOPE_CAPTURE_READ,
     SCOPE_READ,
+    SCOPE_WRITE,
     TenantContext,
 )
 from victus.application.use_cases import captures as capture_uc
@@ -39,6 +40,7 @@ DAY = date(2026, 3, 10)
 # ── tools against the database ───────────────────────────────────────────────
 
 
+@pytest.mark.covers("mcp:product_search")
 def test_product_search_and_day_tools(
     tool_ctx: ToolContext, skyr: int, factory: UowFactory, alice: TenantContext
 ) -> None:
@@ -69,6 +71,7 @@ def test_product_search_and_day_tools(
     assert isinstance(listed, list) and listed[0]["date"] == DAY.isoformat()
 
 
+@pytest.mark.covers("mcp:agent_message_add")
 def test_agent_message_add_writes_a_verdict_without_a_draft(
     tool_ctx: ToolContext, factory: UowFactory, alice: TenantContext
 ) -> None:
@@ -204,7 +207,7 @@ def test_http_calls_tool_with_token_scopes(
         )
         assert listed.status_code == 200, listed.text
         names = {t["name"] for t in listed.json()["result"]["tools"]}
-        assert "product_search" in names
+        assert "product_search" in names and "day_approve" not in names
         ok = _call(client, read, "days_list", {"from": "2026-03-01", "to": "2026-03-31"})
         assert ok.status_code == 200, ok.text
         result = ok.json()["result"]
@@ -214,7 +217,7 @@ def test_http_calls_tool_with_token_scopes(
         assert denied.status_code == 200
         body = denied.json()["result"]
         assert body["isError"] is True and "forbidden" in body["content"][0]["text"]
-        approve = make_token([SCOPE_READ, SCOPE_APPROVE])
+        approve = make_token([SCOPE_READ, SCOPE_WRITE, SCOPE_APPROVE])
         not_found = _call(client, approve, "day_approve", {"date": DAY.isoformat()})
         assert "NotFound" in not_found.json()["result"]["content"][0]["text"]
 

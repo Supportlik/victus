@@ -127,7 +127,9 @@ def _resolve_versions(
         pick = valid_on(chain, day) if len(chain) > 1 else p
         if pick is not None:
             out.append(pick)
-        elif day is None:
+        elif day is None:  # pragma: no cover
+            # valid_on without a day always picks a row of a non-empty chain; kept as the
+            # fallback should that rule ever change
             out.append(p)
     return out
 
@@ -434,7 +436,8 @@ class DeleteProduct(UseCase):
             consumable = uow.products.get_consumable(p.id)
             try:
                 uow.audit.record("product.delete", "product", str(p.id), {"name": p.name})
-                if consumable is not None:
+                # no branch: a product row is its consumable (same id), so it is always there
+                if consumable is not None:  # pragma: no branch
                     uow.products.delete_consumable(consumable)
                 uow.commit()
             except Exception as exc:  # RESTRICT: still referenced by line items / ingredients
@@ -521,7 +524,7 @@ def in_reference_unit(
     if consumable.kind != ConsumableKind.PRODUCT.value:
         return amount, unit
     product = uow.products.get(consumable.id)
-    if product is None:
+    if product is None:  # pragma: no cover - a consumable of kind product has its product row
         return amount, unit
     return in_product_unit(product, amount, unit)
 
@@ -577,12 +580,16 @@ class UpdatePortion(UseCase):
                 if key in changes and changes[key] is not None:
                     setattr(portion, key, changes[key])
             product = uow.products.get(portion.product_id)
-            if product is not None:
+            # no branch: portion.product_id is a non-null FK with ON DELETE CASCADE
+            if product is not None:  # pragma: no branch
                 _check_portion_unit(product, portion.amount_unit)
             if changes.get("is_default"):
                 for other in uow.products.portions_for(portion.product_id):
                     if other.id != portion.id and other.unit_code == portion.unit_code:
                         other.is_default = False
+                # the old default has to be written first: the unique index on a default
+                # per product and unit is checked row by row, so one UPDATE batch fails
+                uow.flush()
                 portion.is_default = True
             elif "is_default" in changes and changes["is_default"] is False:
                 portion.is_default = False

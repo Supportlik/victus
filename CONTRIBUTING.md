@@ -80,17 +80,21 @@ a major:
 
 1. `ruff check .`, `ruff format --check .`, `mypy src`, `pytest -q`, `npm test`,
    `scripts/check_translations.py --strict`, `scripts/privacy_check.py` — all green.
-2. Run the suite against PostgreSQL as well, not only SQLite. Dialect-specific migration faults are
+   `pytest -q` includes the coverage gate and the route and tool completeness check.
+2. `npm run test:coverage` in `web/` — the thresholds in `angular.json` hold, and the coverage of
+   neither half has fallen below what the previous release had. A threshold is raised, never
+   lowered; the job summaries of the CI run show both reports.
+3. Run the suite against PostgreSQL as well, not only SQLite. Dialect-specific migration faults are
    invisible on SQLite and stop every PostgreSQL deployment.
-3. The affected areas opened in a browser and looked at (see [the test plan](docs/TESTPLAN.md)).
-4. `CHANGELOG.md`: the entries move from `[Unreleased]` into a new `## [x.y.z] - YYYY-MM-DD`
+4. The affected areas opened in a browser and looked at (see [the test plan](docs/TESTPLAN.md)).
+5. `CHANGELOG.md`: the entries move from `[Unreleased]` into a new `## [x.y.z] - YYYY-MM-DD`
    heading, under Added / Changed / Fixed. An entry says what was wrong and what it did to the
    reader, not which files moved.
-5. `__version__` raised in `src/victus/__init__.py`.
-6. One commit for the release, then an annotated, signed tag `vX.Y.Z` whose message says what the
+6. `__version__` raised in `src/victus/__init__.py`.
+7. One commit for the release, then an annotated, signed tag `vX.Y.Z` whose message says what the
    release is for. The tag is what publishes: pushing it builds the tagged images and the GitHub
    release from the changelog.
-7. Deploy, then check the running version (`victus version`) and the migration head against what
+8. Deploy, then check the running version (`victus version`) and the migration head against what
    was tagged.
 
 **Issues carry their part.** When an issue is picked up, its fix is labelled with the part it will
@@ -106,8 +110,15 @@ tag, and a deployment that is not on a tag is a debugging session, not a release
   to review.
 - **A test that fails before and passes after.** `docs/TESTPLAN.md` names every case and its id;
   add yours there.
+- **Full test coverage.** Every feature and every API endpoint — each REST route and MCP tool,
+  with each scope it accepts and refuses — is covered by tests, and so is every interaction
+  between the web app and the backend: each `ApiClient` call, its success and its error path, and
+  the UI that triggers it. The gates enforce it: branch coverage with `fail_under` in
+  `pyproject.toml`, the thresholds in `web/angular.json`, a `covers(...)` tag for every route and
+  tool, and a spec for every `ApiClient` method (see *Coverage policy* in
+  [the test plan](docs/TESTPLAN.md)). A change without these tests is not finished.
 - **The gate green.** `uv run ruff check . && uv run ruff format --check . && uv run mypy src &&
-  uv run pytest` and, for web changes, `cd web && npm test && npm run build`.
+  uv run pytest` and, for web changes, `cd web && npm test && npm run test:coverage && npm run build`.
 - **English throughout**, in code, comments, commits and documentation.
 - **No personal data.** `uv run python scripts/privacy_check.py` runs in CI and fails on it.
   Examples use `victus.example.com` and the tenant `alice`.

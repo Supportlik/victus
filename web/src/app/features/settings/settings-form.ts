@@ -49,8 +49,11 @@ function str(v: unknown): string {
   return v === undefined || v === null ? '' : String(v);
 }
 
-function num(v: string): number | undefined {
-  const t = v.trim();
+/** A typed value as a number. An `<input type="number">` bound with ngModel writes a
+ *  number (or null) into the model, not the string the model declares, so both arrive. */
+function num(v: string | number | null): number | undefined {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : undefined;
+  const t = (v ?? '').trim();
   if (!t) return undefined;
   const n = Number(t.replace(',', '.'));
   return Number.isFinite(n) ? n : undefined;
@@ -408,7 +411,7 @@ export class TenantSettingsForm {
     setOrDelete(d, 'report_defaults', Object.keys(rd).length ? rd : undefined);
     const caps: Json = { ...obj(d['captures']) };
     // an empty field means "leave it to the default"; 0 is a real answer and must survive
-    const retention = m.captureRetentionDays.trim() === '' ? undefined : num(m.captureRetentionDays);
+    const retention = String(m.captureRetentionDays ?? '').trim() === '' ? undefined : num(m.captureRetentionDays);
     setOrDelete(caps, 'processed_retention_days', retention);
     setOrDelete(d, 'captures', Object.keys(caps).length ? caps : undefined);
     const reg: Json = { ...obj(d['regional']) };

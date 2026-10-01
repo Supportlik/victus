@@ -30,7 +30,7 @@ from victus.application.use_cases._base import UowFactory
 from victus.config.server import ServerConfig
 from victus.domain.services.calendar import DEFAULT_TIMEZONE, today_in
 
-pytestmark = pytest.mark.api
+pytestmark = [pytest.mark.api, pytest.mark.covers("GET /api/v1/events")]
 
 PAST = today_in(DEFAULT_TIMEZONE) - timedelta(days=3)
 EVENTS_URL = "/api/v1/events"

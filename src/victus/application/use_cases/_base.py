@@ -33,5 +33,10 @@ def require_decision(ctx: TenantContext) -> None:
     ctx.require(SCOPE_APPROVE)
 
 
+def can_decide(ctx: TenantContext) -> bool:
+    """Whether :func:`require_decision` would pass — the branch the catalogue doors take."""
+    return ctx.has_scope(SCOPE_WRITE) and ctx.has_scope(SCOPE_APPROVE)
+
+
 def now() -> datetime:
     return datetime.now(UTC)

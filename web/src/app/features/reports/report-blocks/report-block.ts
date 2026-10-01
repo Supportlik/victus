@@ -14,6 +14,7 @@ import {
   KpiTileBlock,
   MacroKey,
   Message,
+  ProjectionRow,
   Quality,
   ReportBlock,
   TdeeWindowsBlock,
@@ -132,6 +133,23 @@ import { CHART_PALETTE } from './palette';
                   <thead><tr><th>{{ i18n.t('Stage') }}</th><th>{{ i18n.t('Date') }}</th><th class="num">{{ i18n.t('gap') }}</th><th class="num">{{ i18n.t('required kg / week') }}</th><th class="num">{{ i18n.t('eat kcal / day') }}</th><th>{{ i18n.t('feasible') }}</th></tr></thead>
                   <tbody>@for (st of burndown().result.stages; track st.name) {
                     <tr><td>{{ st.name }}</td><td>{{ st.date }}</td><td class="num">{{ formatSigned(st.gap, 1, 'kg') }}</td><td class="num">{{ formatSigned(st.required_kg_per_week, 2) }}</td><td class="num">{{ st.eat_kcal_per_day == null ? '–' : formatMacro(st.eat_kcal_per_day, 'kcal') }}</td><td>{{ st.feasible ? i18n.t('yes') : i18n.t('no') }}</td></tr>
+                  }</tbody>
+                </table>
+              </div>
+            }
+            @if (burndown().result.projections?.length) {
+              <p class="v-small v-muted">{{ i18n.t('Each dashed line carries the remaining amount forward at the pace of one trend window.') }}</p>
+              <div class="v-scroll-x">
+                <table class="v-table projections">
+                  <thead><tr><th>{{ i18n.t('Pace') }}</th><th class="num">{{ i18n.t('kg / week') }}</th><th>{{ i18n.t('reaches zero') }}</th><th class="num">{{ i18n.t('vs. goal') }}</th>@for (st of burndown().result.stages; track st.name) { <th class="num">{{ i18n.t('vs. {name}', { name: st.name }) }}</th> }</tr></thead>
+                  <tbody>@for (p of burndown().result.projections; track p.window) {
+                    <tr [class.no-crossing]="!p.crossing"><td>{{ i18n.t('{n}-day pace', { n: p.window }) }}</td><td class="num">{{ formatSigned(p.kg_per_week, 2) }}</td>
+                      @if (p.crossing) {
+                        <td>{{ p.crossing }}</td><td class="num">{{ earlyLate(p.days_vs_goal) }}</td>@for (st of burndown().result.stages; track st.name) { <td class="num">{{ earlyLate(stageOffset(p, st.name)) }}</td> }
+                      } @else {
+                        <td>{{ i18n.t('not at this pace') }}</td><td class="num">–</td>@for (st of burndown().result.stages; track st.name) { <td class="num">–</td> }
+                      }
+                    </tr>
                   }</tbody>
                 </table>
               </div>
@@ -355,7 +373,8 @@ import { CHART_PALETTE } from './palette';
     .bar { min-width: 10rem; } .stack { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--v-surface-2); } .stack span { display: block; }
     .echart { height: 18rem; width: 100%; }
     .echart.tall { height: 30rem; }
-    .stages { margin-top: 0.75rem; }
+    .stages, .projections { margin-top: 0.75rem; }
+    .projections tr.no-crossing td { color: var(--v-ink-3); }
     .failed { border-left: 3px solid var(--v-bad); }
     .not-countable td { color: var(--v-ink-3); }
     h3 { margin-bottom: 0.5rem; font-size: var(--v-fs-m); }
@@ -389,6 +408,22 @@ export class ReportBlockView {
   /** The burndown tooltip has to find this line among the hovered ones, so both read it here. */
   private actualSeries(): string {
     return this.i18n.t('Actual (7-day avg.)');
+  }
+
+  /** One name for a projection's line, its legend entry, its end label and its table row. */
+  projectionSeries(window: number): string {
+    return this.i18n.t('{n}-day pace', { n: window });
+  }
+
+  /** Days between a projected crossing and a date, in words: positive is late (R85). */
+  earlyLate(days: number | null | undefined): string {
+    if (days == null) return '–';
+    if (days === 0) return this.i18n.t('on time');
+    return this.i18n.t(days > 0 ? '{n} d late' : '{n} d early', { n: Math.abs(days) });
+  }
+
+  stageOffset(p: ProjectionRow, stage: string): number | null {
+    return p.stages.find((s) => s.name === stage)?.days ?? null;
   }
 
   private tdeeSeries(days: number): string {
@@ -448,8 +483,15 @@ export class ReportBlockView {
       lines.push(`${dot(actualRow.color)}<b>${kg(goal + remainingNow)}</b> · ${toGo}${change}`);
     }
 
+    const paces = new Set((bd.result.projections ?? []).map((p) => this.projectionSeries(p.window)));
     for (const r of rows) {
       if (r === actualRow || r.value == null) continue;
+      if (r.seriesName && paces.has(r.seriesName)) {
+        // a pace is not a plan to be ahead of or behind: it says where the weight would be
+        const toGo = this.i18n.t('{kg} to go', { kg: kg(r.value[1]) });
+        lines.push(`${dot(r.color)}${r.seriesName}: ${kg(goal + r.value[1])} · ${toGo}`);
+        continue;
+      }
       const planned = r.value[1];
       const gap = remainingNow == null ? null : planned - remainingNow;
       const stand =
@@ -625,9 +667,25 @@ export class ReportBlockView {
         lineStyle: { type: 'dotted' as const, width: 1.5, color: CHART_PALETTE[(i + 4) % CHART_PALETTE.length] },
         itemStyle: { color: CHART_PALETTE[(i + 4) % CHART_PALETTE.length] },
       }));
+    // Long dashes, thinner than the goal line and labelled at their end: a pace, not a plan.
+    // A window that never reaches zero has no path and so draws nothing (R85).
+    const projectionSeries = (b.projections ?? [])
+      .filter((p) => p.crossing && p.path?.length)
+      .map((p, i) => {
+        const color = CHART_PALETTE[[1, 2, 4][i % 3]];
+        return {
+          name: this.projectionSeries(p.window),
+          type: 'line' as const,
+          showSymbol: false,
+          data: p.path,
+          lineStyle: { type: [8, 5] as number[], width: 1.5, color },
+          itemStyle: { color },
+          endLabel: { show: true, formatter: this.projectionSeries(p.window), fontSize: 10, color },
+        };
+      });
     return {
       animation: false,
-      grid: { left: 56, right: 20, top: 8, bottom: 56 },
+      grid: { left: 56, right: projectionSeries.length ? 84 : 20, top: 8, bottom: 56 },
       tooltip: { trigger: 'axis', confine: true, formatter: (p: unknown) => this.burndownTooltip(p, bd) },
       legend: { bottom: 0, type: 'scroll', icon: 'roundRect' },
       xAxis: {
@@ -654,6 +712,7 @@ export class ReportBlockView {
           itemStyle: { color: CHART_PALETTE[3] },
         },
         ...stageSeries,
+        ...projectionSeries,
         {
           name: this.actualSeries(),
           type: 'line',

@@ -6,6 +6,124 @@ All notable changes to Victus are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-10-01
+
+### Security
+- Tightened who may manage tokens and users inside a tenant. A session now carries the scopes of
+  the user's role, so only an owner administers; a token never holds more than its user's role.
+  Listing and revoking tokens is limited to one's own unless the caller is an owner or holds
+  `admin`, and a token without `admin` manages none. Reading the tenant and its users, and
+  creating users, need an owner or `admin` on every path; nobody can grant a scope they do not
+  hold. No data of another tenant was reachable.
+
+### Added
+- **Scope profiles: which boxes to tick for what a client should do.** `docs/API.md` gains a
+  *Scope profiles* section — read-only, assistant that proposes, capture uploader, in-house
+  worker, full delegate — each with its exact scope list, a copy-paste `victus token create`
+  command, and what it can do, what becomes a proposal or a draft, and what is refused. The
+  settings page offers the profiles as presets next to the scope checkboxes and links to them.
+- `docs/SCOPES.md`, a matrix of every MCP tool and REST route against every profile, generated
+  from the code by `scripts/scope_matrix.py`; a test fails when the committed file is stale.
+- Every REST route declares the scopes it needs in one table (`api/scopes.py`), checked before
+  the route runs, and every MCP tool declares its complete set, including "either of" where a
+  use case accepts both. Tests call every route and tool with each smallest accepted scope set
+  and with each set one scope short, and the use case refuses the latter on its own too.
+- **An agent's suggestion can be corrected, not only taken or left (#37, R84).** Every value the
+  agent suggested is an input where it is reviewed. The line-item edit panel — on the day, on the
+  draft approval page and now on every inbox card — has a product search beside the agent's
+  alternatives, a meal select, unit and portion, and both estimate marks; an item logged against a
+  pending new product is offered the portions that proposal brings. The inbox card has **Save**
+  beside **Accept**, and **Accept all** keeps every correction, the meal included. On the products
+  page and the product detail the proposed name, brand, nutrients, reference amount and unit,
+  portions and `valid_from` are inputs, sent as `changes` on approve.
+- `PATCH /api/v1/proposals/{id}` amends a pending proposal without deciding it (`approve`, or
+  `agent:write` for the token's own untouched proposal), validated like the decision and audited;
+  the MCP tool `proposal_update` is the agent's way to fix its own misreading. `GET /proposals`
+  takes `consumable_id`. Proposals carry `proposed`, the values as filed, once a person changed one.
+- `meal_id` on `PATCH /api/v1/line-items/{id}` and on `line_item_update` moves an item to another
+  meal of the same day.
+- A person's correction of the agent's draft is said in the day thread.
+- **The burndown says when the actual line reaches zero at the pace of the last weeks.**
+  From today's remaining amount it draws a dashed line per trend window (7, 14 and 30 days
+  by default), and a table gives each window's rate, the day it reaches zero, and how many
+  days early or late that is against the goal date and every stage. A flat or rising window
+  says "not at this pace" and draws nothing. The day is the forecast block's ETA for the
+  same window, computed from the same slopes and the same report day, so the two blocks
+  cannot disagree. The new block parameter `projection_windows` picks the windows; `[]`
+  switches it off, and existing report definitions keep working unchanged (R85, #38).
+- `victus backup record --path … [--size …] [--at …] [--tenant …] [--error …]`: a backup made
+  outside Victus (an encrypted `tar` of the data volume on a timer, a disk snapshot) reports in
+  and counts like one of Victus' own. `docs/BACKUP.md` has a host-script example using
+  `docker compose exec -T api victus backup record`.
+- `GET /api/v1/backup/jobs?limit=`: the recorded backups, newest first, read-only, needs
+  `admin`.
+
+### Changed
+- **The MCP server lists only the tools a token may call.** A connector no longer sees tools that
+  could only fail; a call to one anyway answers `forbidden: scope '…' required`.
+- **REST catalogue writes without `approve` become proposals**, like the MCP tools (ADR 0013):
+  `POST /products`, `PATCH /products/{id}`, `POST /products/{id}/versions`,
+  `POST /products/{id}/portions` and `PATCH`/`DELETE /portions/{id}` answer `202` with the
+  pending proposal instead of `403`.
+- **Deciding needs `write` and `approve`** on every path: `day_approve` (also with `close`),
+  `line_item_approve` and `draft_discard` now ask for `write` too, as their REST routes already did.
+- `report_snapshot_create` and `POST /reports/{name}/snapshots` need `write`: storing a snapshot
+  is a write. `product_propose` and `report_assess` accept `write` as well as `agent:write`.
+- `day_thread_get` declares `capture:read`, which its use case always needed, so a read-only
+  token no longer sees a tool that always failed. `capture_get` transcribes audio on the way only
+  for a token that also holds `capture:write`; a read-only capture token gets the capture as it
+  stands.
+- `line_item_create` on a date without a day log: a draft creates the day as a draft with
+  `reliable` unset, the way `draft_create` does; with `approve` it answers `NotFound` saying to
+  create the day and set `reliable` first, instead of a bare "not found".
+- The recommended connector token is the *assistant that proposes*,
+  `read,write,capture:read,capture:write,agent:write`, everywhere it is quoted. The previous one
+  had no `write` but held `approve`: it could decide but not propose.
+- `GET /events` checks its scopes before whether the stream is switched on.
+- Migration `0013_proposal_amendment` adds `created_by` and `proposed_changes` to `product_proposal`.
+- **Coverage is a gate now, not a number somebody looks at.** For contributors: `pytest` runs
+  under branch coverage with `fail_under` in `pyproject.toml`, `npm run test:coverage` runs the
+  web specs under V8 coverage with thresholds in `angular.json`, and CI puts both reports into
+  the job summary (`make coverage`, `make web-coverage` locally). A route or MCP tool without a
+  test tagged `covers(...)` for it fails the suite, and so does an `ApiClient` method no spec
+  calls (#40). Nothing changes for anyone running Victus.
+
+### Fixed
+- The settings page offered two scopes the server does not know, `settings` and `backup`; ticking
+  either made token creation fail with `unknown scopes`. Both are gone from the page and the docs.
+- `report_render` over MCP checks `read` itself, as the REST route does.
+- `docs/MCP.md`: `weight_add` takes `measured_at, kg` and `captures_open` takes `date, scope`;
+  `docs/API.md` no longer lists routes that do not exist.
+- Pressing “Show it” while an edit panel was open reset what had been typed to the server's values;
+  the panel now keeps the typing and says that newer data arrived. An inbox card refreshes from the
+  change stream unless one of its rows was corrected.
+- **Accept all** on an inbox card dropped a changed meal.
+- **No backup is a warning, not silence** (#36). `/health` used to answer `"backup": "none"`
+  with `status: ok`, so an instance that had never been backed up looked healthy, and the
+  settings page showed nothing at all. Now `checks.backup` — and with it `status` — reads
+  `degraded` when no successful backup was ever recorded or the newest is older than
+  `backup.max_age_hours` (now an actual setting, default 30). The answer stays `200`, so the
+  container healthchecks are unaffected. `/health` also returns `backup_last_at` and
+  `backup_max_age_hours`.
+- The settings page shows the last backup's age and time, or **never**, with a warning and a
+  pointer to `docs/BACKUP.md`; an owner with `admin` sees the five most recent backups.
+- Routes under `/api/v1/backup` no longer answer `501` before authentication: the placeholder
+  is gone and other paths answer `404`.
+- `victus backup create` run by hand is recorded as a backup job, like a scheduled run.
+- **Saving the settings form or a target band failed once a number had been edited** — the
+  page threw `v.trim is not a function` and nothing was saved, because a number field hands the
+  form a number, not text. Both forms take either now.
+- **Making a portion the default failed** when another portion of the same unit already was the
+  default: the database refused the two rows in one batch. The old default is written first.
+- `scripts/demo_seed.py` named CLI options that do not exist (`tenant create --slug`, `user create`
+  without `--name`); its instructions now run as written.
+
+### Documentation
+- `docs/DEPLOYMENT.md` and `docs/OPERATIONS.md` say it plainly: without the `backup` service or
+  a host backup that reports in, the instance has no backups that Victus knows about; a
+  *Backup degraded* runbook entry. `docs/API.md` documents the real backup API instead of the
+  planned one.
+
 ## [1.7.0] - 2026-09-12
 
 ### Added

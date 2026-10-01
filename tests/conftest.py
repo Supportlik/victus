@@ -37,3 +37,11 @@ def app(config: ServerConfig) -> Iterator[FastAPI]:
 def client(app: FastAPI) -> Iterator[TestClient]:
     with TestClient(app) as c:
         yield c
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Record every test's ``covers`` tags before ``-k``/``-m`` deselect anything."""
+    from tests import coverage_registry
+
+    coverage_registry.record(items)

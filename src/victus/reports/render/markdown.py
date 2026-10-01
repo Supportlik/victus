@@ -212,7 +212,41 @@ def _burndown(b: BurndownBlockResult) -> str:
         ]
         lines.append("")
         lines.append(_table(["Stage", "Date", "Required", "% BW/wk", "Eat", "Feasible"], rows))
+    if r.projections:
+        lines.append("")
+        lines.append(_projection_table(b))
     return "\n".join(lines)
+
+
+def _early_late(days: int | None) -> str:
+    """Days between a crossing and a date: "12 d early", "on time", "5 d late"."""
+    if days is None:
+        return "–"
+    if days == 0:
+        return "on time"
+    return f"{abs(days)} d {'late' if days > 0 else 'early'}"
+
+
+def _projection_table(b: BurndownBlockResult) -> str:
+    """At the pace of each trend window: when does the remaining amount reach zero (R85)?"""
+    stages = [s.name for s in b.result.stages]
+    headers = ["Pace", "kg/wk", "Reaches zero", "vs. goal", *(f"vs. {n}" for n in stages)]
+    rows: list[list[str]] = []
+    for p in b.result.projections:
+        head = [f"{p.window}-day trend", signed(p.kg_per_week, 2)]
+        if p.crossing is None:
+            rows.append([*head, "not at this pace", "–", *("–" for _ in stages)])
+            continue
+        offsets = {o.name: o.days for o in p.stages}
+        rows.append(
+            [
+                *head,
+                _d(p.crossing),
+                _early_late(p.days_vs_goal),
+                *(_early_late(offsets.get(n)) for n in stages),
+            ]
+        )
+    return _table(headers, rows)
 
 
 def _weekly(b: WeeklyChartResult) -> str:

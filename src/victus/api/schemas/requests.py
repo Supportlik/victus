@@ -159,6 +159,8 @@ class LineItemPatch(BaseModel):
     portion_id: int | None = None
     estimated: bool | None = None
     amount_estimated: bool | None = None
+    #: Another meal of the same day; a meal of another day is refused.
+    meal_id: int | None = None
 
 
 class DayMessageIn(BaseModel):

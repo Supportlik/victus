@@ -25,7 +25,7 @@ def moving_average(series: Mapping[date, float], n: int) -> dict[date, float]:
     for d in sorted(series):
         lo = d - timedelta(days=n - 1)
         vals = [v for dd, v in series.items() if lo <= dd <= d]
-        if vals:
+        if vals:  # pragma: no branch - d itself is in series, so vals is never empty
             out[d] = round(statistics.mean(vals), 2)
     return out
 

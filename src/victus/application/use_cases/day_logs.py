@@ -366,6 +366,42 @@ def _item_view(uow: UnitOfWork, li: orm.LineItem, day: date) -> dto.LineItemView
     return line_item_view(li, macros, li.consumable, category, icon, label)
 
 
+def item_words(li: orm.LineItem) -> dict[str, str]:
+    """A line item as the day thread names it: product, amount, meal and both marks."""
+    amount = li.amount if li.amount is not None else li.base_amount
+    unit = li.unit_code or li.base_unit
+    return {
+        "product": li.consumable.name if li.consumable is not None else str(li.consumable_id),
+        "amount": f"{float(amount or 0):g} {unit}",
+        "meal": (li.meal.name or "") if li.meal is not None else "",
+        "nutrition values estimated": "yes" if li.estimated else "no",
+        "amount estimated": "yes" if li.amount_estimated else "no",
+    }
+
+
+def note_correction(
+    uow: UnitOfWork, tenant_id: str, day: date, before: dict[str, str], after: dict[str, str]
+) -> orm.DayMessage | None:
+    """Say in the day's thread what a person changed on the agent's draft (R84).
+
+    The audit log keeps the numbers, but nobody reads it: the thread is where the person,
+    and the agent on its next run, see that "1 tub" was corrected to "300 g". Nothing is
+    written when nothing changed.
+    """
+    parts = [f"{k} {before[k]} → {after[k]}" for k in after if before.get(k) != after[k]]
+    if not parts:
+        return None
+    return uow.day_messages.add(
+        orm.DayMessage(
+            tenant_id=tenant_id,
+            date=day,
+            role=MessageRole.SYSTEM.value,
+            kind=MessageKind.CORRECTION.value,
+            content=f"Corrected {before['product']}: " + "; ".join(parts),
+        )
+    )
+
+
 class AddLineItem(UseCase):
     """Log an item. Without ``approve`` it is a proposal, not a fact (R81).
 
@@ -413,6 +449,86 @@ class AddLineItem(UseCase):
             return view
 
 
+class AddLineItemOnDate(UseCase):
+    """Log an item into a named meal of a day, creating the meal — and, for a draft, the day.
+
+    The MCP ``line_item_create`` tool names a date and a meal, not a meal id. Without
+    ``approve`` the item is a draft (R81), so a missing day is created the way
+    ``draft_create`` creates one: status ``draft``, ``reliable`` unset, for a person to
+    decide. With ``approve`` the item would be a fact, and a fact needs a day whose
+    reliability a person set — there is no default — so a missing day is an error that
+    says what to do instead of a bare "not found".
+    """
+
+    def execute(
+        self, day: date, meal_name: str, item: LineItemInput, *, origin: str = "manual"
+    ) -> dto.LineItemView:
+        self.ctx.require(SCOPE_WRITE)
+        is_draft = not self.ctx.has_scope(SCOPE_APPROVE)
+        if is_draft and origin == "manual":
+            origin = "agent"
+        name = meal_name.strip()
+        if not name:
+            raise ValidationFailed("meal name must not be empty")
+        with self._uow() as uow:
+            d = uow.day_logs.get_by_date(day)
+            if d is None:
+                if not is_draft:
+                    raise NotFound(
+                        f"no day log for {day.isoformat()}: create the day first and set "
+                        "'reliable' (POST /days/{date}); a fact needs a day a person set up"
+                    )
+                d = uow.day_logs.add(
+                    orm.DayLog(
+                        tenant_id=self.ctx.tenant_id,
+                        date=day,
+                        weekday=weekday_name(day),
+                        reliable=None,
+                        status=DayStatus.DRAFT.value,
+                        created_by_kind="agent",
+                    )
+                )
+                uow.audit.record(
+                    "day.create", "day_log", str(d.id), {"date": day.isoformat(), "draft": True}
+                )
+                uow.flush()
+            meal = next(
+                (m for m in d.meals if (m.name or "").strip().lower() == name.lower()), None
+            )
+            if meal is None:
+                position = (max((m.position for m in d.meals), default=0)) + 1
+                meal = uow.day_logs.add_meal(
+                    orm.Meal(day_log_id=d.id, position=position, name=name)
+                )
+                uow.flush()
+            consumable = uow.products.get_consumable(item.consumable_id)
+            if consumable is None:
+                raise NotFound(f"consumable {item.consumable_id} not found")
+            base, base_unit, portion_id = resolve_base(uow, consumable, item)
+            position = (max((li.position for li in meal.line_items), default=0)) + 1
+            li = uow.day_logs.add_line_item(
+                orm.LineItem(
+                    meal_id=meal.id,
+                    position=position,
+                    consumable_id=consumable.id,
+                    portion_id=portion_id,
+                    unit_code=item.unit_code,
+                    amount=item.amount,
+                    base_amount=base,
+                    base_unit=base_unit,
+                    amount_estimated=item.amount_estimated,
+                    estimated=item.estimated,
+                    raw_text=item.raw_text,
+                    origin=origin,
+                    is_draft=is_draft,
+                )
+            )
+            uow.flush()
+            view = _item_view(uow, li, day)
+            uow.commit()
+            return view
+
+
 class UpdateLineItem(UseCase):
     """Change amount/unit/portion or re-assign the consumable (review list).
 
@@ -429,7 +545,22 @@ class UpdateLineItem(UseCase):
             if not li.is_draft:
                 # R81: an approved item is a reviewed fact; changing it is a decision.
                 self.ctx.require(SCOPE_APPROVE)
+            was = item_words(li)
             diff: dict[str, Any] = {}
+            if changes.get("meal_id") is not None and changes["meal_id"] != li.meal_id:
+                target = uow.day_logs.get_meal(int(changes["meal_id"]))
+                if target is None:
+                    raise NotFound(f"meal {changes['meal_id']} not found")
+                if target.day_log_id != li.meal.day_log_id:
+                    # a line item moves between the meals of its day, never to another day
+                    raise ValidationFailed(
+                        f"meal {target.id} is not part of {li.meal.day_log.date.isoformat()}",
+                        errors=[{"field": "meal_id", "message": "another day"}],
+                    )
+                diff["meal_id"] = [li.meal_id, target.id]
+                li.position = (max((x.position for x in target.line_items), default=0)) + 1
+                li.meal_id = target.id
+                li.meal = target
             consumable = li.consumable
             original_consumable_id = li.consumable_id
             if (
@@ -465,6 +596,8 @@ class UpdateLineItem(UseCase):
                     diff[key] = changes[key]
             uow.audit.record("line_item.update", "line_item", str(li.id), diff)
             uow.flush()
+            if li.is_draft and li.origin == "agent" and self.ctx.has_scope(SCOPE_APPROVE):
+                note_correction(uow, self.ctx.tenant_id, li.meal.day_log.date, was, item_words(li))
             view = _item_view(uow, li, li.meal.day_log.date)
             uow.commit()
             return view

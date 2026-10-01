@@ -1,6 +1,7 @@
 """MCP server: stdio (``victus mcp --tenant``) and Streamable HTTP (``/mcp``) transports.
 
-The server registers every :mod:`victus.mcp.tools` spec with the MCP SDK
+The server registers every :mod:`victus.mcp.tools` spec with the MCP SDK and shows each
+caller only the tools its scopes allow
 (``mcp`` 2.x, ``MCPServer``). Over stdio the tenant is fixed by the CLI flag and
 the local process is trusted; over HTTP each request carries a Victus API token
 (``Authorization: Bearer vct_…``) whose scopes become the tenant context, the
@@ -53,6 +54,7 @@ from victus.mcp.tools import (
     ToolSpec,
     dispatch,
     result_text,
+    tools_for,
 )
 
 log = logging.getLogger("victus.mcp")
@@ -124,18 +126,59 @@ def _wrapper_for(spec: ToolSpec, resolve: Callable[[], ToolContext]) -> Callable
     return call
 
 
+class ScopedMCPServer(MCPServer):
+    """An MCP server that shows each caller only the tools its scopes allow.
+
+    One server instance serves every HTTP request, so the registry is registered once
+    and filtered per request: ``tools/list`` omits what the token may not call, so a
+    client never sees a tool that could only fail. One that calls such a tool anyway (the
+    names are documented) gets the tool error ``forbidden: scope '…' required`` from
+    :func:`dispatch`, never a result.
+    """
+
+    def __init__(
+        self, *args: Any, visible: Callable[[], frozenset[str]] | None = None, **kwargs: Any
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self._visible = visible
+
+    def visible_tools(self) -> frozenset[str] | None:
+        return None if self._visible is None else self._visible()
+
+    async def list_tools(self) -> list[Any]:
+        tools = await super().list_tools()
+        names = self.visible_tools()
+        return tools if names is None else [t for t in tools if t.name in names]
+
+
+def _visible_for(resolve_context: Callable[[], ToolContext]) -> Callable[[], frozenset[str]]:
+    def visible() -> frozenset[str]:
+        try:
+            ctx = resolve_context().ctx
+        except ToolError:
+            return frozenset()  # no principal, no tools
+        return frozenset(spec.name for spec in tools_for(ctx))
+
+    return visible
+
+
 def build_server(
     resolve_context: Callable[[], ToolContext],
     *,
     token_verifier: Any | None = None,
     auth: AuthSettings | None = None,
 ) -> MCPServer:
-    """An MCP server exposing every registry tool; ``resolve_context`` runs per call."""
-    server = MCPServer(
+    """An MCP server over the registry; ``resolve_context`` runs per list and per call.
+
+    Every tool is registered, and each request sees only those its context's scopes
+    allow (``tools_for``), whichever transport carries it.
+    """
+    server = ScopedMCPServer(
         SERVER_NAME,
         instructions=INSTRUCTIONS,
         token_verifier=token_verifier,
         auth=auth,
+        visible=_visible_for(resolve_context),
     )
     for spec in TOOLS:
         server.add_tool(

@@ -7,7 +7,7 @@ Symptom → check → action. Commands assume `cd` into the stack directory with
 ```bash
 docker compose ps                                  # which service is down / restarting
 docker compose logs --since 15m api worker | tail -200
-curl -s http://127.0.0.1:8090/api/v1/health | jq   # db, storage, scheduler, backup_age_hours
+curl -s http://127.0.0.1:8090/api/v1/health | jq   # checks.*, backup_age_hours, backup_last_at
 df -h /var/lib/docker $BACKUP_DIR                  # disk
 ```
 
@@ -86,6 +86,17 @@ Or in the app: Settings → API tokens → revoke. Revocation is immediate (toke
 | Data disk | Blobs: `victus blobs gc` deletes attachments no capture references; WAL: `PRAGMA wal_checkpoint(TRUNCATE)` |
 | Backup disk | `victus backup prune`; lower retention in config |
 | Docker | `docker system prune -f` (images only) |
+
+### Backup degraded
+
+`/health` answers `status: degraded` with `checks.backup: degraded`; the settings page says the last backup was
+**never** or is older than `backup.max_age_hours`.
+
+| Check | Action |
+|---|---|
+| `backup_last_at` is `null` | Victus has never recorded a successful backup. Is the `backup` service in the stack (`docker compose ps backup`)? If backups are made on the host instead, the host script must end with `docker compose exec -T api victus backup record --path … --size …` ([BACKUP.md](BACKUP.md#host-level-backups)) |
+| `backup_age_hours` above the limit | `docker compose logs backup`; `docker compose exec -T api victus backup schedule --once` runs a cycle now. For a host backup, check its timer and that it reaches the `record` call |
+| Recent jobs show `failed` / `verify_failed` (settings page, or `GET /api/v1/backup/jobs` with an `admin` token) | Read the job's `error`; `deploy/backup/verify.sh --latest`; free space on `$BACKUP_DIR` (*Disk full*) |
 
 ### Scale sync failing
 

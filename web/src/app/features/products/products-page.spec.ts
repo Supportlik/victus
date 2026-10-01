@@ -4,6 +4,8 @@
 // the product's other numbers beside them, and the buttons to decide it.
 // T-WEB-061: a new product the agent met links to the day and the meal it was eaten in.
 // T-WEB-074: a proposal filed while the page is open appears on it, off the change stream.
+// T-WEB-210…213: every proposed value is an input; Save amends, Approve sends `changes`,
+// and a refresh never takes a typed correction away (R84).
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
@@ -128,6 +130,21 @@ async function withProposals(http: HttpTestingController): Promise<HTMLElement> 
   return f.nativeElement as HTMLElement;
 }
 
+function inputOf(row: Element): HTMLInputElement {
+  return row.querySelector('td:last-child input, td:last-child select') as HTMLInputElement;
+}
+
+/** The value of the editor's input for one field, found by its label. */
+function valueOf(el: Element, field: string): string {
+  return (el.querySelector(`v-proposal-editor [aria-label="${field}"]`) as HTMLInputElement).value;
+}
+
+/** Type into an input the way a person does, so ngModel takes it. */
+function type(input: HTMLInputElement, value: string): void {
+  input.value = value;
+  input.dispatchEvent(new Event('input'));
+}
+
 function flat(el: Element | null): string {
   return (el?.textContent ?? '').replace(/\s+/g, ' ').trim();
 }
@@ -209,10 +226,12 @@ describe('ProductsPage', () => {
     const el = await withProposals(http);
     const proposal = el.querySelector('.proposal')!;
 
-    // the field name alone said nothing: what carbs is now and what it would become
-    const change = flat(proposal.querySelector('.changes li'));
-    expect(change).toContain('carbs');
-    expect(change).toMatch(/42\s*→\s*8 g/);
+    // the field name alone said nothing: what carbs is now and what it would become, the
+    // proposed value an input a person can correct before deciding
+    const row = proposal.querySelector('v-proposal-editor tbody tr')!;
+    expect(flat(row)).toContain('carbs');
+    expect(flat(row)).toContain('42');
+    expect(inputOf(row).value).toBe('8');
     // the five numbers that do not change are what make the sixth judgeable
     const facts = flat(proposal.querySelector('.facts'));
     expect(facts).toContain('per 100 g');
@@ -222,7 +241,7 @@ describe('ProductsPage', () => {
     expect(flat(proposal)).toContain('12 line items use it');
 
     // the decision sits next to the values, and the link opens this proposal, not the page
-    expect(proposal.querySelectorAll('button')).toHaveLength(2);
+    expect(Array.from(proposal.querySelectorAll('button')).map(flat)).toEqual(['Approve all', 'Save corrections', 'Reject']);
     const deeper = Array.from(proposal.querySelectorAll('a')).map((a) => a.getAttribute('href'));
     expect(deeper).toContain('/products/7#proposal-pr-1');
     http.verify();
@@ -245,10 +264,12 @@ describe('ProductsPage', () => {
     expect(flat(proposal.querySelector('.from'))).toContain('Opens a new version from');
     expect(flat(proposal.querySelector('.from'))).toContain('keeps what it counted');
 
-    // the values still read as values; the day is not one of them
-    const changes = Array.from(proposal.querySelectorAll('.changes li')).map(flat);
-    expect(changes.some((c) => /486\s*→\s*470/.test(c))).toBe(true);
-    expect(changes.some((c) => c.includes('valid_from') || c.includes('2026-09-01'))).toBe(false);
+    // the values still read as values; the day is not one of them, but its own input
+    const rows = Array.from(proposal.querySelectorAll('v-proposal-editor tbody tr'));
+    expect(rows.map(flat)).toEqual([expect.stringContaining('486')]);
+    expect(inputOf(rows[0]).value).toBe('470');
+    expect(rows.some((r) => flat(r).includes('valid_from'))).toBe(false);
+    expect((proposal.querySelector('.valid-from input') as HTMLInputElement).value).toBe('2026-09-01');
 
     // and the button says what it will do, with no field-by-field link: a version is one act
     const labels = Array.from(proposal.querySelectorAll('button')).map((b) => flat(b));
@@ -268,10 +289,11 @@ describe('ProductsPage', () => {
     expect(text).toContain('Breakfast');
     expect(text).toContain('60 g');
     expect(text).toContain('draft');
-    // what it is, next to where it came from
-    expect(flat(entry.querySelector('.facts'))).toContain('kcal 380');
-    expect(text).toContain('Foodspring');
-    expect(text).toContain('bar 60 g');
+    // what it is, next to where it came from — as inputs, since it has no product page
+    expect(valueOf(entry, 'kcal')).toBe('380');
+    expect(valueOf(entry, 'brand')).toBe('Foodspring');
+    const portion = entry.querySelector('[data-portion="0"]')!;
+    expect(Array.from(portion.querySelectorAll('input')).map((i) => i.value)).toEqual(['bar', 'bar', '60']);
     http.verify();
   });
 
@@ -304,6 +326,138 @@ describe('ProductsPage', () => {
     // nothing was being decided here, so it simply appeared: no notice, no reload
     expect(flat(el.querySelector('.pending'))).toContain('Chia seeds');
     expect(el.querySelector('.stale')).toBeNull();
+    http.verify();
+  });
+  it('T-WEB-210: approves a correction with the value a person typed as changes', async () => {
+    const f = TestBed.createComponent(ProductsPage);
+    f.detectChanges();
+    http.expectOne((r) => r.url === '/api/v1/products').flush([CHIA]);
+    http.expectOne((r) => r.url === '/api/v1/proposals').flush([CORRECTION]);
+    http.expectOne((r) => r.url === '/api/v1/products/7').flush(CHIA);
+    http.expectOne((r) => r.url === '/api/v1/products/7/usage').flush(usage(7, [], 12));
+    f.detectChanges();
+    await f.whenStable();
+    const el = f.nativeElement as HTMLElement;
+    type(el.querySelector('v-proposal-editor [aria-label="carbs"]') as HTMLInputElement, '7.5');
+    f.detectChanges();
+    const approve = Array.from(el.querySelectorAll('v-proposal-editor button')).find((b) => flat(b) === 'Approve with corrections') as HTMLButtonElement;
+    approve.click();
+    const req = http.expectOne('/api/v1/proposals/pr-1/approve');
+    expect(req.request.body).toEqual({ changes: { carbs: 7.5 } });
+    req.flush({ ...CORRECTION, status: 'approved', changes: { carbs: 7.5 }, proposed: { carbs: 8 } });
+    // the decided proposal leaves the list, and the catalogue is read again
+    http.expectOne((r) => r.url === '/api/v1/products').flush([CHIA]);
+    f.detectChanges();
+    await f.whenStable();
+    expect(el.querySelector('.proposal')).toBeNull();
+    http.verify();
+  });
+
+  it('T-WEB-211: saves a new product’s corrected values without deciding, and shows a refusal', async () => {
+    const f = TestBed.createComponent(ProductsPage);
+    f.detectChanges();
+    http.expectOne((r) => r.url === '/api/v1/products').flush([CHIA]);
+    http.expectOne((r) => r.url === '/api/v1/proposals').flush([NEW_PRODUCT]);
+    http.expectOne((r) => r.url === '/api/v1/products/99/usage').flush(usage(99, [], 0));
+    f.detectChanges();
+    await f.whenStable();
+    const el = f.nativeElement as HTMLElement;
+    const entry = el.querySelector('.new-product')!;
+    type(entry.querySelector('[aria-label="name"]') as HTMLInputElement, 'Protein bar crunchy');
+    type(entry.querySelector('[aria-label="salt"]') as HTMLInputElement, '');
+    type(entry.querySelector('[data-portion="0"] [aria-label="Weight"]') as HTMLInputElement, '55');
+    f.detectChanges();
+    const save = Array.from(entry.querySelectorAll('button')).find((b) => flat(b) === 'Save corrections') as HTMLButtonElement;
+    save.click();
+    const req = http.expectOne('/api/v1/proposals/pr-2');
+    expect(req.request.method).toBe('PATCH');
+    // only what changed; a cleared field is withdrawn with null
+    expect(req.request.body).toEqual({
+      changes: {
+        name: 'Protein bar crunchy',
+        salt: null,
+        portions: [{ unit_code: 'bar', label: 'bar', amount: 55, amount_unit: 'g' }],
+      },
+    });
+    req.flush({ title: 'Validation failed', status: 422, detail: 'salt must be zero or more' }, { status: 422, statusText: 'Unprocessable' });
+    f.detectChanges();
+    expect(flat(entry.querySelector('.v-error'))).toContain('salt must be zero or more');
+    // nothing was decided: the proposal is still listed, with what was typed
+    expect(valueOf(entry, 'name')).toBe('Protein bar crunchy');
+
+    save.click();
+    const again = http.expectOne('/api/v1/proposals/pr-2');
+    const amended = {
+      ...NEW_PRODUCT,
+      product_name: 'Protein bar crunchy',
+      changes: { ...again.request.body.changes, brand: 'Foodspring' },
+      proposed: NEW_PRODUCT.changes,
+    } as ProductProposal;
+    delete (amended.changes as Record<string, unknown>)['salt'];
+    again.flush(amended);
+    f.detectChanges();
+    await f.whenStable();
+    expect(flat(el.querySelector('.new-product strong'))).toBe('Protein bar crunchy');
+    // the agent's own reading stays beside the corrected field
+    expect(flat(entry)).toContain('agent: Protein bar');
+    http.verify();
+  });
+
+  it('T-WEB-212: rejects from the editor, and keeps the proposal when the rejection fails', async () => {
+    const f = TestBed.createComponent(ProductsPage);
+    f.detectChanges();
+    http.expectOne((r) => r.url === '/api/v1/products').flush([CHIA]);
+    http.expectOne((r) => r.url === '/api/v1/proposals').flush([NEW_PRODUCT]);
+    http.expectOne((r) => r.url === '/api/v1/products/99/usage').flush(usage(99, [], 0));
+    f.detectChanges();
+    await f.whenStable();
+    const el = f.nativeElement as HTMLElement;
+    const reject = Array.from(el.querySelectorAll('.new-product button')).find((b) => flat(b) === 'Reject') as HTMLButtonElement;
+    reject.click();
+    http.expectOne('/api/v1/proposals/pr-2/reject').flush({ title: 'Conflict', status: 409, detail: 'already approved' }, { status: 409, statusText: 'Conflict' });
+    f.detectChanges();
+    expect(flat(el.querySelector('.new-product .v-error'))).toContain('already approved');
+    reject.click();
+    http.expectOne('/api/v1/proposals/pr-2/reject').flush({ ...NEW_PRODUCT, status: 'rejected' });
+    f.detectChanges();
+    await f.whenStable();
+    expect(el.querySelector('.new-product')).toBeNull();
+    http.verify();
+  });
+
+  it('T-WEB-213: holds a refresh back while a correction is typed, and keeps the typing when shown', async () => {
+    const f = TestBed.createComponent(ProductsPage);
+    f.detectChanges();
+    http.expectOne((r) => r.url === '/api/v1/products').flush([CHIA]);
+    http.expectOne((r) => r.url === '/api/v1/proposals').flush([CORRECTION]);
+    http.expectOne((r) => r.url === '/api/v1/products/7').flush(CHIA);
+    http.expectOne((r) => r.url === '/api/v1/products/7/usage').flush(usage(7, [], 12));
+    f.detectChanges();
+    await f.whenStable();
+    const el = f.nativeElement as HTMLElement;
+    type(el.querySelector('v-proposal-editor [aria-label="carbs"]') as HTMLInputElement, '7');
+    f.detectChanges();
+
+    TestBed.inject(LiveService).lastChange.set({
+      cursor: 3,
+      targets: [{ action: 'proposal.amend', type: 'product_proposal', id: 'pr-1' }],
+    });
+    await f.whenStable();
+    f.detectChanges();
+    http.expectNone((r) => r.url === '/api/v1/proposals');
+    expect(flat(el.querySelector('.stale'))).toContain('There is newer data.');
+
+    const show = Array.from(el.querySelectorAll('.stale button')).find((b) => flat(b) === 'Show it') as HTMLButtonElement;
+    show.click();
+    http.expectOne((r) => r.url === '/api/v1/products').flush([CHIA]);
+    http.expectOne((r) => r.url === '/api/v1/proposals').flush([{ ...CORRECTION, changes: { carbs: 9 } }]);
+    http.match((r) => r.url.startsWith('/api/v1/products/7')).forEach((r) => r.flush(r.request.url.endsWith('usage') ? usage(7, [], 12) : CHIA));
+    f.detectChanges();
+    await f.whenStable();
+    f.detectChanges();
+    // the typed 7 survives the newer 9, and the editor says that it kept it
+    expect(valueOf(el, 'carbs')).toBe('7');
+    expect(flat(el.querySelector('v-proposal-editor'))).toContain('What you typed is kept');
     http.verify();
   });
 });

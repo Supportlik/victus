@@ -126,6 +126,9 @@ class BackupConfig(BaseModel):
     path: Path = Path("/backups")
     cron: str = "0 3 * * *"
     retention: BackupRetention = Field(default_factory=BackupRetention)
+    #: ``/health`` reports ``backup`` as ``degraded`` once the newest successful backup is
+    #: older than this, and also when there has never been one.
+    max_age_hours: int = Field(default=30, ge=1)
 
 
 class ServerSection(BaseModel):

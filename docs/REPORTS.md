@@ -30,7 +30,7 @@ Every render call takes `from`/`to` (or the default period) and the tenant setti
 | `tdee_windows` | `windows: [7,14,30]`, `show_grade: true` | `tdee.rolling_tdee`, `reliability.grade` | table window × (Ø kcal, Δ kg, TDEE, grade, coverage) |
 | `trend` | `windows: [7,14,21,30]` | `trend.trend_windows` | slope kg/day and kg/week per window, actual difference |
 | `forecast` | `horizons: [1m,3m,6m]`, `with_eta: true` | `forecast.forecast` | projected weight per horizon, weight at goal date, ETA to goal |
-| `burndown` | `start: <date>`, `stages: from_settings` | `burndown.burndown` | planned vs. actual series, gap, required rate |
+| `burndown` | `start: <date>`, `stages: from_settings`, `projection_windows: [7,14,30]` | `burndown.burndown`, `burndown.projections` | planned vs. actual series, gap, required rate; per projection window the pace, the day the remaining amount reaches zero and the days early or late against the goal and each stage (R85) |
 | `weekly_chart` | `weeks: 12` | `tdee.weekly_tdee` | ISO week × (Ø kg, Ø kcal, weekly TDEE) |
 | `timeline` | `tdee_window: 14` | `day_macros` + `tdee.rolling_window` | one row per day: weight, moving average, intake, rolling TDEE, macros (R63) |
 | `day_list` | `columns: [kcal, protein, fiber, weight, status]` | repository + `day_macros` | one row per day with flags |
@@ -65,6 +65,12 @@ another path. Unknown paths make the tile a `BlockError`; the rest of the report
 * `band_distribution` rates every day against **its own** band (bands differ by training type and validity);
   `kcal` is rated against the corridor (asymmetric: below the minimum counts as "below optimum", never as a finding).
 * `burndown.start` may be a date, `from_settings` (tenant `burndown_start`) or omitted (period start).
+* `burndown.projection_windows` (default `[7, 14, 30]`) carries today's remaining amount forward at
+  the slope of each trend window until it reaches zero; `[]` switches the projection off. The
+  crossing day is the forecast ETA of the same window (same slopes, same `as_of`, the same
+  `ETA_MIN_SLOPE` rule), so a flat or rising window reads "not at this pace" in both blocks and
+  draws no line. A line whose zero lies past the last stage stops at that edge of the chart;
+  its date is still given in the table. Snapshots frozen before this existed simply have no rows.
 
 ## Built-in `checkup.yaml`
 
@@ -103,6 +109,7 @@ blocks:
   - type: burndown
     start: from_settings
     stages: from_settings
+    projection_windows: [7, 14, 30]
   - type: day_list
     columns: [kcal, protein, fiber, weight, status]
   - type: text_finding

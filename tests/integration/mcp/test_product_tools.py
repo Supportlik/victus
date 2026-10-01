@@ -5,6 +5,8 @@ from __future__ import annotations
 import dataclasses
 from typing import Any, cast
 
+import pytest
+
 from victus.application.tenant_context import SCOPE_READ, SCOPE_WRITE, TenantContext
 from victus.application.use_cases import captures as capture_uc
 from victus.application.use_cases import products as products_uc
@@ -14,6 +16,7 @@ from victus.infrastructure.storage.memory import InMemoryBlobStorage
 from victus.mcp.tools import ToolContext, dispatch
 
 
+@pytest.mark.covers("mcp:captures_open", "mcp:product_update", "mcp:capture_mark")
 def test_captures_open_scope_and_product_update(
     tool_ctx: ToolContext, factory: UowFactory, alice: TenantContext, skyr: int
 ) -> None:
@@ -49,6 +52,9 @@ def test_captures_open_scope_and_product_update(
     assert marked["status"] == "processed"
 
 
+@pytest.mark.covers(
+    "mcp:portion_create", "mcp:portion_update", "mcp:portion_delete", "mcp:product_get"
+)
 def test_t_mcp_013_portion_update_and_delete_propose_without_approve(
     tool_ctx: ToolContext, skyr: int
 ) -> None:
@@ -102,6 +108,7 @@ def test_t_mcp_013_portion_update_and_delete_propose_without_approve(
     }
 
 
+@pytest.mark.covers("mcp:product_version_create", "mcp:product_versions", "mcp:product_get")
 def test_t_mcp_014_product_version_create_proposes_without_approve(
     tool_ctx: ToolContext, skyr: int
 ) -> None:
@@ -149,6 +156,7 @@ def test_t_mcp_014_product_version_create_proposes_without_approve(
     assert [v["kcal"] for v in versions["versions"]] == [63, 66]
 
 
+@pytest.mark.covers("mcp:portion_create", "mcp:product_get")
 def test_t_mcp_015_a_portion_proposal_for_a_unit_that_is_not_one_says_so(
     tool_ctx: ToolContext, factory: UowFactory, alice: TenantContext, skyr: int
 ) -> None:
@@ -194,6 +202,7 @@ def test_t_mcp_015_a_portion_proposal_for_a_unit_that_is_not_one_says_so(
     ]
 
 
+@pytest.mark.covers("mcp:product_get", "mcp:product_search", "mcp:product_propose")
 def test_t_mcp_016_a_density_is_visible_to_the_agent(
     tool_ctx: ToolContext, factory: UowFactory, alice: TenantContext, skyr: int
 ) -> None:

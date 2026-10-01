@@ -127,12 +127,13 @@ async def events(
     read. The payload never carries an audit `diff` — action, target type and target
     id only.
     """
-    if not config.events.enabled:
-        raise FeatureDisabled("server-sent events are disabled on this server")
     # Refuse here, where a refusal can still be a status code: once the stream has
-    # started the response is on its way and nothing can be taken back.
+    # started the response is on its way and nothing can be taken back. The scopes come
+    # first, so a token learns what it lacks whether or not the stream is switched on.
     ctx.require(SCOPE_READ)
     ctx.require(SCOPE_CAPTURE_READ)
+    if not config.events.enabled:
+        raise FeatureDisabled("server-sent events are disabled on this server")
     return StreamingResponse(
         _stream(request, uow, ctx, config.events, _resume_from(request, cursor)),
         media_type="text/event-stream",

@@ -48,6 +48,25 @@ jobs:
         env:
           CI: "true"
 
+      # Runs the suite once more under V8 coverage; the thresholds in angular.json fail it.
+      - name: Unit test coverage (thresholds in angular.json)
+        run: npm run test:coverage
+        env:
+          CI: "true"
+
+      - name: Coverage report in the job summary
+        if: always()
+        run: |
+          node -e '
+            const fs = require("fs");
+            const file = "coverage/web/coverage-summary.json";
+            if (!fs.existsSync(file)) { console.log("No coverage data."); process.exit(0); }
+            const t = JSON.parse(fs.readFileSync(file, "utf8")).total;
+            const row = (k) => `| ${k} | ${t[k].covered} / ${t[k].total} | ${t[k].pct} % |`;
+            console.log(["### Web coverage", "", "| Metric | Covered | % |", "|---|---|---|",
+              ...["statements", "branches", "functions", "lines"].map(row)].join("\n"));
+          ' >> "$GITHUB_STEP_SUMMARY"
+
       - name: Production build
         run: npm run build -- --configuration production
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from datetime import date
 from typing import Annotated
 
@@ -11,8 +12,9 @@ from fastapi.responses import JSONResponse
 from victus.api.deps import Blobs, Ctx, Transcription, Uow
 from victus.api.schemas.inbox import CaptureOut, CapturePatch
 from victus.application.errors import ExternalServiceError
+from victus.application.tenant_context import SCOPE_CAPTURE_READ
 from victus.application.use_cases import captures as uc
-from victus.domain.values import CaptureKind
+from victus.domain.values import CaptureKind, CaptureStatus
 
 router = APIRouter(tags=["captures"])
 
@@ -62,8 +64,13 @@ async def upload_capture(
         try:
             view = uc.TranscribeCapture(uow, ctx, blobs, transcription).execute(view.id)
         except ExternalServiceError:
-            # the capture stays (status failed); the user can retry via /transcribe
-            view = uc.GetCapture(uow, ctx).execute(view.id)
+            # the capture stays (status failed); the user can retry via /transcribe.
+            # An upload-only token (capture:write) may not read captures back, so it
+            # hears the new status without a second read.
+            if ctx.has_scope(SCOPE_CAPTURE_READ):
+                view = uc.GetCapture(uow, ctx).execute(view.id)
+            else:
+                view = dataclasses.replace(view, status=CaptureStatus.FAILED.value)
     code = status.HTTP_201_CREATED if view.created else status.HTTP_200_OK
     return JSONResponse(CaptureOut.model_validate(view).model_dump(mode="json"), status_code=code)
 

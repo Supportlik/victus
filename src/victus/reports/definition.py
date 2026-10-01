@@ -118,6 +118,18 @@ class BurndownDef(_BlockBase):
     type: Literal["burndown"]
     start: date | Literal["from_settings"] | None = None
     stages: Literal["from_settings"] | list[str] = "from_settings"
+    #: trend windows (days) whose pace is projected to zero (R85); ``[]`` switches it off
+    projection_windows: list[int] = Field(default_factory=lambda: [7, 14, 30])
+
+    @field_validator("projection_windows")
+    @classmethod
+    def _projection_windows(cls, v: list[int]) -> list[int]:
+        for w in v:
+            if w < 2:
+                raise ValueError(f"invalid projection window {w} (expected at least 2 days)")
+        if len(set(v)) != len(v):
+            raise ValueError("projection windows must be distinct")
+        return v
 
 
 def _default_series() -> list[WeeklySeries]:

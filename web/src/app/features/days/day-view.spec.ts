@@ -1,6 +1,7 @@
 // T-WEB-001: day view renders meals, totals, ⚠️ on estimates, draft tint and band gauges from a fixture.
 // T-WEB-071: the day keeps up with the change stream, and stays out of the way of whoever
 // is in the middle of typing into it.
+// T-WEB-216: pressing Show it while an edit panel holds a correction keeps the correction.
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
@@ -412,6 +413,40 @@ describe('DayView', () => {
     const req = http.expectOne('/api/v1/line-items/11');
     expect(req.request.body).toEqual({ amount: 400, unit_code: 'tub', portion_id: 9, estimated: false, amount_estimated: true });
     req.flush({});
+    http.match(() => true).forEach((r) => r.flush(r.request.method === 'GET' ? [] : {}));
+  });
+  it('T-WEB-216: keeps what an open edit panel holds when the newer day is shown', async () => {
+    const fixture = await render();
+    const http = TestBed.inject(HttpTestingController);
+    const el = fixture.nativeElement as HTMLElement;
+    open(fixture, 'Paprika chicken');
+    http.expectOne('/api/v1/products/9').flush(chicken);
+    await fixture.whenStable();
+    const panel = el.querySelector('v-line-item-form')!;
+    const amount = panel.querySelector('[aria-label="Amount"]') as HTMLInputElement;
+    amount.value = '250';
+    amount.dispatchEvent(new Event('input'));
+    // the panel offers the day's meals beside the unit
+    expect(Array.from((panel.querySelector('[aria-label="Meal"]') as HTMLSelectElement).options).map((o) => o.textContent?.trim())).toEqual(['Breakfast', 'new meal…']);
+
+    change({ action: 'line_item.update', type: 'line_item', id: '12' });
+    await fixture.whenStable();
+    http.expectNone('/api/v1/days/2026-01-02');
+    const show = Array.from(el.querySelectorAll('.stale button')).find((b) => b.textContent?.trim() === 'Show it') as HTMLButtonElement;
+    show.click();
+    const newer = structuredClone(day);
+    newer.meals[0].line_items[1].amount = 300;
+    http.expectOne('/api/v1/days/2026-01-02').flush(newer);
+    await fixture.whenStable();
+    http.match((r) => r.url.endsWith('/messages')).forEach((r) => r.flush([]));
+    fixture.detectChanges();
+
+    // the panel is still open, with the typed 250 rather than the newer 300
+    const form = fixture.debugElement.query(By.directive(LineItemForm)).componentInstance as LineItemForm;
+    expect(form.amount).toBe(250);
+    expect(form.kept()).toBe(true);
+    save(el.querySelector('v-line-item-form')!);
+    expect(http.expectOne('/api/v1/line-items/12').request.body).toMatchObject({ amount: 250 });
     http.match(() => true).forEach((r) => r.flush(r.request.method === 'GET' ? [] : {}));
   });
 });

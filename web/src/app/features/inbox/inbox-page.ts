@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal, viewChild, viewChildren } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { AgentRun, AgentStatus, ApiClient, Capture, DraftListEntry, ReportSnapshot } from '../../api';
+import { AgentRun, AgentStatus, ApiClient, Capture, DraftListEntry, ReportSnapshot, Unit } from '../../api';
 import { FormatService } from '../../core/format.service';
 import { I18nService } from '../../core/i18n.service';
 import { BadgesService } from '../../core/badges.service';
@@ -104,7 +104,7 @@ const INBOX_TARGETS = ['capture', 'agent_run', 'day_log', 'report_snapshot'];
       <section class="drafts">
         <h3>{{ i18n.t('Waiting for your decision') }} @if (drafts().length) { <span class="v-tag draft">{{ drafts().length }}</span> }</h3>
         @for (d of drafts(); track d.date) {
-          <v-draft-day-card [entry]="d" [captures]="capturesFor(d.date)" (changed)="reload()" />
+          <v-draft-day-card [entry]="d" [captures]="capturesFor(d.date)" [units]="units()" (changed)="reload()" />
         } @empty {
           <div class="v-empty">{{ i18n.t('No drafts. Add a capture above and press “Process now”.') }}</div>
         }
@@ -161,6 +161,8 @@ export class InboxPage {
   readonly run = signal<AgentRun | null>(null);
   readonly status = signal<AgentStatus | null>(null);
   readonly snapshots = signal<ReportSnapshot[]>([]);
+  /** The unit table, for the edit panel of every drafted item. */
+  readonly units = signal<Unit[]>([]);
   readonly error = signal<string | null>(null);
   readonly filters: { id: Filter; label: string }[] = [
     { id: 'open', label: 'Open' },
@@ -191,6 +193,7 @@ export class InboxPage {
   });
 
   constructor() {
+    this.api.units().subscribe({ next: (u) => this.units.set(u), error: () => this.units.set([]) });
     this.reload();
   }
 

@@ -4,8 +4,8 @@ Every screenshot and recording in `docs/media/` comes from a tenant built by thi
 That is the point of it: the pictures can be retaken when the interface changes instead of
 rotting, and nothing about a real person's food, weight or body ever reaches them (R48).
 
-    victus tenant create --slug demo --name Demo
-    victus user create --tenant demo --email demo@example.invalid   # prints a recovery code
+    victus tenant create demo --name Demo
+    victus user create --tenant demo --email demo@example.invalid --name Demo  # recovery code
     victus token create --tenant demo --name seed --scopes read,write,approve
     python scripts/demo_seed.py --base http://127.0.0.1:8020/api/v1 --token vct_…
 

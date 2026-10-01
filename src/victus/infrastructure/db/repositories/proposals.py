@@ -30,12 +30,15 @@ class ProposalRepo(Repo):
         status: str | None = None,
         product_id: int | None = None,
         limit: int = 200,
+        consumable_id: int | None = None,
     ) -> Sequence[orm.ProductProposal]:
         stmt = self.scoped(select(orm.ProductProposal), orm.ProductProposal)
         if status:
             stmt = stmt.where(orm.ProductProposal.status == status)
         if product_id is not None:
             stmt = stmt.where(orm.ProductProposal.product_id == product_id)
+        if consumable_id is not None:
+            stmt = stmt.where(orm.ProductProposal.consumable_id == consumable_id)
         return self.session.scalars(
             stmt.order_by(orm.ProductProposal.created_at.desc()).limit(limit)
         ).all()

@@ -22,14 +22,8 @@ from typing import Any, cast
 
 from victus.application import dto
 from victus.application.errors import ApplicationError, ExternalServiceError
-from victus.application.tenant_context import (
-    SCOPE_AGENT_WRITE,
-    SCOPE_CAPTURE_READ,
-    SCOPE_CAPTURE_WRITE,
-    SCOPE_READ,
-    SCOPE_WRITE,
-    TenantContext,
-)
+from victus.application.scope_profiles import WORKER
+from victus.application.tenant_context import TenantContext
 from victus.application.use_cases import agent as agent_uc
 from victus.application.use_cases import captures as capture_uc
 from victus.application.use_cases import products as product_uc
@@ -68,9 +62,9 @@ from .pricing import turn_cost_usd
 
 log = logging.getLogger("victus.agent")
 
-WORKER_SCOPES: frozenset[str] = frozenset(
-    {SCOPE_READ, SCOPE_WRITE, SCOPE_CAPTURE_READ, SCOPE_CAPTURE_WRITE, SCOPE_AGENT_WRITE}
-)
+#: The in-house worker profile (docs/API.md, "Scope profiles"): it drafts and proposes,
+#: never decides — no ``approve``, no ``admin``.
+WORKER_SCOPES: frozenset[str] = frozenset(WORKER.scopes)
 MAX_IMAGE_EDGE = 1024
 
 

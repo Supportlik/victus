@@ -6,6 +6,7 @@ import re
 
 from victus.application import dto
 from victus.application.errors import Conflict, NotFound, ValidationFailed
+from victus.application.tenant_context import SCOPE_ADMIN
 from victus.application.use_cases._base import UseCase
 from victus.infrastructure.auth import recovery
 from victus.infrastructure.db import orm
@@ -32,6 +33,8 @@ class CreateUser(UseCase):
     """Create a user in the context's tenant and return the one-time recovery code."""
 
     def execute(self, display_name: str, email: str, role: str = "member") -> dto.OwnerCreated:
+        # Both paths — a session and a token — are checked here, so no adapter can forget.
+        self.ctx.require(SCOPE_ADMIN)
         email = email.strip().lower()
         if "@" not in email:
             raise ValidationFailed("a valid e-mail address is required")
@@ -58,6 +61,7 @@ class CreateUser(UseCase):
 
 class ResetRecoveryCode(UseCase):
     def execute(self, email: str) -> dto.OwnerCreated:
+        self.ctx.require(SCOPE_ADMIN)
         with self._uow() as uow:
             u = uow.users.get_by_email(email.strip().lower())
             if u is None:
@@ -72,6 +76,7 @@ class ResetRecoveryCode(UseCase):
 
 class ListUsers(UseCase):
     def execute(self) -> list[dto.UserView]:
+        self.ctx.require(SCOPE_ADMIN)
         with self._uow() as uow:
             return [
                 dto.UserView(id=u.id, display_name=u.display_name, email=u.email, role=u.role)
@@ -81,6 +86,7 @@ class ListUsers(UseCase):
 
 class GetTenant(UseCase):
     def execute(self) -> dto.TenantView:
+        self.ctx.require(SCOPE_ADMIN)
         with self._uow() as uow:
             t = uow.tenants.get(self.ctx.tenant_id)
             if t is None:

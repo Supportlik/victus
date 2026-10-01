@@ -62,6 +62,7 @@ and always complete.
 | Apply retention now | `victus backup prune [--dry-run]` | – |
 | Schedule (daemon) | `victus backup schedule --daemon` (the `backup` service) | – |
 | One scheduled cycle now | `victus backup schedule --once` | – |
+| Record a host-level backup | `victus backup record --path <where> [--size <bytes>] [--at <ISO 8601>] [--tenant <slug>] [--error <msg>]` | see [Host-level backups](#host-level-backups) |
 
 Run inside Compose: `docker compose run --rm --no-deps backup backup …` (the image's entrypoint is `victus`).
 The wrappers do exactly that plus safety checks (free space, stop `api`/`worker` before a restore, confirmation,
@@ -188,7 +189,8 @@ performs the whole restore into a throw-away database and reports the first prob
 8. `docker compose up -d` (web, worker, backup).
 9. Log in with an existing passkey (works because `RP_ID` is unchanged). If no device with a passkey survived, use
    the recovery code via the app's *Recovery* link.
-10. `curl …/api/v1/health` → `backup_age_hours` resets after the first scheduled run; add the host to monitoring.
+10. `curl …/api/v1/health` → `checks.backup` reads `degraded` until the first scheduled run (or a host backup that
+    reports in) is recorded on the new database; add the host to monitoring.
 
 ## Retention
 
@@ -204,10 +206,57 @@ default `0 3 * * *`), records every run in `backup_job` (`status` `finished` | `
 `verified`, `path`, `size`) and touches `<backup.path>/.victus-backup.alive` at least once a minute — the Compose
 healthcheck of the `backup` service watches that file. `--once` runs one cycle and exits `1` if it failed.
 
+## Host-level backups
+
+Victus only knows about backups that are recorded as a `backup_job` row. The scheduler (`backup` service) and
+`victus backup create` record their own. A backup made **outside** Victus — an encrypted `tar` of the data volume on
+a systemd timer, a disk snapshot — is invisible until it reports in:
+
+```sh
+#!/bin/sh
+# /usr/local/bin/victus-host-backup — run nightly from a timer, after the stack is up.
+set -eu
+cd /opt/victus/deploy                                   # where docker-compose.yml lives
+volume=deploy_victus_data            # Compose prefixes the project name; see `docker volume ls`
+target=/mnt/backup/victus-data-$(date -u +%Y%m%dT%H%M%SZ).tar.gpg
+if docker run --rm -v "$volume":/data:ro alpine tar -C /data -cf - .      | gpg --batch --yes --symmetric --passphrase-file /root/.victus-backup-pass -o "$target"; then
+  docker compose exec -T api victus backup record --path "$target" --size "$(stat -c %s "$target")"
+else
+  docker compose exec -T api victus backup record --path "$target" --error "host tar/gpg failed"
+  exit 1
+fi
+```
+
+- `--path` is stored as given; it is where the host wrote the backup and need not exist inside the container.
+- `--size` is in bytes. Without it the size is read from `--path` when that file is visible to the container,
+  otherwise left empty.
+- `--at` sets when the backup finished (ISO 8601 **with** offset, e.g. `2026-09-15T03:00:00Z`); default is now.
+  A time without offset or in the future is refused.
+- `--tenant alice` marks a backup of one tenant; omit it for a backup of everything.
+- `--error "…"` records a failed backup. It shows in the settings page and does **not** count as a backup.
+- Exit codes: `0` recorded · `2` input error (nothing recorded).
+
+`-T` keeps `docker compose exec` from asking for a TTY, which a timer does not have. Replace the volume name, the
+paths and the encryption with your own; Victus only needs the `record` call at the end.
+
+**Without the `backup` service and without a host backup that reports in, the instance has no backups that Victus
+knows about** — and `/health` says so.
+
 ## Health indicator
 
-`GET /api/v1/health` returns `backup_age_hours` (age of the newest archive in `backup.path`). Above
-`backup.max_age_hours` (30) the field is flagged `"warn"`; the Angular header shows a red dot. (Stage 1 API wiring.)
+`GET /api/v1/health` returns `backup_age_hours` and `backup_last_at` (the newest *successful* `backup_job`: a
+scheduled run, `backup create` or `backup record`) and `backup_max_age_hours`. `checks.backup` is:
+
+| State | `checks.backup` | `status` |
+|---|---|---|
+| A successful backup within `backup.max_age_hours` (default 30) | `ok` | `ok` (if every other check is) |
+| The newest successful backup is older | `degraded` | `degraded` |
+| No successful backup was ever recorded | `degraded` | `degraded` |
+
+A failed job never counts. The answer stays HTTP `200` either way, so the container healthchecks stay green; watch
+the body in your monitoring. The settings page (*System*) shows the last backup's age and time, or **never**, with a
+pointer to this document; an owner with `admin` also sees the five most recent jobs (`GET /api/v1/backup/jobs`,
+see [API.md](API.md#backup)).
 
 ## Monthly check (5 minutes)
 

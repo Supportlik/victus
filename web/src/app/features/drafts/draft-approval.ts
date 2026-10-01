@@ -1,11 +1,12 @@
-import { ChangeDetectionStrategy, Component, effect, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
+import { Observable, of, switchMap } from 'rxjs';
 import { ApiClient, ApproveRequest, DraftCorrection, DraftSummary, LineItem, Unit } from '../../api';
 import { I18nService } from '../../core/i18n.service';
 import { describeError } from '../../core/problem';
 import { DayNamePipe, MacroPipe, formatUnit } from '../../shared/format';
-import { LineItemForm } from '../../shared/line-item-form';
+import { LineItemForm, MealChoice } from '../../shared/line-item-form';
 import { MarkdownPipe } from '../../shared/markdown.pipe';
 
 interface Row {
@@ -64,7 +65,7 @@ interface Row {
                            guessed, I know better" happens most. -->
                       <tr class="editor">
                         <td colspan="8">
-                          <v-line-item-form [item]="r.item" [units]="units()" (saved)="itemSaved()" (cancelled)="editing.set(null)" />
+                          <v-line-item-form [item]="r.item" [units]="units()" [meals]="meals()" [day]="date()" (saved)="itemSaved()" (cancelled)="editing.set(null)" />
                         </td>
                       </tr>
                     }
@@ -111,6 +112,12 @@ export class DraftApproval {
   readonly units = signal<Unit[]>([]);
   /** The item whose edit panel is open, under its row. */
   readonly editing = signal<number | null>(null);
+  /** The open edit panel, so approving does not leave what it holds behind. */
+  private readonly panel = viewChild(LineItemForm);
+  /** The meals of the drafted day, for moving an item in its edit panel. */
+  readonly meals = computed<MealChoice[]>(() =>
+    (this.summary()?.day.meals ?? []).map((m) => ({ id: m.id, name: m.name })),
+  );
   close = true;
 
   constructor() {
@@ -173,9 +180,15 @@ export class DraftApproval {
     return { corrections, close: this.close };
   }
 
+  /**
+   * Approve the day. A panel left open with typed corrections is saved first, the way the
+   * inbox's Accept all keeps every correction: approving must not drop what is on screen.
+   */
   approve(): void {
     this.busy.set(true);
-    this.api.approveDraft(this.date(), this.buildRequest()).subscribe({
+    const panel = this.panel();
+    const first$: Observable<unknown> = panel && panel.dirty() && panel.ready() ? panel.persist() : of(null);
+    first$.pipe(switchMap(() => this.api.approveDraft(this.date(), this.buildRequest()))).subscribe({
       next: () => void this.router.navigate(['/days', this.date()]),
       error: (e: unknown) => {
         this.error.set(describeError(e));

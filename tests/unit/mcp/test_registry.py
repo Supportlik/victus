@@ -8,6 +8,7 @@ import pytest
 from victus.application.tenant_context import (
     ALL_SCOPES,
     SCOPE_READ,
+    Requires,
     TenantContext,
 )
 from victus.config.server import ServerConfig
@@ -63,6 +64,7 @@ EXPECTED = {
     "meal_delete",
     "product_update",
     "product_propose",
+    "proposal_update",
     "product_create",
     "portion_create",
     "portion_update",
@@ -138,7 +140,7 @@ def test_dispatch_rejects_unknown_tool_and_bad_arguments() -> None:
 
 
 def test_get_tool_and_result_text() -> None:
-    assert get_tool("day_get").scope == SCOPE_READ
+    assert get_tool("day_get").scope == Requires.of(SCOPE_READ)
     assert tools.result_text({"a": 1}) == '{"a": 1}'
     assert tools.result_text("md") == "md"
     img = tools.ImageResult(data_b64="AA==", mime="image/png", text="caption")
