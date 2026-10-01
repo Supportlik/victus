@@ -1,0 +1,38 @@
+name: Dependency graph
+
+# Dependabot closes an alert only when the dependency graph sees the fixed version. GitHub
+# reads uv.lock through a graph job of its own that does not run on every push, so a release
+# that fixed an advisory left the alert open until Dependabot's next scheduled run. This
+# submits what uv.lock and web/package-lock.json resolve to on every push to main, and the
+# alert closes minutes after the fix lands.
+on:
+  push:
+    branches: [main]
+  schedule:
+    # Tuesday 06:41 UTC, after the Security audit: a snapshot also when nothing was pushed.
+    - cron: "41 6 * * 2"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependency-graph
+  cancel-in-progress: true
+
+jobs:
+  submit:
+    name: Submit the locked dependencies
+    runs-on: ubuntu-latest
+    permissions:
+      # the dependency submission API writes a snapshot for the commit
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      # Pip covers uv.lock (UvLockComponentDetector, stable); Npm covers web/package-lock.json.
+      # Nothing is installed first, so the snapshot is the lockfiles, not a node_modules tree.
+      - name: Detect and submit
+        uses: advanced-security/component-detection-dependency-submission-action@v0.1.6
+        with:
+          detectorsCategories: Pip,Npm

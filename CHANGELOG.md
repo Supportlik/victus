@@ -6,6 +6,12 @@ All notable changes to Victus are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- **A fixed advisory closes its Dependabot alert by itself.** For contributors: GitHub read
+  `uv.lock` only when Dependabot ran, so 1.8.1 fixed six advisories and all six alerts stayed
+  open on versions that were no longer there. The new *Dependency graph* workflow submits what
+  `uv.lock` and `web/package-lock.json` resolve to on every push to `main` and once a week.
+
 ## [1.8.1] - 2026-10-01
 
 ### Security

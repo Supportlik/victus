@@ -179,7 +179,7 @@ tree is marked **planned**.
 
 | ID | Requirement | Where implemented | Stage |
 |---|---|---|---|
-| R46 | CI: pytest on Python 3.12–3.14 against SQLite and PostgreSQL, ruff, mypy (strict for `domain` and `application`), pip-audit, Trivy, CodeQL, Angular build + unit tests, Docker build, OpenAPI client drift check. | `.github/workflows/` | 0–1 |
+| R46 | CI: pytest on Python 3.12–3.14 against SQLite and PostgreSQL, ruff, mypy (strict for `domain` and `application`), pip-audit, Trivy, CodeQL, Angular build + unit tests, Docker build, OpenAPI client drift check; every push to `main` submits the locked dependencies to GitHub's dependency graph, so a Dependabot alert closes as soon as the fix lands. | `.github/workflows/` | 0–1 |
 | R47 | Domain services are pure functions with no I/O; reference and golden tests live in `tests/fixtures/`. | `tests/unit/domain/` — planned | 1–2 |
 | R48 | The repository contains no personal or health data: examples use placeholder tenants, domains and values; fixtures are synthetic or anonymised. | `tests/fixtures/`, `examples/`, CI secret scan | 0 |
 
