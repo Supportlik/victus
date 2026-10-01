@@ -29,7 +29,8 @@ All notable changes to Victus are documented here. The format follows
   Listing and revoking tokens is limited to one's own unless the caller is an owner or holds
   `admin`, and a token without `admin` manages none. Reading the tenant and its users, and
   creating users, need an owner or `admin` on every path; nobody can grant a scope they do not
-  hold. No data of another tenant was reachable.
+  hold. No data of another tenant was reachable
+  ([GHSA-vw5g-qwhj-r6wr](https://github.com/Supportlik/victus/security/advisories/GHSA-vw5g-qwhj-r6wr)).
 
 ### Added
 - **Scope profiles: which boxes to tick for what a client should do.** `docs/API.md` gains a
