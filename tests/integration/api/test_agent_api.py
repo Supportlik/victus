@@ -123,20 +123,18 @@ def test_agent_status_reports_whether_a_runner_would_collect(
     r = client.get("/api/v1/agent/status", headers=alice_token)
     assert r.status_code == 200, r.text
     # the test server runs without a model key
-    assert r.json()["runner"] in {"no_key", "disabled"}
+    assert r.json()["runner"] == "no_key"
     assert r.json()["model"] is None
 
     enabled, key = cfg.agent.enabled, cfg.providers.anthropic_api_key
     try:
-        cfg.agent.enabled = False
-        assert (
-            client.get("/api/v1/agent/status", headers=alice_token).json()["runner"] == "disabled"
-        )
-        cfg.agent.enabled = True
         cfg.providers.anthropic_api_key = None
         assert client.get("/api/v1/agent/status", headers=alice_token).json()["runner"] == "no_key"
         cfg.providers.anthropic_api_key = SecretStr("sk-test")
-        body = client.get("/api/v1/agent/status", headers=alice_token).json()
-        assert body["runner"] == "ready" and body["model"] == cfg.agent.model
+        # the schedule switch does not decide whether a queued run is collected
+        for scheduled in (True, False):
+            cfg.agent.enabled = scheduled
+            body = client.get("/api/v1/agent/status", headers=alice_token).json()
+            assert body["runner"] == "ready" and body["model"] == cfg.agent.model, scheduled
     finally:
         cfg.agent.enabled, cfg.providers.anthropic_api_key = enabled, key

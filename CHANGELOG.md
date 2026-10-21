@@ -6,6 +6,15 @@ All notable changes to Victus are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.8.4] - 2026-10-21
+
+### Fixed
+- **"Process now" is offered whenever a model key is set.** With the hourly schedule off
+  (`agent.enabled: false`, the default), `GET /agent/status` reported `disabled`, so the inbox hid
+  the button and offered the Claude hand-off instead, although the worker collects queued runs
+  either way, as the configuration reference says. The status now depends on the model key
+  alone and reports `ready` or `no_key`; `disabled` is no longer sent.
+
 ## [1.8.3] - 2026-10-21
 
 ### Fixed

@@ -28,15 +28,11 @@ def agent_status(ctx: Ctx, cfg: Annotated[ServerConfig, Depends(get_config)]) ->
 
     Queued runs are picked up by the worker, which needs a model key. Without one the
     web app hands the job to the user's own Claude over MCP instead of queueing a run
-    nobody would collect. No key material is exposed, only the state.
+    nobody would collect. No key material is exposed, only the state. ``agent.enabled`` does
+    not enter into it: it switches the schedule, and the worker collects queued runs either way.
     """
     ctx.require(SCOPE_READ)
-    if not cfg.agent.enabled:
-        runner = "disabled"
-    elif cfg.providers.anthropic_api_key is None:
-        runner = "no_key"
-    else:
-        runner = "ready"
+    runner = "no_key" if cfg.providers.anthropic_api_key is None else "ready"
     return AgentStatusOut(runner=runner, model=cfg.agent.model if runner == "ready" else None)
 
 

@@ -98,7 +98,8 @@ class UnlockOut(Out):
 class AgentStatusOut(Out):
     """Whether a run queued now would be picked up."""
 
-    #: ``ready`` (a worker with a model key), ``no_key``, or ``disabled`` by configuration
+    #: ``ready`` (a worker with a model key) or ``no_key``; up to 1.8.3 also ``disabled``,
+    #: sent in error whenever the schedule was off
     runner: str
     #: the model the worker would use, only when ready
     model: str | None = None
