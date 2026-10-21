@@ -6,6 +6,16 @@ All notable changes to Victus are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.8.3] - 2026-10-21
+
+### Fixed
+- **The in-house worker drafts again, this time for real.** With 1.8.2 the schemas were accepted,
+  but the request still failed with a 400: strict tool use allows at most 20 strict tools and 16
+  parameters with a union type (every nullable field counts) per request, and the worker sent 22
+  strict tools with 37 such parameters. Strict mode is now handed out within that budget,
+  writing tools first; a tool that does not fit is sent without `strict` and its input is
+  checked by the tool itself, as before. Verified with a real run against the Anthropic API.
+
 ## [1.8.2] - 2026-10-21
 
 ### Fixed

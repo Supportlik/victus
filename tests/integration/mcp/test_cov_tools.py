@@ -1,4 +1,4 @@
-"""T-MCP-200…224: every tool handler of the registry against the database, through ``dispatch``.
+"""T-MCP-200…226: every tool handler of the registry against the database, through ``dispatch``.
 
 Each test calls the tool the way an MCP client or the in-house worker does and asserts what
 that caller reads back — the JSON, the error code — plus, where a tool writes, what a second
@@ -687,3 +687,34 @@ def test_t_mcp_224_strict_definitions_carry_no_unsupported_keyword() -> None:
     assert strict
     for definition in strict:
         assert not banned & _schema_keywords(definition["input_schema"]), definition["name"]
+
+
+@pytest.mark.parametrize("subset", ["worker", "all"])
+def test_t_mcp_225_strict_budget_holds_per_request(subset: str) -> None:
+    """T-MCP-225: at most 20 strict tools and 16 union parameters across them in one request."""
+    specs = [t for t in tools.TOOLS if subset == "all" or t.name in tools.WORKER_TOOLS]
+    strict = [d for d in tools.anthropic_tool_definitions(specs) if d.get("strict")]
+    assert 0 < len(strict) <= tools._STRICT_MAX_TOOLS
+    assert sum(tools._count_unions(d["input_schema"]) for d in strict) <= tools._STRICT_MAX_UNIONS
+    # every strict schema requires all its properties, so none counts as optional
+    for definition in strict:
+        schema = definition["input_schema"]
+        assert set(schema["required"]) == set(schema["properties"]), definition["name"]
+
+
+def test_t_mcp_226_strict_budget_goes_to_writers_first() -> None:
+    """T-MCP-226: writers take the budget before readers; what does not fit stays non-strict."""
+    reader, writer, second = (tools.get_tool(n) for n in ("report_render", "body_add", "body_add"))
+    assert reader.read_only and not writer.read_only
+    defs = tools.anthropic_tool_definitions([reader, writer, second])
+    budget = tools._STRICT_MAX_UNIONS
+    first_cost = tools._count_unions(defs[1]["input_schema"])
+    assert defs[1]["strict"] is True and first_cost <= budget
+    # a second body_add no longer fits beside the first, and keeps its plain schema with bounds
+    assert "strict" not in defs[2] and 2 * first_cost > budget
+    assert defs[2]["input_schema"] == writer.input_schema()
+    reader_cost = tools._count_unions(reader.input_schema())
+    assert defs[0].get("strict", False) is (first_cost + reader_cost <= budget)
+
+    many = tools.anthropic_tool_definitions([tools.get_tool("weight_add")] * 21)
+    assert [d.get("strict", False) for d in many] == [True] * 20 + [False]

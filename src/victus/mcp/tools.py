@@ -1630,21 +1630,53 @@ def dispatch(tc: ToolContext, name: str, arguments: dict[str, Any] | None) -> To
         raise ToolError(code, f"{exc.detail}{extra}") from exc
 
 
+#: Limits of strict tool use, summed over every strict schema in one request: tools marked
+#: strict, and parameters with a union type (``anyOf`` or a type list — every nullable field).
+#: The third limit, optional parameters, cannot bite: ``_strictify`` requires every property.
+_STRICT_MAX_TOOLS = 20
+_STRICT_MAX_UNIONS = 16
+
+
 def anthropic_tool_definitions(specs: list[ToolSpec]) -> list[dict[str, Any]]:
-    """Anthropic ``tools`` parameter for the given specs (strict where the schema allows)."""
-    out: list[dict[str, Any]] = []
-    for spec in specs:
-        schema = spec.input_schema()
-        entry: dict[str, Any] = {
-            "name": spec.name,
-            "description": spec.description,
-            "input_schema": schema,
-        }
-        if spec.input_schema_override is None and "$defs" not in schema:
-            entry["strict"] = True
-            _strictify(schema)
-        out.append(entry)
-    return out
+    """Anthropic ``tools`` parameter for the given specs, strict as far as one request allows.
+
+    A schema qualifies when it has no override and no ``$defs``. Qualifying tools that write are
+    offered strict mode first, then the readers, each in registry order; a tool that would push
+    the request past a limit goes out without ``strict``. Its input model still validates every
+    call, so the difference is only whether the API or the tool refuses a malformed input.
+    """
+    entries: list[dict[str, Any]] = [
+        {"name": spec.name, "description": spec.description, "input_schema": spec.input_schema()}
+        for spec in specs
+    ]
+    candidates = [
+        i
+        for i, spec in enumerate(specs)
+        if spec.input_schema_override is None and "$defs" not in entries[i]["input_schema"]
+    ]
+    candidates.sort(key=lambda i: specs[i].read_only)
+    tools_left, unions_left = _STRICT_MAX_TOOLS, _STRICT_MAX_UNIONS
+    for i in candidates:
+        schema = specs[i].input_schema()
+        _strictify(schema)
+        unions = _count_unions(schema)
+        if tools_left == 0 or unions > unions_left:
+            continue
+        entries[i]["input_schema"] = schema
+        entries[i]["strict"] = True
+        tools_left -= 1
+        unions_left -= unions
+    return entries
+
+
+def _count_unions(node: Any) -> int:
+    """Schemas in ``node`` that use ``anyOf``/``oneOf`` or a type list."""
+    if isinstance(node, list):
+        return sum(_count_unions(v) for v in node)
+    if not isinstance(node, dict):
+        return 0
+    own = int("anyOf" in node or "oneOf" in node or isinstance(node.get("type"), list))
+    return own + sum(_count_unions(v) for v in node.values())
 
 
 #: Keywords strict tool use rejects with a 400 (numeric and length bounds, array bounds beyond

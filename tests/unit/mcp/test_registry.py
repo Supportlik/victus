@@ -102,7 +102,8 @@ def test_every_input_schema_is_a_valid_object_schema() -> None:
 def test_anthropic_definitions_are_strict_where_possible() -> None:
     defs = {d["name"]: d for d in anthropic_tool_definitions(list(TOOLS))}
     assert set(defs) == EXPECTED
-    search = defs["product_search"]
+    # alone in a request, nothing competes for the strict budget
+    (search,) = anthropic_tool_definitions([get_tool("product_search")])
     assert search["strict"] is True
     assert search["input_schema"]["additionalProperties"] is False
     # Anthropic's strict mode requires every property to be listed, nullable ones included
