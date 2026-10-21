@@ -1,4 +1,4 @@
-"""T-MCP-200…222: every tool handler of the registry against the database, through ``dispatch``.
+"""T-MCP-200…224: every tool handler of the registry against the database, through ``dispatch``.
 
 Each test calls the tool the way an MCP client or the in-house worker does and asserts what
 that caller reads back — the JSON, the error code — plus, where a tool writes, what a second
@@ -637,3 +637,53 @@ def test_t_mcp_222_strictify_skips_non_schema_entries() -> None:
     assert schema["properties"]["nested"]["additionalProperties"] is False
     assert schema["anyOf"][0] is True and schema["anyOf"][1]["required"] == ["x"]
     assert schema["items"]["additionalProperties"] is False
+
+
+def test_t_mcp_223_strictify_moves_bounds_into_the_description() -> None:
+    """T-MCP-223: numeric, length and array bounds leave the schema and are named in the text."""
+    schema: dict[str, Any] = {
+        "type": "object",
+        "properties": {
+            "limit": {"type": "integer", "minimum": 1, "maximum": 50, "description": "Rows."},
+            "cm": {"anyOf": [{"type": "number", "exclusiveMinimum": 0}, {"type": "null"}]},
+            "text": {"type": "string", "minLength": 1},
+            "ids": {"type": "array", "items": {"type": "integer"}, "minItems": 1, "maxItems": 9},
+        },
+    }
+    tools._strictify(schema)
+    props = schema["properties"]
+    assert props["limit"] == {
+        "type": "integer",
+        "description": "Rows. Constraints: minimum 1, maximum 50.",
+    }
+    assert props["cm"]["anyOf"][0] == {
+        "type": "number",
+        "description": "Constraints: exclusiveMinimum 0.",
+    }
+    assert "minLength" not in props["text"]
+    # minItems 0 and 1 are the array bounds strict mode accepts, so they stay
+    assert props["ids"]["minItems"] == 1 and "maxItems" not in props["ids"]
+
+
+def _schema_keywords(node: Any) -> set[str]:
+    """Every keyword used in a JSON schema; property names are data and are skipped."""
+    if isinstance(node, list):
+        return set().union(set(), *(_schema_keywords(v) for v in node))
+    if not isinstance(node, dict):
+        return set()
+    found = set(node)
+    for key, value in node.items():
+        if key in ("properties", "$defs") and isinstance(value, dict):
+            found |= set().union(set(), *(_schema_keywords(v) for v in value.values()))
+        else:
+            found |= _schema_keywords(value)
+    return found
+
+
+def test_t_mcp_224_strict_definitions_carry_no_unsupported_keyword() -> None:
+    """T-MCP-224: no strict tool definition sends a keyword the Anthropic API rejects with a 400."""
+    banned = set(tools._STRICT_UNSUPPORTED) - {"minItems"}
+    strict = [d for d in tools.anthropic_tool_definitions(list(tools.TOOLS)) if d.get("strict")]
+    assert strict
+    for definition in strict:
+        assert not banned & _schema_keywords(definition["input_schema"]), definition["name"]

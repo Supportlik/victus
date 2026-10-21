@@ -1647,8 +1647,43 @@ def anthropic_tool_definitions(specs: list[ToolSpec]) -> list[dict[str, Any]]:
     return out
 
 
+#: Keywords strict tool use rejects with a 400 (numeric and length bounds, array bounds beyond
+#: ``minItems`` 0 or 1). The input model still enforces them when the tool runs; the model
+#: reads the bound from the description instead.
+_STRICT_UNSUPPORTED = (
+    "minimum",
+    "maximum",
+    "exclusiveMinimum",
+    "exclusiveMaximum",
+    "multipleOf",
+    "minLength",
+    "maxLength",
+    "minItems",
+    "maxItems",
+    "uniqueItems",
+)
+
+
+def _strip_unsupported(schema: dict[str, Any]) -> None:
+    """Move the bounds strict mode cannot express out of ``schema`` and into its description."""
+    bounds: list[str] = []
+    for key in _STRICT_UNSUPPORTED:
+        if key not in schema:
+            continue
+        value = schema[key]
+        if key == "minItems" and value in (0, 1):
+            continue
+        del schema[key]
+        bounds.append(f"{key} {json.dumps(value)}")
+    if bounds:
+        note = f"Constraints: {', '.join(bounds)}."
+        description = schema.get("description")
+        schema["description"] = f"{description} {note}" if description else note
+
+
 def _strictify(schema: dict[str, Any]) -> None:
-    """Strict tool use needs additionalProperties:false and every property required."""
+    """Strict tool use needs additionalProperties:false, every property required and no bounds."""
+    _strip_unsupported(schema)
     if schema.get("type") == "object":
         schema["additionalProperties"] = False
         props = schema.get("properties", {})

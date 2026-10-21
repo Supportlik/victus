@@ -34,6 +34,6 @@ jobs:
       # Npm covers web/package-lock.json.
       # Nothing is installed first, so the snapshot is the lockfiles, not a node_modules tree.
       - name: Detect and submit
-        uses: advanced-security/component-detection-dependency-submission-action@v0.1.6
+        uses: advanced-security/component-detection-dependency-submission-action@v0.2.0
         with:
           detectorsCategories: Python,Npm

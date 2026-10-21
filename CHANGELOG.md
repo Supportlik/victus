@@ -6,7 +6,28 @@ All notable changes to Victus are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.8.2] - 2026-10-21
+
+### Fixed
+- **The in-house worker drafts again.** Every run with `providers.anthropic_api_key` set failed
+  before the first token: the tools are sent to the Anthropic API in strict mode, and strict mode
+  refuses numeric and length bounds (`minimum`, `maximum`, `minLength`, …) with a 400, so the run
+  ended as `failed` and the captures stayed open. Strict tool definitions now leave those bounds
+  out and name them in the property's description instead; the tool inputs are still checked
+  against them when a tool runs. Claude connected over MCP was not affected.
+
+### Security
+- **Pillow 13.0** (one critical and eight further advisories in 12.x, used for capture images),
+  **certifi 2026.10.19** (critical), **vite 8.3.5** (three advisories in the web build tooling;
+  Angular 22.2 pins vite 8.3.0, so `web/package.json` overrides it until Angular moves) and
+  **@modelcontextprotocol/server 2.3.1** (two advisories, pulled in by the Angular CLI).
+- The web image upgrades its Alpine packages at build time, as the api image already did, so a
+  fix Alpine has shipped (zlib, CVE-2026-85091) no longer waits for the next nginx tag.
+
 ### Changed
+- Dependencies at their newest compatible releases, among them anthropic 1.17, FastAPI 0.157,
+  pydantic 2.14, SQLAlchemy 2.1.5, Angular 22.2.3 and vitest 5. TypeScript stays on 6.0, the
+  range the Angular 22 compiler supports. Base images: Python 3.14.8, Node 26.12, Caddy 2.11.7.
 - **A fixed advisory closes its Dependabot alert by itself.** For contributors: GitHub read
   `uv.lock` only when Dependabot ran, so 1.8.1 fixed six advisories and all six alerts stayed
   open on versions that were no longer there. The new *Dependency graph* workflow submits what

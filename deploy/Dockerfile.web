@@ -5,7 +5,7 @@
 # (`.github/dependabot.yml`, ecosystem docker) proposes bumps.
 
 # ── Stage 1: build the Angular bundle ───────────────────────────────────────
-FROM node:26.10-alpine3.24 AS build
+FROM node:26.12-alpine3.24 AS build
 
 WORKDIR /web
 COPY web/package.json web/package-lock.json ./
@@ -23,6 +23,13 @@ LABEL org.opencontainers.image.title="victus-web" \
       org.opencontainers.image.source="https://github.com/Supportlik/victus" \
       org.opencontainers.image.licenses="LicenseRef-PolyForm-Noncommercial-1.0.0" \
       org.opencontainers.image.version="${VERSION}"
+
+# Same reason as in Dockerfile.api: the base tag freezes the Alpine packages it was cut with,
+# and a fix Alpine has already shipped (zlib 1.3.2-r1 for CVE-2026-85091 at the time of
+# writing) would otherwise wait for the next nginx tag. The upgrade needs root; the image
+# drops back to `nginx` below.
+USER root
+RUN apk --no-cache upgrade
 
 # The unprivileged image runs as user `nginx` and cannot bind port 80;
 # nginx.conf therefore listens on 8080 and compose maps WEB_PORT → 8080.
