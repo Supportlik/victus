@@ -9,7 +9,7 @@ from typing import Annotated
 from fastapi import APIRouter, File, Form, Query, Response, UploadFile, status
 from fastapi.responses import JSONResponse
 
-from victus.api.deps import Blobs, Ctx, Transcription, Uow
+from victus.api.deps import Blobs, Config, Ctx, Transcription, Uow
 from victus.api.schemas.inbox import CaptureOut, CapturePatch
 from victus.application.errors import ExternalServiceError
 from victus.application.tenant_context import SCOPE_CAPTURE_READ
@@ -32,6 +32,7 @@ async def upload_capture(
     uow: Uow,
     blobs: Blobs,
     transcription: Transcription,
+    cfg: Config,
     text: Annotated[str | None, Form()] = None,
     target_date: Annotated[date | None, Form()] = None,
     product_id: Annotated[int | None, Form()] = None,
@@ -62,7 +63,9 @@ async def upload_capture(
     )
     if view.created and view.kind == CaptureKind.AUDIO.value and transcription is not None:
         try:
-            view = uc.TranscribeCapture(uow, ctx, blobs, transcription).execute(view.id)
+            view = uc.TranscribeCapture(
+                uow, ctx, blobs, transcription, catalogue_terms=cfg.transcription.catalogue_terms
+            ).execute(view.id)
         except ExternalServiceError:
             # the capture stays (status failed); the user can retry via /transcribe.
             # An upload-only token (capture:write) may not read captures back, so it
@@ -115,9 +118,12 @@ def transcribe_capture(
     uow: Uow,
     blobs: Blobs,
     transcription: Transcription,
+    cfg: Config,
     force: Annotated[bool, Query()] = False,
 ) -> CaptureOut:
-    view = uc.TranscribeCapture(uow, ctx, blobs, transcription).execute(capture_id, force=force)
+    view = uc.TranscribeCapture(
+        uow, ctx, blobs, transcription, catalogue_terms=cfg.transcription.catalogue_terms
+    ).execute(capture_id, force=force)
     return CaptureOut.model_validate(view)
 
 

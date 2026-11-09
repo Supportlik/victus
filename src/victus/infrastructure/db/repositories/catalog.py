@@ -7,7 +7,7 @@ from datetime import date
 
 from sqlalchemy import func, select
 
-from victus.domain.services import search_ranking
+from victus.domain.services import food_query, search_ranking
 from victus.infrastructure.db import orm
 from victus.infrastructure.db.repositories._base import Repo
 
@@ -187,6 +187,37 @@ class ProductRepo(Repo):
             orm.Consumable,
         )
         return [(int(i), str(n)) for i, n in self.session.execute(stmt).all()]
+
+    def search_rows(self) -> Sequence[tuple[int, str, str, str | None, str | None]]:
+        """``(id, kind, name, brand, ean)`` of every product and one-off of the tenant.
+
+        The agent's search scores these in Python (``food_query``); a one-off has neither
+        brand nor barcode.
+        """
+        stmt = self.scoped(
+            select(
+                orm.Consumable.id,
+                orm.Consumable.kind,
+                orm.Consumable.name,
+                orm.Product.brand,
+                orm.Product.ean,
+            )
+            .outerjoin(orm.Product, orm.Product.id == orm.Consumable.id)
+            .where(orm.Consumable.kind.in_(("product", "ad_hoc"))),
+            orm.Consumable,
+        )
+        return [
+            (int(i), str(k), str(n), b, e) for i, k, n, b, e in self.session.execute(stmt).all()
+        ]
+
+    def ad_hoc_named(self, name: str) -> orm.Consumable | None:
+        """The newest one-off of this tenant that names the same food (folded spelling)."""
+        stmt = self.scoped(
+            select(orm.Consumable).where(orm.Consumable.kind == "ad_hoc"), orm.Consumable
+        ).order_by(orm.Consumable.id.desc())
+        return next(
+            (c for c in self.session.scalars(stmt) if food_query.same_food(c.name, name)), None
+        )
 
     # ── portions ──
     def portions_for(self, product_id: int) -> Sequence[orm.Portion]:

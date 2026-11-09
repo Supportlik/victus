@@ -35,7 +35,7 @@ same declaration the server lists tools by and checks before the handler runs (`
 
 | Tool | Scope | Use case | Returns |
 |---|---|---|---|
-| `product_search(q, limit=10, on?)` | `read` | `SearchProducts` | candidates `{id, name, kind, tier, score, kcal_per_100}` and matching products with `reference_unit` and `density_g_per_ml`; `on` picks the version that applied on that day (R70) |
+| `product_search(q, limit=10, on?)` | `read` | `FindProducts`, `MatchText` | `q` as the person said it — the search tries the variants itself: without quantities, units and filler words, each word alone (the brand too), both umlaut spellings, compounds and near spellings of a misheard word; a barcode in `q` finds the product carrying it. Returns `variants` (what was tried), `matches` (matcher candidates `{consumable_id, name, kind, tier, score}`) and `products`, best first: catalogue products with `reference_unit`, `density_g_per_ml` and portions, and one-offs logged before (`kind: "ad_hoc"`, values per 100, `source`), each with `score` (0–1, the share of the query it covers) and `matched_by`. A one-off ranks below a product that fits as well. `on` picks the version that applied on that day (R70). The web app's search field keeps the stricter every-word search |
 | `product_get(id)` | `read` | `GetProduct` | product with portions, nutrients and `density_g_per_ml`, which is null unless the product carries one: without it an amount in the other unit cannot be converted (R75) |
 | `rules_list(scope?)` | `read` | `ListRules` | the user's own instructions (when → then) |
 | `rule_upsert(when, then, name?, scope?, enabled?, priority?)` | `write` | `UpsertRule` | a rule the user just gave you, written down |
@@ -63,7 +63,7 @@ same declaration the server lists tools by and checks before the handler runs (`
 | `capture_mark(id, status?, target_date?, product_id?)` | `capture:write` | `UpdateCapture` | updated capture |
 | `agent_run_start(mode, dates?, captures?)` | `agent:write` | `BeginAgentRun(runner="external")` | `run_id`, `locked_days`, `skipped_days` |
 | `agent_run_finish(run_id, status, summary_md?)` | `agent:write` | `FinishAgentRun` | run record; releases every lock of the run |
-| `draft_create(draft)` | `agent:write` | `CreateDraft` | created items; **requires a live lock held by the draft's `run_id`** |
+| `draft_create(draft)` | `agent:write` | `CreateDraft` | created items and `proposed_products`; **requires a live lock held by the draft's `run_id`**. A one-off is named by `one_off_name` (or `raw_text` without its quantities); a one-off of the same name logged before is reused, and from its second line item on it is filed once as a `new` product proposal |
 | `draft_discard(date)` | `write` + `approve` | `DiscardDraft` | discarded count |
 | `line_item_approve(line_item_id, amount?, unit_code?, consumable_id?)` | `write` + `approve` | `ApproveLineItem` | the accepted item; the rest of the day stays a draft |
 | `day_approve(date, corrections[], close)` | `write` + `approve` | `ApproveDay` | approved day + warnings |
@@ -102,7 +102,7 @@ paths) — never a stack trace.
 agent_run_start(mode="historical")           → run 7f3a, locked [2026-09-07], skipped {}
 day_thread_get("2026-09-07")                 → 2 new captures, no draft yet
 capture_get("cap_…")                         → transcript
-product_search("skyr")                       → [{id: 123, name: "Skyr natural", tier: 2, score: 0.93}, …]
+product_search("a tub of skyr")              → {variants: [...], matches: [{consumable_id: 123, tier: 2, …}], products: [{id: 123, kind: "product", score: 0.9, …}, …]}
 draft_create({run_id: "7f3a", date: "2026-09-07", meals: [...], source_captures: [...]})
 agent_message_add("7f3a", "2026-09-07", kind="summary", content="A rest day that came in light. …")
 report_render("checkup", "14d")

@@ -191,6 +191,39 @@ class DayLogRepo(Repo):
         ).mappings()
         return [dict(r) for r in rows]
 
+    def most_logged_products(self, limit: int = 40) -> Sequence[tuple[str, str | None, int]]:
+        """``(name, brand, times)`` of the catalogue products logged most often, then the
+        rest of the catalogue's brands with a count of 0 — the words a transcript should
+        spell the way the catalogue does."""
+        logged = self.session.execute(
+            text(
+                "SELECT c.name AS name, p.brand AS brand, COUNT(*) AS n "
+                "  FROM line_item li "
+                "  JOIN meal m ON m.id = li.meal_id "
+                "  JOIN day_log d ON d.id = m.day_log_id "
+                "  JOIN consumable c ON c.id = li.consumable_id "
+                "  JOIN product p ON p.id = c.id "
+                " WHERE d.tenant_id = :t AND c.kind = 'product' "
+                " GROUP BY c.name, p.brand "
+                " ORDER BY n DESC, c.name "
+                " LIMIT :n"
+            ),
+            {"t": self.tenant_id, "n": limit},
+        ).all()
+        brands = self.session.execute(
+            text(
+                "SELECT DISTINCT p.brand AS brand FROM product p "
+                "  JOIN consumable c ON c.id = p.id "
+                " WHERE c.tenant_id = :t AND p.brand IS NOT NULL "
+                " ORDER BY p.brand "
+                " LIMIT :n"
+            ),
+            {"t": self.tenant_id, "n": limit},
+        ).all()
+        rows = [(str(r.name), r.brand, int(r.n)) for r in logged]
+        rows.extend(("", str(r.brand), 0) for r in brands)
+        return rows
+
     def usage_count(self, consumable_id: int) -> int:
         """How many line items point at a consumable, past the cap ``usage_of`` stops at."""
         total = self.session.execute(

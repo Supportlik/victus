@@ -38,6 +38,8 @@ class ModelResponse:
     #: of ``input_tokens``, which counts only the uncached rest.
     cache_creation_input_tokens: int = 0
     cache_read_input_tokens: int = 0
+    #: Web searches the server ran during this turn (``agent.web``); billed per search.
+    web_search_requests: int = 0
 
 
 class ModelError(Exception):
@@ -157,6 +159,10 @@ def _from_sdk(response: Any) -> ModelResponse:
             getattr(response.usage, "cache_creation_input_tokens", None) or 0
         ),
         cache_read_input_tokens=int(getattr(response.usage, "cache_read_input_tokens", None) or 0),
+        web_search_requests=int(
+            getattr(getattr(response.usage, "server_tool_use", None), "web_search_requests", None)
+            or 0
+        ),
     )
 
 
@@ -177,6 +183,10 @@ class ScriptedTurn:
     stop_details: dict[str, Any] | None = None
     cache_creation_input_tokens: int = 0
     cache_read_input_tokens: int = 0
+    #: Content blocks the server would have produced itself (``server_tool_use``,
+    #: ``web_search_tool_result``, …), echoed back like the rest of the turn.
+    server_blocks: Sequence[dict[str, Any]] = ()
+    web_search_requests: int = 0
 
 
 @dataclass(slots=True)
@@ -210,6 +220,7 @@ class ScriptedModelClient:
             self._index += 1
         tool_uses: list[ToolUse] = []
         params: list[dict[str, Any]] = []
+        params.extend(dict(b) for b in turn.server_blocks)
         if turn.text:
             params.append({"type": "text", "text": turn.text})
         for i, (name, inp) in enumerate(turn.tool_calls):
@@ -229,6 +240,7 @@ class ScriptedModelClient:
             stop_details=turn.stop_details,
             cache_creation_input_tokens=turn.cache_creation_input_tokens,
             cache_read_input_tokens=turn.cache_read_input_tokens,
+            web_search_requests=turn.web_search_requests,
         )
 
     def _remember_results(self, messages: list[dict[str, Any]]) -> None:

@@ -30,7 +30,7 @@ from victus.application.use_cases import products as product_uc
 from victus.application.use_cases import rules as rules_uc
 from victus.application.use_cases import snapshots as snap_uc
 from victus.application.use_cases.settings import Regional, regional_of
-from victus.config.server import ServerConfig
+from victus.config.server import AgentWeb, ServerConfig
 from victus.domain.services.calendar import day_of, today_in
 from victus.domain.values import (
     AgentMode,
@@ -167,10 +167,72 @@ def _image_refs(cap: dto.CaptureView) -> list[dto.AttachmentRef]:
     return [dto.AttachmentRef(id=cap.attachment_id, mime="image/*", size=0, original_name=None)]
 
 
+#: What a fetched page may add to the context at most, so one page cannot eat a day's budget.
+WEB_FETCH_MAX_CONTENT_TOKENS = 10_000
+
+
+def web_tools(web: AgentWeb) -> list[dict[str, Any]]:
+    """Anthropic's server-side web search and fetch, confined to the allowed domains.
+
+    They run on Anthropic's side: the runner neither executes nor sees the requests, only
+    the results in the model's turn. Nothing is offered unless ``agent.web`` is on *and*
+    names at least one domain.
+    """
+    if not web.active:
+        return []
+    return [
+        {
+            "type": web.search_tool,
+            "name": "web_search",
+            "max_uses": web.max_uses,
+            "allowed_domains": list(web.allowed_domains),
+        },
+        {
+            "type": web.fetch_tool,
+            "name": "web_fetch",
+            "max_uses": web.max_uses,
+            "allowed_domains": list(web.allowed_domains),
+            "max_content_tokens": WEB_FETCH_MAX_CONTENT_TOKENS,
+        },
+    ]
+
+
 def session_tools(tc: ToolContext) -> list[dict[str, Any]]:
-    """The worker's tools for the model; the barcode lookup only when the server offers it."""
+    """The worker's tools for the model; the barcode lookup only when the server offers it,
+    the web tools only when ``agent.web`` allows them."""
     names = WORKER_TOOLS if tc.product_lookup is not None else WORKER_TOOLS - {"product_lookup_ean"}
-    return anthropic_tool_definitions(tools_for(tc.ctx, names))
+    return anthropic_tool_definitions(tools_for(tc.ctx, names)) + web_tools(tc.config.agent.web)
+
+
+def capabilities(tc: ToolContext) -> str:
+    """What this session can and cannot reach, so a rule it cannot follow is said, not dropped.
+
+    A user rule such as "take the bakery's website" reads like an instruction the session
+    simply ignored when the web is switched off. Stating it up front lets system rule 10
+    turn that into an open question.
+    """
+    web = tc.config.agent.web
+    lines = ["## What this session can reach"]
+    if web.active:
+        lines.append(
+            "- Web: `web_search` and `web_fetch`, limited to "
+            + ", ".join(web.allowed_domains)
+            + ". Search for product names, brands and barcodes only — never the person's "
+            "day, amounts, times or notes."
+        )
+    else:
+        lines.append(
+            "- Web: none. A user rule that names a website or another online source cannot "
+            "be followed here: say so in `open_questions` for that item."
+        )
+    if tc.product_lookup is not None:
+        lines.append("- Barcodes: `product_lookup_ean` looks an EAN up.")
+    else:
+        lines.append(
+            "- Barcodes: no lookup. A legible EAN goes into `open_questions` (it could be "
+            "looked up), not into a silent estimate."
+        )
+    return "\n".join(lines)
 
 
 def context_json(view: dto.DayContextView) -> str:
@@ -247,7 +309,11 @@ class DayDrafter:
                 changed = True
                 try:
                     capture_uc.TranscribeCapture(
-                        self.tc.uow_factory, self.tc.ctx, self.tc.blobs, self.tc.transcription
+                        self.tc.uow_factory,
+                        self.tc.ctx,
+                        self.tc.blobs,
+                        self.tc.transcription,
+                        catalogue_terms=self.cfg.transcription.catalogue_terms,
                     ).execute(cap.id)
                 except ExternalServiceError as exc:
                     notes.append(f"capture {cap.id}: transcription failed ({exc.detail})")
@@ -298,6 +364,8 @@ class DayDrafter:
         task = "\n\n".join(
             p.format(**fields) for p in (self.prompts.capture_to_draft, self.prompts.day_verdict)
         )
+        # What the session can reach closes the task, right before the rules that may need it.
+        task = task.rstrip() + "\n\n" + capabilities(self.tc)
         content: list[dict[str, Any]] = [{"type": "text", "text": task}]
         # The person's rules come before the day: they say where values must come from.
         rules = tenant_rules(self.tc, "days")
@@ -410,6 +478,7 @@ class DayDrafter:
                 response.output_tokens,
                 cache_write_tokens=response.cache_creation_input_tokens,
                 cache_read_tokens=response.cache_read_input_tokens,
+                web_searches=response.web_search_requests,
             )
             # The token budget measures the context the model processed, cached or not;
             # caching lowers what that context costs (the USD budget), not its size.
@@ -436,18 +505,29 @@ class DayDrafter:
                     agent_uc.ExtendDayLock(self.tc.uow_factory, self.tc.ctx).execute(
                         run_id, day, lock_ttl_minutes=self.cfg.agent.lock_ttl_minutes
                     )
-            reason = self.budget.exceeded
+            reason = self.budget.exceeded or self._session_over(outcome)
             if reason:
                 if outcome.outcome != success:
                     outcome.outcome = "budget_exceeded"
                 outcome.error = f"budget exhausted: {reason}"
                 break
+            if response.stop_reason == "pause_turn":
+                # a server tool (web search) paused a long turn: sending the conversation
+                # back as it stands lets the server continue it — no extra user message
+                continue
             if response.stop_reason != "tool_use":
                 break
         else:
             if outcome.outcome != success:
                 outcome.outcome = "stuck"
                 outcome.error = f"no result after {self.cfg.agent.max_turns_per_day} turns"
+
+    def _session_over(self, outcome: DayOutcome) -> str | None:
+        """Why this one session has spent its own share (``max_usd_per_day``), if it has."""
+        cap = self.cfg.agent.budget.max_usd_per_day
+        if cap is not None and outcome.cost_usd >= cap:
+            return f"session cost {outcome.cost_usd:.2f} USD >= {cap:.2f} USD per day"
+        return None
 
     # -- product captures (label photos, corrections): one short session each --
 
@@ -472,7 +552,11 @@ class DayDrafter:
                 and self.tc.blobs is not None
             ):
                 fresh = capture_uc.TranscribeCapture(
-                    self.tc.uow_factory, self.tc.ctx, self.tc.blobs, self.tc.transcription
+                    self.tc.uow_factory,
+                    self.tc.ctx,
+                    self.tc.blobs,
+                    self.tc.transcription,
+                    catalogue_terms=self.cfg.transcription.catalogue_terms,
                 ).execute(cap.id)
             content: list[dict[str, Any]] = [
                 {
