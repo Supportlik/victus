@@ -8,11 +8,13 @@ Images that belong to captures are attached to this message in order.
 
 1. Read every capture. Group items into meals by the times and words the person used
    (breakfast, lunch, dinner, snack — or the meal names already present in the day log).
-2. For each item, look at "Recently logged" first, then call `product_search` with the food's main
-   word and its brand — not the whole phrase with quantities and filler words. If that finds
-   nothing that fits, try the variants the rules list (shorter word, stem, brand alone, without
-   umlauts) before you estimate. Prefer a product the person already has in the catalogue or has
-   logged before; a recipe batch counts as a product too.
+2. For each item, look at "Recently logged" first, then call `product_search` once with the item
+   as said (brand included). It tries the variants itself — the food's main word, the brand
+   alone, without quantities, filler words and umlauts, near spellings of a misheard brand — and
+   returns products and one-offs logged before, best first, each with a `score`. Read the whole
+   `products` list before you conclude that nothing fits. Prefer a product the person already has
+   in the catalogue or has logged before; a recipe batch (in `matches`) counts as a product too;
+   an `ad_hoc` entry that fits is reused by its id.
 3. Decide the quantity: label or weight given → exact; whole container → the container's portion;
    otherwise estimate, mark `quantity_estimated` and explain the basis in `rationale`. When the
    person names a pack, slice or piece count and the product lacks that portion, propose it with
@@ -30,6 +32,7 @@ Images that belong to captures are attached to this message in order.
    - `run_id` = `{run_id}`, `date` = `{date}`
    - `source_captures` = every capture id you used
    - up to three `candidates` per item, `chosen_consumable_id` or `one_off_nutrition_per_100`
+     with `one_off_name` (the food, not the sentence)
    - `training` when the captures state it (rest, strength, martial_arts)
    - `notes` (≤ 5) and `open_questions` for anything the reviewer must decide
 7. Once `draft_create` has succeeded, write the day's verdict with `agent_message_add` as the next

@@ -6,6 +6,36 @@ All notable changes to Victus are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **The agent's search tries the variants itself.** `product_search` takes the item as it was
+  said — "110 g Fitnessbrötchen from Bakery X" — and does what a person would: it drops the
+  amount and the filler words, looks for every remaining word on its own (so the brand alone
+  too), in both umlaut spellings, inside compounds and as a near spelling of a misheard word,
+  and ranks what it finds by how much of the query each name covers. Before, every word had to
+  be in the name, so a transcript phrase found nothing and a long name was estimated again. Each
+  entry now carries `kind`, `score` and `matched_by`, and the response lists the `variants`
+  tried. A barcode in the query finds the product that carries it. The web app's search field
+  keeps its stricter every-word search.
+- **One-offs come back.** `product_search` returns one-offs logged before, marked `ad_hoc` and
+  ranked below a product that fits as well, so a food estimated once is reused instead of
+  estimated again. A one-off is named after the food (`one_off_name` in the draft, or the raw
+  text without its amount) instead of the whole sentence; logged again under the same name it
+  is logged against the same one-off, and from its second line item on it is filed once as a
+  product proposal — approving it keeps its id and every item logged against it.
+- **Web access for drafting, opt-in.** With `agent.web.enabled` and a list of
+  `agent.web.allowed_domains`, a drafting session gets Anthropic's `web_search` and
+  `web_fetch`, confined to those domains, so a rule such as "take the bakery's website" can be
+  followed. Off by default. The session is told what it can reach, and a rule it cannot follow
+  becomes an open question. What leaves the server: the search queries, which the model is told
+  to limit to product names, brands and barcodes, and fetches of the allowed sites — never the
+  day itself.
+- **A budget per day.** `agent.budget.max_usd_per_day` (1.00 USD) ends one day's session when it
+  is reached and goes on with the next day, so one rich day no longer spends what the other days
+  of a run need.
+- **Transcription knows the catalogue.** The vocabulary prompt is extended with the catalogue's
+  brands and most logged product names (`transcription.catalogue_terms`, 40), so a brand is
+  spelled as the catalogue spells it rather than as a near-homophone.
+
 ## [1.9.0] - 2026-11-09
 
 ### Added

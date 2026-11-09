@@ -17,6 +17,7 @@ def turn_cost_usd(
     *,
     cache_write_tokens: int = 0,
     cache_read_tokens: int = 0,
+    web_searches: int = 0,
 ) -> float:
     price = cfg.pricing_for(model)
     write = (
@@ -29,9 +30,10 @@ def turn_cost_usd(
         if price.cache_read_per_mtok is not None
         else price.input_per_mtok * CACHE_READ_FACTOR
     )
-    return (
+    tokens = (
         input_tokens * price.input_per_mtok
         + output_tokens * price.output_per_mtok
         + cache_write_tokens * write
         + cache_read_tokens * read
     ) / 1_000_000.0
+    return tokens + web_searches * cfg.web.usd_per_search

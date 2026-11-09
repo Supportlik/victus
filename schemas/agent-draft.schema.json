@@ -26,6 +26,7 @@
         "raw_text": { "type": "string", "description": "What the user said/wrote/showed, verbatim." },
         "candidates": { "type": "array", "maxItems": 5, "items": { "$ref": "#/$defs/candidate" } },
         "chosen_consumable_id": { "type": ["integer", "null"], "description": "null = no product chosen; the item becomes a one-off consumable with the nutrition values below." },
+        "one_off_name": { "type": ["string", "null"], "maxLength": 300, "description": "Only when chosen_consumable_id is null: what the food is, named the way a product would be (\"Butter chicken (Brand Z)\"), without the amount or filler words. Missing, the name is raw_text without its quantities. A one-off of the same name logged before is reused, and its second occurrence files a product proposal by itself." },
         "one_off_nutrition_per_100": {
           "type": "object",
           "description": "Only when chosen_consumable_id is null.",

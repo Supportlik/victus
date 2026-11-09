@@ -216,3 +216,45 @@ def test_t_agt_128_prompt_caching_is_requested_and_its_usage_read() -> None:
     response = _create(plain)
     assert "cache_control" not in json.loads(plain_seen[0].content)
     assert response.cache_creation_input_tokens == 0 and response.cache_read_input_tokens == 0
+
+
+def test_t_agt_133_web_searches_and_server_blocks_are_read_from_the_reply() -> None:
+    """T-AGT-133: a turn that used the server-side web search reports how many searches ran
+    (`usage.server_tool_use.web_search_requests`), keeps the server blocks in the content to
+    echo back, and a `pause_turn` stop is passed on as such; without the field it reads 0."""
+    content = [
+        {
+            "type": "server_tool_use",
+            "id": "srvtoolu_1",
+            "name": "web_search",
+            "input": {"query": "Bakery X Fitnessbrötchen nutrition"},
+        },
+        {
+            "type": "web_search_tool_result",
+            "tool_use_id": "srvtoolu_1",
+            "content": [
+                {
+                    "type": "web_search_result",
+                    "url": "https://bakery.victus.example.com/rolls",
+                    "title": "Rolls",
+                    "encrypted_content": "abc",
+                }
+            ],
+        },
+    ]
+    usage = {"input_tokens": 10, "output_tokens": 5, "server_tool_use": {"web_search_requests": 2}}
+    client, _seen = _client(
+        lambda _r: httpx.Response(
+            200, json=_message(content=content, usage=usage, stop_reason="pause_turn")
+        )
+    )
+    response = _create(client)
+    assert response.stop_reason == "pause_turn" and response.tool_uses == []
+    assert response.web_search_requests == 2
+    assert [b["type"] for b in response.content_params] == [
+        "server_tool_use",
+        "web_search_tool_result",
+    ]
+
+    plain, _ = _client(lambda _r: httpx.Response(200, json=_message()))
+    assert _create(plain).web_search_requests == 0

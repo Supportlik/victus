@@ -65,6 +65,7 @@ path in upper snake case with `VICTUS_` prefix and `__` for nesting, e.g. `datab
 | `transcription.model` | str | no | `gpt-4o-transcribe` | Provider model name |
 | `transcription.max_file_mb` | int | no | `25` | Files above this are rejected (`TranscriptionError`) |
 | `transcription.ffmpeg_path` | str | no | `ffmpeg` | Binary used to convert `.oga`/`.opus`/`.webm` to MP3 before upload; if it is missing, those formats fail with a clear error |
+| `transcription.catalogue_terms` | int | no | `40` | Terms from the tenant's catalogue added to its `vocabulary_prompt` before each transcription: brands first (most logged first), then the most logged product names without their parenthesised details, skipping what the prompt already has. A brand is then spelled the way the catalogue spells it instead of as a near-homophone. `0` sends only the tenant's own prompt. Goes to the transcription provider together with the audio, as the prompt always did |
 
 ### `agent`
 
@@ -77,7 +78,7 @@ Env prefix `VICTUS_AGENT__…` (nested keys with `__`, e.g. `VICTUS_AGENT__BUDGE
 | `agent.poll_seconds` | int | no | `5` | How often the worker looks for queued runs |
 | `agent.lock_ttl_minutes` | int | no | `5` | `agent_lock.locked_until` horizon; a single day is drafted well within this, so a crashed run frees its day quickly. The runner extends the lock between long turns |
 | `agent.model` | str | no | `claude-opus-5` | Model for the worker runner (Anthropic model id, no date suffix) |
-| `agent.effort` | enum | no | `medium` | `low` / `medium` / `high` / `xhigh` / `max`; sent as `output_config.effort`. Drafting is routine work — raise it only if drafts miss items |
+| `agent.effort` | enum | no | `medium` | `low` / `medium` / `high` / `xhigh` / `max`; sent as `output_config.effort`. Drafting is routine work — raise it only if drafts miss items. `high` costs more output (thinking) tokens per turn, which prompt caching does not make cheaper; `agent.budget.max_usd_per_day` keeps a deeper session from spending a whole run |
 | `agent.max_tokens` | int | no | `16000` | `max_tokens` per model turn |
 | `agent.fallbacks` | bool | no | `true` | Server-side refusal fallbacks (beta header `server-side-fallback-2026-07-01`, `fallbacks: "default"`). With `false` a refused turn ends the day session with outcome `refused` |
 | `agent.max_turns_per_day` | int | no | `40` | Model turns per day session; beyond this the session is abandoned as stuck |
@@ -86,9 +87,15 @@ Env prefix `VICTUS_AGENT__…` (nested keys with `__`, e.g. `VICTUS_AGENT__BUDGE
 | `agent.lookup.ean` | bool | no | `false` | Offer the tool `product_lookup_ean` (worker and MCP): a barcode is looked up in Open Food Facts. **Privacy:** only the barcode leaves the server — never day data, names or amounts. Off, the tool answers `LookupDisabled` and the worker does not offer it |
 | `agent.lookup.ean_url` | str | no | `https://world.openfoodfacts.org/api/v2/product/{ean}.json` | URL template of the lookup; `{ean}` is replaced by the barcode |
 | `agent.lookup.timeout_s` | float | no | `5.0` | Timeout per lookup; a slow or failing service turns into a typed `ExternalServiceError` for the agent, never a failed run |
+| `agent.web.enabled` | bool | no | `false` | Offer Anthropic's server-side `web_search` and `web_fetch` to drafting sessions, so a rule such as "take the bakery's website" can be followed. Offered only together with at least one `allowed_domains` entry. **Privacy:** the searches run on Anthropic's side and go to its search provider; `web_fetch` loads pages of the allowed domains. The model writes the queries and is instructed to search product names, brands and barcodes only — never the day, amounts, times or notes. Nothing else leaves the server that the model call does not already carry. Off, a rule that needs the web becomes an open question |
+| `agent.web.allowed_domains` | list[str] | no | `[]` | Plain hostnames (`bakery.example.com`, no scheme) both tools are confined to; subdomains included. Environment: `VICTUS_AGENT__WEB__ALLOWED_DOMAINS='["bakery.example.com"]'` |
+| `agent.web.max_uses` | int | no | `5` | Searches and fetches per model turn, each |
+| `agent.web.search_tool` / `agent.web.fetch_tool` | str | no | `web_search_20260209` / `web_fetch_20260209` | Server tool versions (with dynamic filtering). For a model without it, use `web_search_20250305` / `web_fetch_20250910` |
+| `agent.web.usd_per_search` | float | no | `0.01` | Booked per web search on top of the tokens (list price 10 USD per 1,000); a fetched page costs its tokens only |
 | `agent.budget.max_input_tokens` | int | no | `400000` | Per run, summed over all day sessions; cached input counts too — caching lowers the cost of the context, not its size |
 | `agent.budget.max_output_tokens` | int | no | `40000` | Per run |
 | `agent.budget.max_usd_per_run` | float | no | `2.0` | Per run; the run stops gracefully (`budget_exceeded`) when reached, remaining days are picked up by the next run |
+| `agent.budget.max_usd_per_day` | float \| null | no | `1.0` | Per day session (and per product-capture or assessment session): a session that reaches it ends as `budget_exceeded` and the run goes on with the next day, so one rich day cannot starve the others. `null` leaves only the run's budget |
 | `agent.budget.max_images_per_run` | int | no | `12` | Images per run, downscaled to 1024 px before they reach the model |
 | `agent.pricing.<model>.input_per_mtok` / `.output_per_mtok` | float | no | opus-5 5/25, sonnet-5 2/10, haiku-4-5 1/5 | USD per million tokens used to book `agent_run.cost_usd` / `agent_session.cost_usd`. Unknown model ids fall back to the opus-5 rates |
 | `agent.pricing.<model>.cache_write_per_mtok` / `.cache_read_per_mtok` | float \| null | no | `null` | Prompt-cache prices; `null` books cache writes at 1.25× and cache reads at 0.1× `input_per_mtok` |

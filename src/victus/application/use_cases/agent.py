@@ -41,6 +41,8 @@ from victus.application.use_cases.day_logs import (
 )
 from victus.application.use_cases.drafts import draft_markdown
 from victus.application.use_cases.products import in_reference_unit
+from victus.application.use_cases.proposals import NEW, PENDING, author_of
+from victus.domain.services.food_query import one_off_name
 from victus.domain.values import (
     AgentMode,
     CaptureStatus,
@@ -707,6 +709,7 @@ class CreateDraft(UseCase):
 
             created = 0
             ad_hoc = 0
+            proposed: list[str] = []
             for meal_in in draft["meals"]:
                 meal = _find_meal(d, meal_in["name"])
                 if meal is None:
@@ -724,9 +727,12 @@ class CreateDraft(UseCase):
                     if meal not in d.meals:  # pragma: no branch
                         d.meals.append(meal)
                 for item in meal_in["line_items"]:
-                    _li, is_ad_hoc = self._line_item(uow, meal, item)
+                    li, is_ad_hoc = self._line_item(uow, meal, item)
                     created += 1
                     ad_hoc += int(is_ad_hoc)
+                    filed = self._propose_returning_one_off(uow, li.consumable_id, run.id)
+                    if filed:
+                        proposed.append(filed)
 
             assigned = 0
             for cid in draft.get("source_captures", []):
@@ -771,7 +777,13 @@ class CreateDraft(UseCase):
                 "draft.create",
                 "day_log",
                 str(d.id),
-                {"run_id": run.id, "items": created, "ad_hoc": ad_hoc, "captures": assigned},
+                {
+                    "run_id": run.id,
+                    "items": created,
+                    "ad_hoc": ad_hoc,
+                    "captures": assigned,
+                    "proposed": proposed,
+                },
             )
             uow.flush()
             view = build_day_view(uow, d)
@@ -783,6 +795,7 @@ class CreateDraft(UseCase):
                 captures_assigned=assigned,
                 questions=questions,
                 markdown=draft_markdown(view),
+                proposed_products=proposed,
             )
             uow.commit()
             return result
@@ -802,10 +815,18 @@ class CreateDraft(UseCase):
                 raise ValidationFailed(
                     f"'{item['raw_text']}': no product chosen and no one_off_nutrition_per_100"
                 )
+            name = str(item.get("one_off_name") or "").strip() or one_off_name(item["raw_text"])
+            unit = "ml" if item.get("unit_code") == "ml" else "g"
+            again = uow.products.ad_hoc_named(name)
+            earlier = uow.products.get_ad_hoc_item(again.id) if again is not None else None
+            if again is not None and earlier is not None and earlier.reference_unit == unit:
+                # the same food estimated before: log it against that one-off, so both days
+                # count the same values and a promotion keeps both items (#78)
+                return self._add_line_item(uow, meal, item, again, is_ad_hoc=True), True
             ad = uow.products.add_ad_hoc_item(
-                item["raw_text"][:300],
+                name[:300],
                 reference_amount=100.0,
-                reference_unit="ml" if item.get("unit_code") == "ml" else "g",
+                reference_unit=unit,
                 kcal=nutrition.get("kcal"),
                 protein=nutrition.get("protein"),
                 carbs=nutrition.get("carbs"),
@@ -817,6 +838,17 @@ class CreateDraft(UseCase):
             consumable = uow.products.get_consumable(ad.id)
             assert consumable is not None
             is_ad_hoc = True
+        return self._add_line_item(uow, meal, item, consumable, is_ad_hoc=is_ad_hoc), is_ad_hoc
+
+    def _add_line_item(
+        self,
+        uow: UnitOfWork,
+        meal: orm.Meal,
+        item: dict[str, Any],
+        consumable: orm.Consumable,
+        *,
+        is_ad_hoc: bool,
+    ) -> orm.LineItem:
         inp = LineItemInput(
             consumable_id=consumable.id,
             amount=float(item["quantity"]),
@@ -870,4 +902,64 @@ class CreateDraft(UseCase):
         if li not in meal.line_items:  # pragma: no branch
             # keep the in-memory collection current so the returned day view sees the item
             meal.line_items.append(li)
-        return li, is_ad_hoc
+        return li
+
+    def _propose_returning_one_off(
+        self, uow: UnitOfWork, consumable_id: int, run_id: str
+    ) -> str | None:
+        """File a one-off that is logged a second time as a ``new`` product proposal.
+
+        A one-off estimated once used to be estimated again every time, because search
+        never saw it and nothing asked the person to keep it. From its second line item on
+        it is a food the person eats, so it goes to the review list once — approving
+        promotes it in place, keeping its id and every item logged against it (R81). Any
+        proposal the one-off already has (pending, approved or rejected) means a person was
+        asked already, and a product of that name means approving could only collide.
+        Returns the name filed, or ``None``.
+        """
+        item = uow.products.get_ad_hoc_item(consumable_id)
+        consumable = uow.products.get_consumable(consumable_id)
+        if item is None or consumable is None:
+            return None
+        if uow.proposals.list(consumable_id=consumable_id, limit=1):
+            return None
+        times = uow.day_logs.usage_count(consumable_id)
+        if times < 2 or uow.products.by_name(consumable.name) is not None:
+            return None
+        values = {
+            "name": consumable.name,
+            "reference_amount": item.reference_amount,
+            "reference_unit": item.reference_unit,
+            **{
+                k: getattr(item, k)
+                for k in ("kcal", "protein", "carbs", "fat", "fiber", "salt")
+                if getattr(item, k) is not None
+            },
+        }
+        source = (item.origin_text or "")[:300] or None
+        if source:
+            values["source"] = source
+        pr = uow.proposals.add(
+            orm.ProductProposal(
+                tenant_id=self.ctx.tenant_id,
+                product_id=None,
+                kind=NEW,
+                consumable_id=consumable_id,
+                run_id=run_id,
+                changes=values,
+                rationale=(
+                    f"Logged as a one-off {times} times; filed so it can be approved once "
+                    "and found from then on."
+                ),
+                source=source,
+                status=PENDING,
+                created_by=author_of(self.ctx),
+            )
+        )
+        uow.audit.record(
+            "product.propose_new",
+            "consumable",
+            str(consumable_id),
+            {"proposal": pr.id, "name": consumable.name, "returning_one_off": True},
+        )
+        return consumable.name

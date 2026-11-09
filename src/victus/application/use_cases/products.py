@@ -12,8 +12,8 @@ from victus.application.ports.unit_of_work import UnitOfWork
 from victus.application.tenant_context import SCOPE_READ, SCOPE_WRITE
 from victus.application.use_cases._base import UseCase, require_decision
 from victus.application.use_cases._mappers import portion_view, product_view
-from victus.domain.services import search_ranking
-from victus.domain.services.matching import ConsumableIndex
+from victus.domain.services import food_query, search_ranking
+from victus.domain.services.matching import ConsumableIndex, fold, normalize
 from victus.domain.services.units import UNITS, convert_base
 from victus.domain.values import ConsumableKind, MatchCandidate
 from victus.infrastructure.db import orm
@@ -188,6 +188,107 @@ class SearchProducts(UseCase):
             rows.sort(key=lambda p: search_ranking.sort_key(query, p.name, p.brand))
             rows = _resolve_versions(uow, rows, on, need=offset + limit)
             return [_view(uow, p, names) for p in rows[window]]
+
+
+class FindProducts(UseCase):
+    """The agent's search: a spoken phrase in, products and one-offs out, ranked (#78).
+
+    ``SearchProducts`` answers a field a person types into: every word must be in the
+    name. A transcript is not typed — "110 g Fitnessbrötchen from <misheard bakery>" has
+    words no name holds — so this one scores every product and one-off by how much of the
+    query it covers (``food_query``): each content word on its own, both umlaut spellings,
+    compounds and near spellings, the brand counting like the name. A barcode in the query
+    finds the product carrying it first.
+
+    One-offs come back too, marked ``ad_hoc``, so a food estimated once is found the next
+    time; they rank below a product that answers the query as well, because a product is
+    the entry a person approved.
+    """
+
+    #: A one-off's score against a product's, so a product that fits as well comes first.
+    AD_HOC_FACTOR = 0.9
+
+    def execute(
+        self, query: str, *, limit: int = 10, on: date | None = None
+    ) -> dto.FindProductsView:
+        self.ctx.require(SCOPE_READ)
+        relevance = food_query.Relevance(query)
+        eans = set(food_query.eans_in(query))
+        with self._uow() as uow:
+            ranked: list[tuple[tuple[Any, ...], int, str, food_query.Hit, float]] = []
+            for cid, kind, name, brand, ean in uow.products.search_rows():
+                hit: food_query.Hit | None
+                if kind == "product" and ean and ean in eans:
+                    hit = food_query.Hit(score=1.0, tier=search_ranking.EXACT, matched=("ean",))
+                else:
+                    hit = relevance.of(name, brand)
+                if hit is None:
+                    continue
+                score = hit.score
+                if kind == "ad_hoc":
+                    score = round(score * self.AD_HOC_FACTOR, 3)
+                key = (-score, kind != "product", hit.tier, normalize(name), -cid)
+                ranked.append((key, cid, kind, hit, score))
+            ranked.sort(key=lambda e: e[0])
+            names = _category_names(uow)
+            items: list[dto.FoundConsumable] = []
+            handled: set[int] = set()
+            foods: set[str] = set()
+            for _key, cid, kind, hit, score in ranked:
+                if len(items) >= limit:
+                    break
+                if cid in handled:
+                    continue
+                if kind == "ad_hoc":
+                    item = uow.products.get_ad_hoc_item(cid)
+                    consumable = uow.products.get_consumable(cid)
+                    # the row was read in this transaction; neither can be gone
+                    assert item is not None and consumable is not None
+                    food = fold(consumable.name)
+                    if food in foods:
+                        continue  # the same food estimated on another day: the newest answers
+                    foods.add(food)
+                    items.append(
+                        dto.FoundConsumable(
+                            kind="ad_hoc",
+                            score=score,
+                            matched_by=list(hit.matched),
+                            ad_hoc=_ad_hoc_view(consumable, item),
+                        )
+                    )
+                    continue
+                chain = list(uow.products.versions_of(cid))
+                handled.update(c.id for c in chain)
+                pick = valid_on(chain, on) if len(chain) > 1 else chain[0]
+                if pick is None:
+                    continue  # no version of it existed on that day
+                items.append(
+                    dto.FoundConsumable(
+                        kind="product",
+                        score=score,
+                        matched_by=list(hit.matched),
+                        product=_view(uow, pick, names),
+                    )
+                )
+            return dto.FindProductsView(
+                query=query, variants=food_query.variants(query), items=items
+            )
+
+
+def _ad_hoc_view(consumable: orm.Consumable, item: orm.AdHocItem) -> dto.AdHocView:
+    return dto.AdHocView(
+        id=consumable.id,
+        name=consumable.name,
+        reference_amount=item.reference_amount,
+        reference_unit=item.reference_unit,
+        kcal=item.kcal,
+        protein=item.protein,
+        carbs=item.carbs,
+        fat=item.fat,
+        fiber=item.fiber,
+        salt=item.salt,
+        source=item.origin_text,
+    )
 
 
 class ProductVersions(UseCase):

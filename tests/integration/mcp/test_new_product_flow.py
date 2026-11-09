@@ -83,7 +83,9 @@ def test_t_mcp_010_unknown_food_reaches_the_day_and_waits_for_the_person(
     assert created["pending_review"] is True and created["status"] == "pending"
     consumable_id = created["log_against_consumable_id"]
     assert consumable_id is not None
-    assert dispatch(agent_ctx, "product_search", {"q": "Oat drink"})["products"] == []  # type: ignore[index]
+    # the pending entry is a one-off until approved: search finds it marked as such (#78)
+    pending = dispatch(agent_ctx, "product_search", {"q": "Oat drink"})["products"]  # type: ignore[index]
+    assert [(p["id"], p["kind"]) for p in pending] == [(consumable_id, "ad_hoc")]
 
     # 3. The day is drafted against the pending one-off, so its macros are right today.
     # `manual`: a run for a named day, not one driven by open captures

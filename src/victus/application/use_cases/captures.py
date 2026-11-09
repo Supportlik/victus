@@ -530,6 +530,36 @@ def transcription_settings(uow: UnitOfWork) -> tuple[str | None, str | None]:
 
 
 _WORD = re.compile(r"[\w'-]+", re.UNICODE)
+_PARENTHESES = re.compile(r"\([^()]*\)")
+
+
+def catalogue_vocabulary(uow: UnitOfWork, limit: int, prompt: str | None = None) -> str:
+    """The catalogue's brands and most logged product names, for the transcription prompt.
+
+    A brand spoken into a voice note is regularly transcribed as a near-homophone, and the
+    search downstream can bridge a misspelt word only so far (#78). Telling the speech model
+    how the catalogue spells its brands and its everyday foods fixes that at the source.
+    Brands come first (the logged ones by how often), then product names without their
+    parenthesised details; terms the tenant's own prompt already has are left out, and the
+    list stops at ``limit`` terms.
+    """
+    if limit <= 0:
+        return ""
+    taken = {w.strip().lower() for w in re.split(r"[,;\n]+", prompt or "") if w.strip()}
+    terms: list[str] = []
+
+    def add(term: str | None) -> None:
+        clean = re.sub(r"\s+", " ", _PARENTHESES.sub(" ", term or "")).strip(" ,;-")
+        if clean and clean.lower() not in taken and len(terms) < limit:
+            taken.add(clean.lower())
+            terms.append(clean)
+
+    rows = uow.day_logs.most_logged_products(limit)
+    for _name, brand, _times in rows:
+        add(brand)
+    for name, _brand, _times in rows:
+        add(name)
+    return ", ".join(terms)
 
 
 #: How many of the prompt's words in the prompt's own order make a transcript an echo.
@@ -545,7 +575,9 @@ def _repeats_a_run(words: Sequence[str], prompt_words: Sequence[str], length: in
     return any(tuple(words[i : i + length]) in runs for i in range(len(words) - length + 1))
 
 
-def looks_like_prompt_echo(text: str, vocabulary_prompt: str | None) -> bool:
+def looks_like_prompt_echo(
+    text: str, vocabulary_prompt: str | None, catalogue: str | None = None
+) -> bool:
     """Speech models return the vocabulary prompt (or nothing) for silent audio.
 
     True when the transcript is empty, made almost entirely of words that occur in the
@@ -561,13 +593,15 @@ def looks_like_prompt_echo(text: str, vocabulary_prompt: str | None) -> bool:
     words = [w.lower() for w in _WORD.findall(text or "")]
     if not words:
         return True
-    if not vocabulary_prompt:
-        return False
-    prompt_words = [w.lower() for w in _WORD.findall(vocabulary_prompt)]
-    hits = sum(1 for w in words if w in set(prompt_words))
-    if hits / len(words) >= 0.8:
-        return True
-    return _repeats_a_run(words, prompt_words, _ECHO_RUN)
+    prompt_words = [w.lower() for w in _WORD.findall(vocabulary_prompt or "")]
+    if prompt_words:
+        hits = sum(1 for w in words if w in set(prompt_words))
+        if hits / len(words) >= 0.8:
+            return True
+    # The catalogue's terms only count as an echo when repeated in their own order: a real
+    # note is often nothing but the names of foods the catalogue holds ("Brand Y skyr").
+    full = [*prompt_words, *(w.lower() for w in _WORD.findall(catalogue or ""))]
+    return _repeats_a_run(words, full, _ECHO_RUN)
 
 
 def _audio_parts(uow: UnitOfWork, cap: orm.Capture) -> list[orm.Attachment]:
@@ -617,10 +651,14 @@ class TranscribeCapture(UseCase):
         ctx: TenantContext,
         blobs: BlobStorage,
         transcription: TranscriptionPort | None,
+        *,
+        catalogue_terms: int = 0,
     ) -> None:
         super().__init__(uow_factory, ctx)
         self.blobs = blobs
         self.transcription = transcription
+        #: How many catalogue terms join the vocabulary prompt (``transcription.catalogue_terms``).
+        self.catalogue_terms = catalogue_terms
 
     def execute(self, capture_id: str, *, force: bool = False) -> dto.CaptureView:
         self.ctx.require(SCOPE_CAPTURE_WRITE)
@@ -643,6 +681,8 @@ class TranscribeCapture(UseCase):
                     "transcription is not configured (providers.openai_api_key missing)"
                 )
             language, vocab = transcription_settings(uow)
+            catalogue = catalogue_vocabulary(uow, self.catalogue_terms, vocab)
+            prompt = ", ".join(p for p in (vocab, catalogue) if p) or None
             for att in pending:
                 try:
                     audio = self.blobs.get(att.storage_key)
@@ -654,7 +694,7 @@ class TranscribeCapture(UseCase):
                         mime=att.mime,
                         filename=att.original_name,
                         language=language,
-                        vocabulary_prompt=vocab,
+                        vocabulary_prompt=prompt,
                     )
                 except TranscriptionError as exc:
                     cap.status = CaptureStatus.FAILED.value
@@ -667,7 +707,7 @@ class TranscribeCapture(UseCase):
                     # what earlier parts produced is kept: it is not wrong, only incomplete
                     uow.commit()
                     raise ExternalServiceError(f"transcription failed: {exc}") from exc
-                echo = looks_like_prompt_echo(result.text, vocab)
+                echo = looks_like_prompt_echo(result.text, vocab, catalogue)
                 uow.captures.add_transcript(
                     orm.Transcript(
                         capture_id=cap.id,

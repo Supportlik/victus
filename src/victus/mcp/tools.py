@@ -164,7 +164,13 @@ class _In(BaseModel):
 
 
 class ProductSearchIn(_In):
-    q: str = Field(description="Free text as the user said it, e.g. 'skyr' or 'rye bread'.")
+    q: str = Field(
+        description=(
+            "Free text: the item as the person said it, e.g. 'skyr', "
+            "'110 g rye bread from Bakery X' or a barcode; quantities and filler words "
+            "are ignored."
+        )
+    )
     limit: int = Field(default=10, ge=1, le=50)
     on: date | None = Field(
         default=None,
@@ -682,15 +688,46 @@ def _locked_days(tc: ToolContext) -> set[date] | None:
 
 
 def _product_search(tc: ToolContext, inp: ProductSearchIn) -> ToolResult:
-    matches = product_uc.MatchText(tc.uow_factory, tc.ctx).execute(inp.q, limit=inp.limit)
-    products = product_uc.SearchProducts(tc.uow_factory, tc.ctx).execute(
+    found = product_uc.FindProducts(tc.uow_factory, tc.ctx).execute(
         inp.q, limit=inp.limit, on=inp.on
     )
+    # the matcher compares whole names, so it gets the phrase as said and without its
+    # quantities and filler words; the better of the two answers stays
+    matcher = product_uc.MatchText(tc.uow_factory, tc.ctx)
+    best: dict[int, Any] = {}
+    for text in dict.fromkeys(found.variants[:2] or [inp.q]):
+        for m in matcher.execute(text, limit=inp.limit):
+            held = best.get(m.consumable_id)
+            if held is None or (m.tier, -m.score) < (held.tier, -held.score):
+                best[m.consumable_id] = m
+    matches = sorted(best.values(), key=lambda m: (m.tier, -m.score, m.name))[: inp.limit]
     return {
         "query": inp.q,
+        "variants": found.variants,
         "matches": [jsonable(m) for m in matches],
-        "products": [_compact_product(p) for p in products],
+        "products": [_found_item(f) for f in found.items],
     }
+
+
+def _found_item(found: Any) -> dict[str, Any]:
+    """A product as ``_compact_product`` shows it, or a one-off in the same shape."""
+    if found.product is not None:
+        entry = _compact_product(found.product)
+    else:
+        ad = found.ad_hoc
+        per_100 = 100.0 / ad.reference_amount if ad.reference_amount else 1.0
+        entry = {
+            "id": ad.id,
+            "name": ad.name,
+            "brand": None,
+            "kcal_per_100": None if ad.kcal is None else round(ad.kcal * per_100, 1),
+            "protein_per_100": None if ad.protein is None else round(ad.protein * per_100, 1),
+            "reference_unit": ad.reference_unit,
+            "density_g_per_ml": None,
+            "portions": [],
+            "source": ad.source,
+        }
+    return {**entry, "kind": found.kind, "score": found.score, "matched_by": found.matched_by}
 
 
 def _body_measurements(tc: ToolContext, inp: BodyMeasurementsIn) -> ToolResult:
@@ -802,7 +839,11 @@ def _capture_get(tc: ToolContext, inp: CaptureGetIn) -> ToolResult:
         if tc.blobs is None:
             raise ToolError("unavailable", "blob storage is not configured")
         cap = capture_uc.TranscribeCapture(
-            tc.uow_factory, tc.ctx, tc.blobs, tc.transcription
+            tc.uow_factory,
+            tc.ctx,
+            tc.blobs,
+            tc.transcription,
+            catalogue_terms=tc.config.transcription.catalogue_terms,
         ).execute(inp.id)
     image_ids = [a.id for a in cap.attachments if a.mime.startswith("image/")]
     if not image_ids and cap.kind == CaptureKind.IMAGE.value and cap.attachment_id:
@@ -1173,9 +1214,14 @@ _APPLY_OR_PROPOSE = "applied with write + approve; otherwise filed as a proposal
 TOOLS: tuple[ToolSpec, ...] = (
     _spec(
         "product_search",
-        "Find products for a free-text food item. Returns matcher candidates (tier 1 exact, "
-        "2 short form, 3 fuzzy; score 0–1) and matching products with portions and kcal/100. "
-        "Call this for every item before choosing a consumable or creating a product.",
+        "Find products for a food item, as said or written. Tries the variants a person would "
+        "itself — without amounts, units and filler words, each word alone (the brand too), "
+        "both umlaut spellings, near spellings of a misheard word — and an EAN in the query "
+        "finds the product carrying it. `products` holds products and one-offs logged before "
+        "(`kind`: product | ad_hoc), best first, each with `score` (0–1, the share of the "
+        "query it covers) and `matched_by`; `matches` are matcher candidates (tier 1 exact, "
+        "2 short form, 3 fuzzy). Call this for every item before choosing a consumable or "
+        "creating a product.",
         SCOPE_READ,
         ProductSearchIn,
         _product_search,

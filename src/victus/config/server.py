@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import BaseModel, Field, SecretStr, field_validator
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
@@ -52,12 +52,18 @@ class TranscriptionConfig(BaseModel):
     model: str = "gpt-4o-transcribe"
     max_file_mb: int = 25
     ffmpeg_path: str = "ffmpeg"
+    # Catalogue words added to the tenant's vocabulary prompt: its brands and its most
+    # logged product names, so a brand is not heard as a near-homophone. 0 leaves it out.
+    catalogue_terms: int = Field(default=40, ge=0, le=200)
 
 
 class AgentBudget(BaseModel):
     max_input_tokens: int = 400_000
     max_output_tokens: int = 40_000
     max_usd_per_run: float = 2.0
+    # One session (a day, a product capture, an assessment) stops here, so one rich day
+    # cannot spend what the other days of the run need. None: only the run's budget.
+    max_usd_per_day: float | None = Field(default=1.0, gt=0)
     max_images_per_run: int = 12
 
 
@@ -78,6 +84,39 @@ class AgentLookup(BaseModel):
     ean: bool = False
     ean_url: str = "https://world.openfoodfacts.org/api/v2/product/{ean}.json"
     timeout_s: float = Field(default=5.0, gt=0, le=60)
+
+
+class AgentWeb(BaseModel):
+    """Anthropic's web search and web fetch for a drafting session. Off by default.
+
+    The model writes the search queries; it is told to search product names, brands and
+    barcodes only. ``allowed_domains`` confines both tools — with an empty list the tools
+    are not offered even when ``enabled`` is true.
+    """
+
+    enabled: bool = False
+    allowed_domains: list[str] = Field(default_factory=list)
+    # Searches and fetches per model turn, each.
+    max_uses: int = Field(default=5, ge=1, le=20)
+    search_tool: str = "web_search_20260209"
+    fetch_tool: str = "web_fetch_20260209"
+    # Billed per search on top of tokens (Anthropic list price: 10 USD per 1,000).
+    usd_per_search: float = Field(default=0.01, ge=0)
+
+    @field_validator("allowed_domains")
+    @classmethod
+    def _plain_hostnames(cls, domains: list[str]) -> list[str]:
+        clean: list[str] = []
+        for raw in domains:
+            domain = raw.strip().lower()
+            if not domain or "://" in domain or any(c.isspace() for c in domain):
+                raise ValueError(f"not a plain hostname: {raw!r} (write 'example.com')")
+            clean.append(domain)
+        return clean
+
+    @property
+    def active(self) -> bool:
+        return self.enabled and bool(self.allowed_domains)
 
 
 class AgentConfig(BaseModel):
@@ -103,6 +142,7 @@ class AgentConfig(BaseModel):
     # the conversation so far from the cache instead of paying full input price again.
     prompt_cache: bool = True
     lookup: AgentLookup = Field(default_factory=AgentLookup)
+    web: AgentWeb = Field(default_factory=AgentWeb)
     budget: AgentBudget = Field(default_factory=AgentBudget)
     pricing: dict[str, ModelPricing] = Field(
         default_factory=lambda: {

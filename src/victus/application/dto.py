@@ -76,6 +76,44 @@ class ProductView:
 
 
 @dataclass(frozen=True, slots=True)
+class AdHocView:
+    """A one-off consumable: values per ``reference_amount``, no brand, no portions."""
+
+    id: int
+    name: str
+    reference_amount: float
+    reference_unit: str
+    kcal: float | None
+    protein: float | None
+    carbs: float | None
+    fat: float | None
+    fiber: float | None
+    salt: float | None
+    source: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class FoundConsumable:
+    """One answer of the agent's search: a product or a one-off, with how well it fits."""
+
+    kind: str  # product | ad_hoc
+    #: 0–1: the share of the query's words the name covers, then how well they sit in it.
+    score: float
+    #: What found it: ``ean``, or the query words found in name or brand.
+    matched_by: list[str]
+    product: ProductView | None = None
+    ad_hoc: AdHocView | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class FindProductsView:
+    query: str
+    #: The queries a person would have tried, in the order a reader can follow.
+    variants: list[str]
+    items: list[FoundConsumable]
+
+
+@dataclass(frozen=True, slots=True)
 class IngredientView:
     id: int
     position: int
@@ -662,6 +700,8 @@ class DraftCreateView:
     captures_assigned: int
     questions: int
     markdown: str
+    #: One-offs logged a second time and filed as ``new`` product proposals by this draft.
+    proposed_products: list[str] = field(default_factory=list)
 
 
 # ── change feed (server-sent events) ────────────────────────────────────────

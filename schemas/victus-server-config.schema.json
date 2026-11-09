@@ -66,7 +66,8 @@
         "provider": { "type": "string", "enum": ["openai", "null"], "default": "openai" },
         "model": { "type": "string", "default": "gpt-4o-transcribe" },
         "max_file_mb": { "type": "integer", "minimum": 1, "default": 25 },
-        "ffmpeg_path": { "type": "string", "default": "ffmpeg" }
+        "ffmpeg_path": { "type": "string", "default": "ffmpeg" },
+        "catalogue_terms": { "type": "integer", "minimum": 0, "maximum": 200, "default": 40, "description": "Catalogue brands and most logged product names added to the tenant's vocabulary prompt; 0 leaves them out." }
       }
     },
     "agent": {
@@ -94,6 +95,19 @@
             "timeout_s": { "type": "number", "exclusiveMinimum": 0, "maximum": 60, "default": 5.0, "description": "Timeout per lookup in seconds." }
           }
         },
+        "web": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Anthropic's server-side web_search and web_fetch for drafting sessions. Off by default; offered only with at least one allowed domain.",
+          "properties": {
+            "enabled": { "type": "boolean", "default": false },
+            "allowed_domains": { "type": "array", "items": { "type": "string" }, "default": [], "description": "Plain hostnames (no scheme) both tools are confined to, e.g. a bakery's site." },
+            "max_uses": { "type": "integer", "minimum": 1, "maximum": 20, "default": 5, "description": "Searches and fetches per model turn, each." },
+            "search_tool": { "type": "string", "default": "web_search_20260209", "description": "Server tool version; web_search_20250305 for models without dynamic filtering." },
+            "fetch_tool": { "type": "string", "default": "web_fetch_20260209", "description": "Server tool version; web_fetch_20250910 for models without dynamic filtering." },
+            "usd_per_search": { "type": "number", "minimum": 0, "default": 0.01, "description": "Booked per web search on top of tokens." }
+          }
+        },
         "budget": {
           "type": "object",
           "additionalProperties": false,
@@ -101,6 +115,7 @@
             "max_input_tokens": { "type": "integer", "minimum": 1000, "default": 400000 },
             "max_output_tokens": { "type": "integer", "minimum": 256, "default": 40000 },
             "max_usd_per_run": { "type": "number", "minimum": 0, "default": 2.0 },
+            "max_usd_per_day": { "type": ["number", "null"], "exclusiveMinimum": 0, "default": 1.0, "description": "Cap per day session (and per product or assessment session); null leaves only the run's budget." },
             "max_images_per_run": { "type": "integer", "minimum": 0, "default": 12 }
           }
         },
