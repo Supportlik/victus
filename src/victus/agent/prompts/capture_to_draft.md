@@ -8,10 +8,15 @@ Images that belong to captures are attached to this message in order.
 
 1. Read every capture. Group items into meals by the times and words the person used
    (breakfast, lunch, dinner, snack — or the meal names already present in the day log).
-2. For each item call `product_search` with the words the person used. Prefer a product the person
-   already has in the catalogue; a recipe batch counts as a product too.
+2. For each item, look at "Recently logged" first, then call `product_search` with the food's main
+   word and its brand — not the whole phrase with quantities and filler words. If that finds
+   nothing that fits, try the variants the rules list (shorter word, stem, brand alone, without
+   umlauts) before you estimate. Prefer a product the person already has in the catalogue or has
+   logged before; a recipe batch counts as a product too.
 3. Decide the quantity: label or weight given → exact; whole container → the container's portion;
-   otherwise estimate, mark `quantity_estimated` and explain the basis in `rationale`.
+   otherwise estimate, mark `quantity_estimated` and explain the basis in `rationale`. When the
+   person names a pack, slice or piece count and the product lacks that portion, propose it with
+   `portion_create`.
 4. If the day already has a draft, add only what is new or corrected; do not repeat existing items.
    Follow-up messages such as "the chicken was 300 g" are corrections: put them into the draft as
    the corrected item and say so in `notes` so the reviewer can drop the old one.

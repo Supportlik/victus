@@ -57,10 +57,11 @@ The *In-house worker* column also applies the worker's own tool list (`WORKER_TO
 | `portion_update` | read + (agent:write or write) | — | proposal | — | proposal | yes | applied with write + approve; otherwise filed as a proposal |
 | `product_create` | (agent:write or write) | — | proposal | — | proposal | yes | applied with write + approve; otherwise filed as a proposal |
 | `product_get` | read | yes | yes | — | yes | yes |  |
+| `product_lookup_ean` | read | yes | yes | — | yes | yes |  |
 | `product_propose` | (agent:write or write) | — | yes | — | yes | yes |  |
 | `product_search` | read | yes | yes | — | yes | yes |  |
 | `product_update` | (agent:write or write) | — | proposal | — | — | yes | applied with write + approve; otherwise filed as a proposal |
-| `product_usage` | read | yes | yes | — | — | yes |  |
+| `product_usage` | read | yes | yes | — | yes | yes |  |
 | `product_version_create` | (agent:write or write) | — | proposal | — | — | yes | applied with write + approve; otherwise filed as a proposal |
 | `product_versions` | read | yes | yes | — | yes | yes |  |
 | `proposal_update` | (agent:write or write) + (agent:write or approve) | — | yes | — | — | yes |  |

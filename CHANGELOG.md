@@ -6,6 +6,29 @@ All notable changes to Victus are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **The drafting agent knows what you logged before.** Each day session now starts with a
+  compact "Recently logged" block — every product, recipe batch and one-off logged within
+  `agent.recent_days` (default 14) days of the day, with how often and in what amount — and
+  `product_usage` is in the worker's tool set. Before, the worker saw only the day itself and
+  re-estimated foods that had been logged a few days earlier.
+- **Barcode lookup, opt-in.** The new MCP tool `product_lookup_ean` looks an EAN up in Open Food
+  Facts and returns label values, pack size and a source for `product_create`. Off by default
+  (`agent.lookup.ean`); only the barcode leaves the server.
+- **Prompt caching for the worker** (`agent.prompt_cache`, on by default): further turns of a day
+  session read the earlier context from the cache instead of paying full input price, so a more
+  thorough search costs far less. Cache writes and reads are booked at their own price
+  (`agent.pricing.<model>.cache_write_per_mtok` / `cache_read_per_mtok`).
+
+### Changed
+- **The agent searches like a person.** The prompts no longer ask for one verbatim query: the
+  session searches the food's main word and brand, retries with a shorter word, the stem, the
+  brand alone and spellings without umlauts before it estimates, and prefers what the person
+  logged before. A one-off that comes back is filed as a product proposal instead of being
+  estimated again; a pack or slice size the product lacks is proposed as a portion; a user rule
+  the session cannot follow (a website, a switched-off lookup) becomes an open question instead
+  of being dropped silently. The user's rules now come before the day context.
+
 ## [1.8.6] - 2026-11-09
 
 ### Fixed

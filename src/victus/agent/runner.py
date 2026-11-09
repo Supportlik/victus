@@ -167,6 +167,12 @@ def _image_refs(cap: dto.CaptureView) -> list[dto.AttachmentRef]:
     return [dto.AttachmentRef(id=cap.attachment_id, mime="image/*", size=0, original_name=None)]
 
 
+def session_tools(tc: ToolContext) -> list[dict[str, Any]]:
+    """The worker's tools for the model; the barcode lookup only when the server offers it."""
+    names = WORKER_TOOLS if tc.product_lookup is not None else WORKER_TOOLS - {"product_lookup_ean"}
+    return anthropic_tool_definitions(tools_for(tc.ctx, names))
+
+
 def context_json(view: dto.DayContextView) -> str:
     data = cast(dict[str, Any], jsonable(view))
     return json.dumps(data, ensure_ascii=False, indent=1, default=str)
@@ -179,6 +185,17 @@ def tenant_rules(tc: ToolContext, scope: str) -> str:
     except ApplicationError:
         return ""
     return rules_uc.rules_markdown(rows)
+
+
+def recently_logged(tc: ToolContext, day: date, days: int) -> str:
+    """What the person logged around ``day``, as Markdown for the session prompt (#78)."""
+    if days <= 0:
+        return ""
+    try:
+        view = agent_uc.GetRecentlyLogged(tc.uow_factory, tc.ctx).execute(day, days=days)
+    except ApplicationError:
+        return ""
+    return agent_uc.recently_logged_markdown(view)
 
 
 def tenant_timezone(tc: ToolContext, cfg: ServerConfig) -> str:
@@ -281,13 +298,15 @@ class DayDrafter:
         task = "\n\n".join(
             p.format(**fields) for p in (self.prompts.capture_to_draft, self.prompts.day_verdict)
         )
-        content: list[dict[str, Any]] = [
-            {"type": "text", "text": task},
-            {"type": "text", "text": "## Day context (JSON)\n" + context_json(view)},
-        ]
+        content: list[dict[str, Any]] = [{"type": "text", "text": task}]
+        # The person's rules come before the day: they say where values must come from.
         rules = tenant_rules(self.tc, "days")
         if rules:
             content.append({"type": "text", "text": rules})
+        recent = recently_logged(self.tc, day, self.cfg.agent.recent_days)
+        if recent:
+            content.append({"type": "text", "text": recent})
+        content.append({"type": "text", "text": "## Day context (JSON)\n" + context_json(view)})
         if notes:
             content.append({"type": "text", "text": "Notes: " + "; ".join(notes)})
         content.extend(self._image_blocks(view))
@@ -348,7 +367,7 @@ class DayDrafter:
     def run_day(self, run_id: str, day: date) -> DayOutcome:
         outcome = DayOutcome(date=day, outcome="no_draft")
         started = self._now()
-        tools = anthropic_tool_definitions(tools_for(self.tc.ctx, WORKER_TOOLS))
+        tools = session_tools(self.tc)
         try:
             content, _capture_ids = self._first_message(run_id, day)
         except ApplicationError as exc:
@@ -385,13 +404,25 @@ class DayDrafter:
                 break
             outcome.turns += 1
             cost = turn_cost_usd(
-                self.cfg.agent, response.model, response.input_tokens, response.output_tokens
+                self.cfg.agent,
+                response.model,
+                response.input_tokens,
+                response.output_tokens,
+                cache_write_tokens=response.cache_creation_input_tokens,
+                cache_read_tokens=response.cache_read_input_tokens,
             )
-            outcome.input_tokens += response.input_tokens
+            # The token budget measures the context the model processed, cached or not;
+            # caching lowers what that context costs (the USD budget), not its size.
+            input_tokens = (
+                response.input_tokens
+                + response.cache_creation_input_tokens
+                + response.cache_read_input_tokens
+            )
+            outcome.input_tokens += input_tokens
             outcome.output_tokens += response.output_tokens
             outcome.cost_usd += cost
             self.budget.charge(
-                input_tokens=response.input_tokens, output_tokens=response.output_tokens, usd=cost
+                input_tokens=input_tokens, output_tokens=response.output_tokens, usd=cost
             )
             messages.append({"role": "assistant", "content": response.content_params})
             if response.stop_reason == "refusal":
@@ -427,7 +458,7 @@ class DayDrafter:
             outcome="product_skipped",
         )
         started = self._now()
-        tools = anthropic_tool_definitions(tools_for(self.tc.ctx, WORKER_TOOLS))
+        tools = session_tools(self.tc)
         try:
             assert cap.product_id is not None
             product = product_uc.GetProduct(self.tc.uow_factory, self.tc.ctx).execute(
@@ -500,7 +531,7 @@ class DayDrafter:
         """
         outcome = DayOutcome(date=snap.today, outcome="assess_skipped")
         started = self._now()
-        tools = anthropic_tool_definitions(tools_for(self.tc.ctx, WORKER_TOOLS))
+        tools = session_tools(self.tc)
         content: list[dict[str, Any]] = [
             {
                 "type": "text",

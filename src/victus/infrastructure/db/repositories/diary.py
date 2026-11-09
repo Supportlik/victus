@@ -170,6 +170,27 @@ class DayLogRepo(Repo):
         ).mappings()
         return [dict(r) for r in rows]
 
+    def logged_between(
+        self, start: date, end: date, limit: int = 2000
+    ) -> Sequence[Mapping[str, Any]]:
+        """Every line item logged on a day in ``[start, end)``, newest day first, with the
+        consumable's name and kind: the person's recent habits for a drafting session."""
+        rows = self.session.execute(
+            text(
+                "SELECT d.date AS date, c.id AS consumable_id, c.kind AS kind, c.name AS name, "
+                "       li.amount, li.unit_code, li.base_amount, li.base_unit "
+                "  FROM line_item li "
+                "  JOIN meal m ON m.id = li.meal_id "
+                "  JOIN day_log d ON d.id = m.day_log_id "
+                "  JOIN consumable c ON c.id = li.consumable_id "
+                " WHERE d.tenant_id = :t AND d.date >= :s AND d.date < :e "
+                " ORDER BY d.date DESC, m.position, li.position "
+                " LIMIT :n"
+            ),
+            {"t": self.tenant_id, "s": start, "e": end, "n": limit},
+        ).mappings()
+        return [dict(r) for r in rows]
+
     def usage_count(self, consumable_id: int) -> int:
         """How many line items point at a consumable, past the cap ``usage_of`` stops at."""
         total = self.session.execute(

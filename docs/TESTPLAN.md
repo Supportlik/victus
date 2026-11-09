@@ -648,6 +648,13 @@ need nothing but files.
 | T-AGT-119 | Agent | A draft in the last turn or over budget counts | Run the cases of the test against synthetic fixtures | a day drafted in the turn that spends the budget stays ``drafted``, and so does one drafted before the turn limit runs out; without blob storage the session gets no images and is not told about any. | `test_cov_runner.py` | automated |
 | T-AGT-120 | Agent | A spoken product capture is transcribed first | Run the cases of the test against synthetic fixtures | a voice note about a product is transcribed before its session, and the session reads the transcript. | `test_cov_runner.py` | automated |
 | T-AGT-121 | Agent | A run taken elsewhere is left out of the tick | Run the cases of the test against synthetic fixtures | a queued run that another worker takes first yields no outcome. | `test_cov_runner.py` | automated |
+| T-AGT-122 | Agent | Recently logged groups products and one-offs | Products and a one-off logged on days around the drafted day, plus one on the day and one outside the window | every consumable in the window once, most frequent first, with kind, times, days, last date and usual amount; the day itself and days outside the window left out; the Markdown block names id, kind and amount | `test_recent_history.py` | automated |
+| T-AGT-123 | Agent | First message carries rules, history, then the day | A day rule, history and a capture; worker run with a scripted model | the first message holds task, rules, "Recently logged" and day context in that order; the tools include `product_usage` and leave out `product_lookup_ean` while the lookup is off | `test_recent_history.py` | automated |
+| T-AGT-124 | Agent | History switched off or unreadable | `agent.recent_days: 0`; a history read that fails; a configured lookup | no block with 0, no block (and no failure) when the read fails; with a lookup the session offers `product_lookup_ean` | `test_recent_history.py` | automated |
+| T-AGT-125 | Agent | Cache reads and writes are booked at their price | Scripted turn with cache writes and reads | cost adds writes at 1.25× and reads at 0.1× the input price (or the configured cache prices); the run's input tokens include cached input | `test_recent_history.py` | automated |
+| T-AGT-126 | Agent | Open Food Facts maps a known barcode and caches it | Faked `urlopen` answering a product | one request carrying only the barcode and a user agent; name, brand, values per 100 g and pack size mapped; a second lookup comes from the cache | `test_openfoodfacts.py` | automated |
+| T-AGT-127 | Agent | Open Food Facts: unknown, failing and odd answers | Status 0, HTTP 404/503, unreachable host, timeout, unreadable body, kJ-only energy, a liquid | unknown is `None`; failures raise `ProductLookupError`; kJ converted to kcal; litres become `ml` | `test_openfoodfacts.py` | automated |
+| T-AGT-128 | Agent | Prompt caching is requested and its usage read | Faked transport with cache usage; caching on and off | on: top-level `cache_control` sent and cache writes/reads mapped; off: not sent, counts zero | `test_cov_model.py` | automated |
 
 ## MCP (`T-MCP`)
 
@@ -797,6 +804,10 @@ need nothing but files.
 | T-MCP-238 | MCP | Client ip without a peer or with a malformed one | Run the cases of the test against synthetic fixtures | no peer trusts the forwarded header; a malformed peer is not a private proxy. | `test_cov_server.py` | automated |
 | T-MCP-239 | MCP | Mount without an origin uses the rp id | Run the cases of the test against synthetic fixtures | with no origin configured the MCP resource URL is built from the RP id. | `test_cov_server.py` | automated |
 | T-MCP-240 | MCP | `product_search` with umlauts | Search a long name by one of its words in every spelling of its umlaut | The tool returns the product for every spelling | `test_product_tools.py` | automated |
+| T-MCP-241 | MCP | Barcode lookup returns label values and source | Tool context with a fake lookup | `product_lookup_ean` (spaces allowed) returns name, values per 100 g, pack size and a source for `product_create` | `test_ean_lookup.py` | automated |
+| T-MCP-242 | MCP | Barcode lookup errors are typed | Unknown, malformed and failing lookups | `NotFound`, `ValidationFailed`, `ExternalServiceError` — never a crash | `test_ean_lookup.py` | automated |
+| T-MCP-243 | MCP | Barcode lookup switched off says so | Default config (`agent.lookup.ean: false`) | `LookupDisabled`, telling the agent to raise an open question instead of estimating | `test_ean_lookup.py` | automated |
+| T-MCP-244 | MCP | The config flag switches the adapter on | `agent.lookup.ean` off and on | no lookup when off; the Open Food Facts adapter when on | `test_ean_lookup.py` | automated |
 
 ## E2E (`T-E2E`)
 

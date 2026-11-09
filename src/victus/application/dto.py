@@ -629,6 +629,31 @@ class DayContextView:
 
 
 @dataclass(frozen=True, slots=True)
+class RecentlyLoggedItem:
+    """One consumable the person logged around a day, with how they usually log it."""
+
+    consumable_id: int
+    kind: str  # product | recipe_batch | ad_hoc
+    name: str
+    times: int
+    days: int
+    last_date: date
+    usual_amount: float | None
+    usual_unit_code: str | None
+    usual_base_amount: float
+    base_unit: str
+
+
+@dataclass(frozen=True, slots=True)
+class RecentlyLogged:
+    """What the person logged in a window around a day (the day itself left out)."""
+
+    start: date
+    end: date
+    items: list[RecentlyLoggedItem]
+
+
+@dataclass(frozen=True, slots=True)
 class DraftCreateView:
     date: date
     day: DayView

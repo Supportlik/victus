@@ -82,6 +82,18 @@
         "max_tokens": { "type": "integer", "minimum": 1024, "default": 16000, "description": "max_tokens per model turn." },
         "fallbacks": { "type": "boolean", "default": true, "description": "Server-side refusal fallbacks (beta header). Set false to send plain requests." },
         "max_turns_per_day": { "type": "integer", "minimum": 1, "default": 40, "description": "Model turns per day session before the session is abandoned as stuck." },
+        "recent_days": { "type": "integer", "minimum": 0, "maximum": 90, "default": 14, "description": "Days before and after a drafted day whose logged items the session sees as the person's habits ('Recently logged'). 0 leaves the block out." },
+        "prompt_cache": { "type": "boolean", "default": true, "description": "Prompt caching for the agent's model calls: later turns of a day session read earlier context from the cache." },
+        "lookup": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Outbound lookups the drafting session may make. Off by default.",
+          "properties": {
+            "ean": { "type": "boolean", "default": false, "description": "Offer product_lookup_ean (Open Food Facts by barcode). Only the barcode leaves the server." },
+            "ean_url": { "type": "string", "default": "https://world.openfoodfacts.org/api/v2/product/{ean}.json", "description": "URL template of the lookup; {ean} is replaced by the barcode." },
+            "timeout_s": { "type": "number", "exclusiveMinimum": 0, "maximum": 60, "default": 5.0, "description": "Timeout per lookup in seconds." }
+          }
+        },
         "budget": {
           "type": "object",
           "additionalProperties": false,
@@ -100,7 +112,9 @@
             "additionalProperties": false,
             "properties": {
               "input_per_mtok": { "type": "number", "minimum": 0 },
-              "output_per_mtok": { "type": "number", "minimum": 0 }
+              "output_per_mtok": { "type": "number", "minimum": 0 },
+              "cache_write_per_mtok": { "type": ["number", "null"], "minimum": 0, "description": "Prompt-cache write price; null means 1.25 x input_per_mtok." },
+              "cache_read_per_mtok": { "type": ["number", "null"], "minimum": 0, "description": "Prompt-cache read price; null means 0.1 x input_per_mtok." }
             }
           },
           "default": {

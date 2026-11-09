@@ -61,7 +61,7 @@ Scopes: `read` — reports, days, catalogue; nothing written.
 victus token create --tenant alice --name "reports" --scopes read --days 90
 ```
 
-- **Can:** `day_get`, `days_list`, `drafts_list`, `draft_summary`, `product_search`, `product_get`, `product_versions`, `product_usage`, `recipe_get`, `report_render`, `report_snapshots_list`, `report_snapshot_get`, `rules_list`, `body_measurements`, `GET /days/{day}`, `GET /products`, `POST /reports/{name}/render`, `GET /reports/checkup`, `GET /proposals`
+- **Can:** `day_get`, `days_list`, `drafts_list`, `draft_summary`, `product_search`, `product_get`, `product_versions`, `product_usage`, `product_lookup_ean`, `recipe_get`, `report_render`, `report_snapshots_list`, `report_snapshot_get`, `rules_list`, `body_measurements`, `GET /days/{day}`, `GET /products`, `POST /reports/{name}/render`, `GET /reports/checkup`, `GET /proposals`
 - **Becomes a proposal or a draft:** nothing
 - **Refused:** `day_thread_get` (it carries captures), `captures_open`, `capture_get`, `line_item_create`, `draft_create`, `product_propose`, `report_snapshot_create`, `weight_add`, `day_approve`, `GET /captures`, `GET /events`, `POST /products`, `POST /reports/{name}/snapshots`
 

@@ -39,6 +39,7 @@ from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from victus.application.ports.blob_storage import BlobStorage
+from victus.application.ports.product_lookup import ProductLookupPort
 from victus.application.ports.transcription import TranscriptionPort
 from victus.application.ports.unit_of_work import UnitOfWork
 from victus.application.tenant_context import ALL_SCOPES, TenantContext
@@ -209,6 +210,22 @@ def make_tool_context(
         blobs=blobs,
         transcription=transcription,
         run_id=run_id,
+        product_lookup=product_lookup(config),
+    )
+
+
+def product_lookup(config: ServerConfig) -> ProductLookupPort | None:
+    """The barcode lookup when ``agent.lookup.ean`` is on, otherwise ``None``."""
+    lookup = config.agent.lookup
+    if not lookup.ean:
+        return None
+    from victus import __version__
+    from victus.infrastructure.lookup.openfoodfacts import OpenFoodFactsLookup
+
+    return OpenFoodFactsLookup(
+        lookup.ean_url,
+        timeout_s=lookup.timeout_s,
+        user_agent=f"Victus/{__version__} (self-hosted nutrition log)",
     )
 
 

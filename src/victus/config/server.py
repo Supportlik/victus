@@ -66,6 +66,18 @@ class ModelPricing(BaseModel):
 
     input_per_mtok: float = 5.0
     output_per_mtok: float = 25.0
+    # Prompt-cache prices; unset means 1.25× (write) and 0.1× (read) the input price.
+    cache_write_per_mtok: float | None = None
+    cache_read_per_mtok: float | None = None
+
+
+class AgentLookup(BaseModel):
+    """Outbound lookups a drafting session may make. Off by default: they send data out."""
+
+    # Open Food Facts by barcode: only the EAN leaves the server, never day data.
+    ean: bool = False
+    ean_url: str = "https://world.openfoodfacts.org/api/v2/product/{ean}.json"
+    timeout_s: float = Field(default=5.0, gt=0, le=60)
 
 
 class AgentConfig(BaseModel):
@@ -84,6 +96,13 @@ class AgentConfig(BaseModel):
     fallbacks: bool = True
     # Model turns per day session before the session is abandoned as "stuck".
     max_turns_per_day: int = 40
+    # Days before and after a drafted day whose logged items the session is shown as the
+    # person's habits ("recently logged"); 0 leaves the block out.
+    recent_days: int = Field(default=14, ge=0, le=90)
+    # Prompt caching: later turns of a day session read the system prompt, the tools and
+    # the conversation so far from the cache instead of paying full input price again.
+    prompt_cache: bool = True
+    lookup: AgentLookup = Field(default_factory=AgentLookup)
     budget: AgentBudget = Field(default_factory=AgentBudget)
     pricing: dict[str, ModelPricing] = Field(
         default_factory=lambda: {
