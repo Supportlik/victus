@@ -900,7 +900,7 @@ cd web && npm run test:coverage              # Vitest under V8 coverage, thresho
 cd web && npx playwright test                # needs the dev stack: docker compose --profile dev up
 ```
 
-CI runs the Python matrix (3.12–3.14 × SQLite/PostgreSQL), lint, type check, Angular build and unit tests, Compose
+CI runs the Python matrix (3.12–3.15 × SQLite/PostgreSQL), lint, type check, Angular build and unit tests, Compose
 smoke, security scans (`.github/workflows/`).
 
 ## Manual acceptance per stage
