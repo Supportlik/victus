@@ -26,6 +26,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from victus.application import dto
 from victus.application.errors import ApplicationError
 from victus.application.ports.blob_storage import BlobStorage
+from victus.application.ports.product_lookup import ProductLookupPort
 from victus.application.ports.transcription import TranscriptionPort
 from victus.application.schemas_loader import load_schema
 from victus.application.tenant_context import (
@@ -44,6 +45,7 @@ from victus.application.use_cases import body as body_uc
 from victus.application.use_cases import captures as capture_uc
 from victus.application.use_cases import day_logs as day_uc
 from victus.application.use_cases import drafts as draft_uc
+from victus.application.use_cases import lookup as lookup_uc
 from victus.application.use_cases import products as product_uc
 from victus.application.use_cases import proposals as proposal_uc
 from victus.application.use_cases import recipes as recipe_uc
@@ -78,6 +80,8 @@ class ToolContext:
     run_id: str | None = None
     #: Set by the in-house runner so a written assessment records which prompt produced it.
     prompt_version: str | None = None
+    #: Barcode lookup; ``None`` unless ``agent.lookup.ean`` is on.
+    product_lookup: ProductLookupPort | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -509,6 +513,10 @@ class RuleDeleteIn(_In):
 class ProductUsageIn(_In):
     product_id: int
     limit: int = Field(default=50, ge=1, le=500)
+
+
+class ProductLookupEanIn(_In):
+    ean: str = Field(description="The barcode as printed (8 to 14 digits).")
 
 
 class ProductPortionIn(_In):
@@ -1022,6 +1030,11 @@ def _product_usage(tc: ToolContext, inp: ProductUsageIn) -> ToolResult:
     return cast(dict[str, Any], jsonable(view))
 
 
+def _product_lookup_ean(tc: ToolContext, inp: ProductLookupEanIn) -> ToolResult:
+    found = lookup_uc.LookupProductByEan(tc.uow_factory, tc.ctx, tc.product_lookup).execute(inp.ean)
+    return cast(dict[str, Any], jsonable(found))
+
+
 def _product_propose(tc: ToolContext, inp: ProductProposeIn) -> ToolResult:
     view = proposal_uc.ProposeProductChange(tc.uow_factory, tc.ctx).execute(
         inp.product_id,
@@ -1475,6 +1488,16 @@ TOOLS: tuple[ToolSpec, ...] = (
         _product_usage,
     ),
     _spec(
+        "product_lookup_ean",
+        "Look a barcode (EAN) up in Open Food Facts: name, brand, values per 100 g/ml, pack "
+        "size and a source URL. Only the barcode leaves the server. Nothing is saved — file "
+        "the values with product_create and its `source`. Fails with `LookupDisabled` when "
+        "the server has it switched off (agent.lookup.ean).",
+        SCOPE_READ,
+        ProductLookupEanIn,
+        _product_lookup_ean,
+    ),
+    _spec(
         "product_propose",
         "Propose corrected product values read from a label photo or note. A person approves "
         "in the app; nothing changes until then. Use this for product captures. `changes` may "
@@ -1571,6 +1594,8 @@ WORKER_TOOLS: frozenset[str] = frozenset(
     {
         "product_search",
         "product_get",
+        "product_usage",
+        "product_lookup_ean",
         "product_versions",
         "body_measurements",
         "body_add",

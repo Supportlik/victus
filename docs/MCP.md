@@ -40,7 +40,8 @@ same declaration the server lists tools by and checks before the handler runs (`
 | `rules_list(scope?)` | `read` | `ListRules` | the user's own instructions (when → then) |
 | `rule_upsert(when, then, name?, scope?, enabled?, priority?)` | `write` | `UpsertRule` | a rule the user just gave you, written down |
 | `rule_delete(name)` | `write` | `DeleteRule` | removed |
-| `product_usage(product_id, limit?)` | `read` | `GetProductUsage` | the days a product was logged on |
+| `product_usage(product_id, limit?)` | `read` | `GetProductUsage` | the days a product was logged on; also in the in-house worker's tool set |
+| `product_lookup_ean(ean)` | `read` | `LookupProductByEan` | Open Food Facts by barcode: name, brand, values per 100 g/ml, pack size, `source` and `source_url`; nothing is saved. Only with `agent.lookup.ean: true` (only the barcode leaves the server); otherwise `LookupDisabled` |
 | `product_versions(id)` | `read` | `ProductVersions` | every version with the days it covers |
 | `body_measurements(limit?)` | `read` | `ListBodyMeasurements` | recent tape-measure sessions |
 | `body_add(measured_at, waist_cm?, …)` | `write` | `AddBodyMeasurement` | one session from a note, a photo of a tape or a spoken list (R76) |

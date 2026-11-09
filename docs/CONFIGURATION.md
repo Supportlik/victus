@@ -81,11 +81,17 @@ Env prefix `VICTUS_AGENT__…` (nested keys with `__`, e.g. `VICTUS_AGENT__BUDGE
 | `agent.max_tokens` | int | no | `16000` | `max_tokens` per model turn |
 | `agent.fallbacks` | bool | no | `true` | Server-side refusal fallbacks (beta header `server-side-fallback-2026-07-01`, `fallbacks: "default"`). With `false` a refused turn ends the day session with outcome `refused` |
 | `agent.max_turns_per_day` | int | no | `40` | Model turns per day session; beyond this the session is abandoned as stuck |
-| `agent.budget.max_input_tokens` | int | no | `400000` | Per run, summed over all day sessions |
+| `agent.recent_days` | int | no | `14` | Days before and after a drafted day whose logged items (products, recipe batches and one-offs) the session sees as a compact "Recently logged" block. `0` leaves the block out. Only names, ids and amounts — nothing leaves the server |
+| `agent.prompt_cache` | bool | no | `true` | Prompt caching (top-level `cache_control`) for the worker's model calls: each further turn of a day session reads tools, system prompt, first message (images included) and earlier turns from the cache. Cache writes and reads are booked at their own price (see `agent.pricing`) |
+| `agent.lookup.ean` | bool | no | `false` | Offer the tool `product_lookup_ean` (worker and MCP): a barcode is looked up in Open Food Facts. **Privacy:** only the barcode leaves the server — never day data, names or amounts. Off, the tool answers `LookupDisabled` and the worker does not offer it |
+| `agent.lookup.ean_url` | str | no | `https://world.openfoodfacts.org/api/v2/product/{ean}.json` | URL template of the lookup; `{ean}` is replaced by the barcode |
+| `agent.lookup.timeout_s` | float | no | `5.0` | Timeout per lookup; a slow or failing service turns into a typed `ExternalServiceError` for the agent, never a failed run |
+| `agent.budget.max_input_tokens` | int | no | `400000` | Per run, summed over all day sessions; cached input counts too — caching lowers the cost of the context, not its size |
 | `agent.budget.max_output_tokens` | int | no | `40000` | Per run |
 | `agent.budget.max_usd_per_run` | float | no | `2.0` | Per run; the run stops gracefully (`budget_exceeded`) when reached, remaining days are picked up by the next run |
 | `agent.budget.max_images_per_run` | int | no | `12` | Images per run, downscaled to 1024 px before they reach the model |
 | `agent.pricing.<model>.input_per_mtok` / `.output_per_mtok` | float | no | opus-5 5/25, sonnet-5 2/10, haiku-4-5 1/5 | USD per million tokens used to book `agent_run.cost_usd` / `agent_session.cost_usd`. Unknown model ids fall back to the opus-5 rates |
+| `agent.pricing.<model>.cache_write_per_mtok` / `.cache_read_per_mtok` | float \| null | no | `null` | Prompt-cache prices; `null` books cache writes at 1.25× and cache reads at 0.1× `input_per_mtok` |
 
 ### `events`
 

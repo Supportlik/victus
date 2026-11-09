@@ -55,6 +55,7 @@ def default_model_factory(cfg: ServerConfig) -> ModelClient | None:
         effort=cfg.agent.effort,
         max_tokens=cfg.agent.max_tokens,
         fallbacks=cfg.agent.fallbacks,
+        prompt_cache=cfg.agent.prompt_cache,
     )
 
 

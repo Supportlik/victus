@@ -495,6 +495,87 @@ class GetDayContext(UseCase):
             )
 
 
+class GetRecentlyLogged(UseCase):
+    """The person's habits around a day: every consumable logged within ``days`` days of
+    it — catalogue products, recipe batches and one-offs alike — most frequent first.
+
+    A drafting session gets this as data (#78): ADR 0009 keeps one day's *context* out of
+    another's session, not the knowledge that the same cheese was logged three days ago.
+    """
+
+    def execute(self, day: date, *, days: int = 14, limit: int = 60) -> dto.RecentlyLogged:
+        self.ctx.require(SCOPE_READ)
+        start = day - dt.timedelta(days=days)
+        end = day + dt.timedelta(days=days + 1)
+        with self._uow() as uow:
+            rows = [r for r in uow.day_logs.logged_between(start, end) if _as_date(r) != day]
+        groups: dict[int, list[Any]] = {}
+        for r in rows:
+            groups.setdefault(int(r["consumable_id"]), []).append(r)
+        items = [_recent_item(cid, entries) for cid, entries in groups.items()]
+        items.sort(key=lambda i: (-i.times, -i.last_date.toordinal(), i.name))
+        return dto.RecentlyLogged(start=start, end=end, items=items[:limit])
+
+
+def _as_date(row: Any) -> date:
+    value = row["date"]
+    return value if isinstance(value, date) else date.fromisoformat(str(value)[:10])
+
+
+def _recent_item(consumable_id: int, rows: list[Any]) -> dto.RecentlyLoggedItem:
+    """Rows are newest first; the usual amount is the most frequent one, the newest on a tie."""
+    counts: dict[tuple[float | None, str | None], int] = {}
+    for r in rows:
+        key = (float(r["amount"]) if r["amount"] is not None else None, r["unit_code"])
+        counts[key] = counts.get(key, 0) + 1
+    usual = max(counts, key=lambda k: counts[k])  # dicts keep insertion order: newest wins ties
+    usual_row = next(
+        r
+        for r in rows
+        if (float(r["amount"]) if r["amount"] is not None else None, r["unit_code"]) == usual
+    )
+    first = rows[0]
+    return dto.RecentlyLoggedItem(
+        consumable_id=consumable_id,
+        kind=str(first["kind"]),
+        name=str(first["name"]),
+        times=len(rows),
+        days=len({_as_date(r) for r in rows}),
+        last_date=max(_as_date(r) for r in rows),
+        usual_amount=usual[0],
+        usual_unit_code=str(usual[1]) if usual[1] else None,
+        usual_base_amount=float(usual_row["base_amount"]),
+        base_unit=str(usual_row["base_unit"]),
+    )
+
+
+def recently_logged_markdown(view: dto.RecentlyLogged) -> str:
+    """The session prompt's "recently logged" block: one compact line per consumable."""
+    if not view.items:
+        return ""
+    lines = [
+        f"## Recently logged ({view.start.isoformat()} – "
+        f"{(view.end - dt.timedelta(days=1)).isoformat()}, this day left out)",
+        "",
+        "What the person logged around this day, most frequent first: `[id] name (kind) — "
+        "times on days, last date, usual amount`. Prefer these over a new estimate when one "
+        "fits; an `ad_hoc` entry is a one-off logged before (see the rules on reusing it).",
+        "",
+    ]
+    for i in view.items:
+        if i.usual_amount is not None and i.usual_unit_code:
+            amount = f"{i.usual_amount:g} {i.usual_unit_code}"
+            if i.usual_unit_code != i.base_unit:
+                amount += f" ({i.usual_base_amount:g} {i.base_unit})"
+        else:
+            amount = f"{i.usual_base_amount:g} {i.base_unit}"
+        lines.append(
+            f"- [{i.consumable_id}] {i.name} ({i.kind}) — {i.times}× on {i.days} day(s), "
+            f"last {i.last_date.isoformat()}, usually {amount}"
+        )
+    return "\n".join(lines)
+
+
 class AddAgentMessage(UseCase):
     """Agent-side thread entry: summary, question or note for a day (ADR 0010).
 

@@ -192,3 +192,27 @@ def test_budget_reports_the_output_and_cost_limits() -> None:
     )
     c.charge(usd=0.5)
     assert c.exceeded == "cost 0.50 USD >= 0.50 USD"
+
+
+def test_t_agt_128_prompt_caching_is_requested_and_its_usage_read() -> None:
+    """T-AGT-128: with prompt caching on (the default) the request carries top-level automatic
+    `cache_control` and the reply's cache writes and reads are mapped; switched off, the
+    request goes without it and the counts read as zero."""
+    usage = {
+        "input_tokens": 50,
+        "output_tokens": 10,
+        "cache_creation_input_tokens": 3000,
+        "cache_read_input_tokens": 9000,
+    }
+    client, seen = _client(lambda _r: httpx.Response(200, json=_message(usage=usage)))
+    response = _create(client)
+    assert json.loads(seen[0].content)["cache_control"] == {"type": "ephemeral"}
+    assert response.cache_creation_input_tokens == 3000
+    assert response.cache_read_input_tokens == 9000
+
+    plain_client, plain_seen = _client(lambda _r: httpx.Response(200, json=_message()))
+    plain = AnthropicModelClient("sk-ant-test", model="claude-opus-5", prompt_cache=False)
+    plain._client = plain_client._client
+    response = _create(plain)
+    assert "cache_control" not in json.loads(plain_seen[0].content)
+    assert response.cache_creation_input_tokens == 0 and response.cache_read_input_tokens == 0

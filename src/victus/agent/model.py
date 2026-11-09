@@ -34,6 +34,10 @@ class ModelResponse:
     output_tokens: int
     model: str
     stop_details: dict[str, Any] | None = None
+    #: Prompt caching: input written to the cache and input read from it. Both come on top
+    #: of ``input_tokens``, which counts only the uncached rest.
+    cache_creation_input_tokens: int = 0
+    cache_read_input_tokens: int = 0
 
 
 class ModelError(Exception):
@@ -70,6 +74,7 @@ class AnthropicModelClient:
         max_tokens: int = 16_000,
         fallbacks: bool = True,
         timeout_s: float = 600.0,
+        prompt_cache: bool = True,
     ) -> None:
         import anthropic
 
@@ -78,6 +83,7 @@ class AnthropicModelClient:
         self._effort = effort
         self._max_tokens = max_tokens
         self._fallbacks = fallbacks
+        self._prompt_cache = prompt_cache
 
     @property
     def model(self) -> str:
@@ -101,6 +107,11 @@ class AnthropicModelClient:
             "thinking": {"type": "adaptive"},
             "output_config": {"effort": self._effort},
         }
+        if self._prompt_cache:
+            # Automatic caching: the breakpoint moves to the last block of every request, so
+            # each turn of a day session reads tools, system prompt, the first message (with
+            # its images) and every earlier turn from the cache.
+            kwargs["cache_control"] = {"type": "ephemeral"}
         try:
             if self._fallbacks:
                 response: Any = self._client.beta.messages.create(
@@ -142,6 +153,10 @@ def _from_sdk(response: Any) -> ModelResponse:
         output_tokens=int(response.usage.output_tokens),
         model=str(response.model),
         stop_details=details,
+        cache_creation_input_tokens=int(
+            getattr(response.usage, "cache_creation_input_tokens", None) or 0
+        ),
+        cache_read_input_tokens=int(getattr(response.usage, "cache_read_input_tokens", None) or 0),
     )
 
 
@@ -160,6 +175,8 @@ class ScriptedTurn:
     input_tokens: int = 1_000
     output_tokens: int = 200
     stop_details: dict[str, Any] | None = None
+    cache_creation_input_tokens: int = 0
+    cache_read_input_tokens: int = 0
 
 
 @dataclass(slots=True)
@@ -210,6 +227,8 @@ class ScriptedModelClient:
             output_tokens=turn.output_tokens,
             model=self.model_name,
             stop_details=turn.stop_details,
+            cache_creation_input_tokens=turn.cache_creation_input_tokens,
+            cache_read_input_tokens=turn.cache_read_input_tokens,
         )
 
     def _remember_results(self, messages: list[dict[str, Any]]) -> None:

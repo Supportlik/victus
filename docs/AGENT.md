@@ -51,7 +51,12 @@ agent_run_finish(run_id, status, summary)  → locks released, run recorded
 | Follow-up | A new message for a day that already has a draft queues a `follow_up` run for that day; the session applies changes incrementally (`line_item_update`, `line_item_create`) instead of rebuilding the day. Messages arriving while the day is locked queue the follow-up right away; it starts when the lock is released. |
 | Transcription | Audio captures are transcribed on upload (when `providers.openai_api_key` is set) or lazily before the session / by `capture_get`, through `TranscriptionPort` with the tenant's `transcription.language` and `vocabulary_prompt`. A failed transcription marks the capture `failed`; **Re-transcribe** in the app retries. |
 | Images | Downscaled to 1024 px before being passed to the model; counted against `agent.budget.max_images_per_run`. |
-| Matching | The agent must call `product_search` for every item and pick from the candidates; free-text items become `ad_hoc_item` rows (with the nutrition values the agent states per 100 g) only when no candidate scores ≥ 0.62. |
+| Matching | The agent must call `product_search` for every item and pick from the candidates. It searches the food's main word and brand rather than the whole spoken phrase, and before concluding that nothing fits it retries with variants (a shorter word or stem, the brand alone, without umlauts) and checks the "Recently logged" block. Free-text items become `ad_hoc_item` rows (with the nutrition values the agent states per 100 g) only when nothing fits. |
+| History | The first message carries a compact **Recently logged** block: every product, recipe batch and one-off logged within `agent.recent_days` (default 14) days of the day, the day itself left out — id, name, kind, how often, last date, usual amount. `product_usage`, `day_get` and `days_list` are in the worker's tool set for more. |
+| One-offs | One-offs are not found by `product_search`; the "Recently logged" block is how a session sees them. When a one-off from there comes back, the session files it with `product_create` (a `new` proposal) instead of estimating it a second time, so the person can approve it once. |
+| Portions | When a capture or label states a pack, slice or piece size that the chosen product lacks, the session proposes it with `portion_create`. |
+| Rules it cannot follow | A user rule that needs a source or tool the session does not have (a website, a lookup that is switched off) is not dropped: the item is marked `estimated` and an `open_questions` entry names the rule. |
+| Barcode lookup | With `agent.lookup.ean: true`, `product_lookup_ean` looks a legible EAN up in Open Food Facts (only the barcode leaves the server); the values go into `product_create` with the lookup as `source`. Off by default; the worker then does not offer the tool, and an EAN becomes an open question instead of a silent estimate. |
 | New products | A food with no catalogue entry and known label values goes through `product_create`, which without `approve` files a `kind='new'` proposal and returns `log_against_consumable_id` for the draft. Approving it promotes that one-off into the product, keeping every item logged against it (R81, ADR 0013). |
 | Corrections | The person does not only approve or reject: before deciding, they may correct any drafted item (product, amount, unit, portion, marks, meal) and any proposed value. A correction to the agent's draft appears in the day thread as a `correction` message, so a follow-up session sees "1 tub → 300 g" rather than its own guess; a corrected proposal keeps the agent's values in `proposed`. The agent may fix a value it misread in its **own** pending proposal with `proposal_update` (`agent:write`) until a person has changed that proposal — from then on it files a new proposal instead (R84). |
 | Draft | `day_log(status='draft', created_by_kind='agent')` if the day is new, otherwise `line_item(is_draft=1)` on the existing day (a closed day must be reopened first). Every item carries `confidence`, `rationale`, `source_capture_id`, `source_kind`, `alternatives` (top 3), `raw_text`. |
@@ -74,7 +79,9 @@ Two consequences shape the modes below:
   user (app or `capture_mark`) — the drafting session never has to sort a weekend's worth of notes.
 - **Cross-day knowledge comes from the database, not from the context.** The drafting session reaches the
   product catalogue, portions and yesterday's approved day only through tools (`product_search`,
-  `day_get`), which keeps it small and deterministic.
+  `day_get`, `product_usage`) and the "Recently logged" block the runner reads from the database
+  for it, which keeps it small and deterministic. The rule forbids carrying one day's *context*
+  into another — not looking up what the person logged before.
 
 ## Day thread: talking to a day, before, during and after processing
 
@@ -155,7 +162,8 @@ The in-house runner uses the Anthropic Python SDK with a manual tool loop (no be
 | `agent.fallbacks` | `true` | Server-side refusal fallbacks (beta `server-side-fallback-2026-07-01`, `fallbacks: "default"`). When a turn still ends with `stop_reason = refusal`, the day session ends with outcome `refused` and the day stays undrafted |
 | `agent.max_turns_per_day` | 40 | Guard against tool loops; outcome `stuck` |
 | Tool results | one user message per assistant turn | All `tool_result` blocks of a turn are returned together; failed tools return `is_error: true` with the typed error message |
-| Cost | `agent.pricing` | `input_tokens × input_per_mtok + output_tokens × output_per_mtok`, booked per session and summed per run |
+| Prompt caching | `agent.prompt_cache` (`true`) | Top-level automatic `cache_control`: every further turn of a day session reads tools, system prompt, the first message (images included) and earlier turns from the cache |
+| Cost | `agent.pricing` | `input_tokens × input_per_mtok + output_tokens × output_per_mtok + cache writes × 1.25 × input + cache reads × 0.1 × input` (cache prices configurable), booked per session and summed per run. The token budget counts cached input too |
 
 ## Prompt files
 

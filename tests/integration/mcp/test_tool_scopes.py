@@ -178,6 +178,7 @@ TOOL_CALLS: dict[str, Builder] = {
     "product_search": lambda t: Call({"q": "skyr"}),
     "product_update": lambda t: Call({"product_id": t.env.product()["id"], "kcal": 64}),
     "product_usage": lambda t: Call({"product_id": t.env.ids["product"]}),
+    "product_lookup_ean": lambda _t: Call({"ean": "4000000000000"}, also_ok=("LookupDisabled",)),
     "product_version_create": lambda t: Call(
         {"id": t.env.product()["id"], "valid_from": "2026-06-01", "changes": {"kcal": 70}}
     ),

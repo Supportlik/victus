@@ -66,6 +66,7 @@ EXPECTED = {
     "product_propose",
     "proposal_update",
     "product_create",
+    "product_lookup_ean",
     "portion_create",
     "portion_update",
     "portion_delete",
