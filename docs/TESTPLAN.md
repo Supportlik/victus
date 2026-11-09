@@ -156,6 +156,7 @@ design. Add `--no-cov` when running a single file: `uv run pytest -q --no-cov te
 | T-DOM-084 | Domain | Energy split | Expenditure at 1.09, 1.6 and 2.51 times resting | The middle one splits cleanly; the outer two carry a caveat naming bed rest or athletes | `test_body.py` | automated |
 | T-DOM-085 | Domain | `services/search_ranking` | Rank `Ei` against the name itself, a first word, a later word, a syllable, a brand and an umlaut spelling; sort a list of them | Each falls in its own tier, an umlaut does not demote the exact answer, a brand hit ranks below every name hit, and sorting puts the named product first | `test_search_ranking.py` | automated |
 | T-DOM-086 | Domain | `services/units` density | Convert g↔ml at 1.32 and 0.92, the same unit twice, a missing, zero and negative density, and a count unit | The two units convert through the density; the same unit comes back untouched; anything the density cannot relate is `None`, never the amount itself | `test_units.py` | automated |
+| T-DOM-088 | Domain | `services/search_ranking`, `services/matching` umlaut spellings | Match and rank a long name holding "Fitnessbrötchen" against `Fitnessbrötchen`, `brötchen`, `Brotchen`, `Broetchen`, the name stored decomposed (NFD), a multi-word query and `Hähnchen` in three spellings | "ö", "oe" and "o" are one letter on both sides, a decomposed name compares equal to a composed one, every query word must occur in name or brand, and a word at the start or after a space ranks before a syllable | `test_search_ranking.py`, `test_matching.py` | automated |
 | T-DOM-200 | Domain | Parse number rejects what is not a number | Run the cases of the test against synthetic fixtures | text without a readable number yields None instead of a guess. | `test_cov_quantity_parser.py` | automated |
 | T-DOM-201 | Domain | A multiplication without a unit counts pieces | Run the cases of the test against synthetic fixtures | "2 x 3" counts pieces; a weight further on becomes the base amount. | `test_cov_quantity_parser.py` | automated |
 | T-DOM-202 | Domain | Unreadable numbers fall through to free text | Run the cases of the test against synthetic fixtures | an unreadable count or weight never produces an amount. | `test_cov_quantity_parser.py` | automated |
@@ -338,6 +339,7 @@ need nothing but files.
 | T-SVC-477 | Service | Conversion needs ffmpeg | Run the cases of the test against synthetic fixtures | a format that needs conversion without ffmpeg names the missing binary. | `test_cov_openai_transcribe.py` | automated |
 | T-SVC-478 | Service | A failed conversion says why | Run the cases of the test against synthetic fixtures | ffmpeg's own error text (or the exception) ends up in the message. | `test_cov_openai_transcribe.py` | automated |
 | T-SVC-479 | Service | An api error becomes a transcription error | Run the cases of the test against synthetic fixtures | an error status from the provider is a transcription error. | `test_cov_openai_transcribe.py` | automated |
+| T-SVC-480 | Service | Umlauts in long names | Seed long names with umlauts beside the `Ei` names, then search a word of one in every spelling, a bakery's name, `Hähnchen`, a decomposed name and `Ei` | Each spelling finds the long name, a bakery's name returns all of its products and no other, every name holding `Hähnchen` comes back with word hits before syllable hits, and `Ei` still comes first | `test_product_search.py` | automated |
 
 ## Reports (`T-RPT`)
 
@@ -469,6 +471,7 @@ need nothing but files.
 | T-API-332 | API | Day target band item and product delete | Run the cases of the test against synthetic fixtures | a day with a training type shows the band of the settings; a line item and an unused product are deleted (204) and gone afterwards. | `test_cov_api_edges.py` | automated |
 | T-API-333 | API | Upload limit counts all parts and skips empty ones | Run the cases of the test against synthetic fixtures | parts that are each below the limit but together above it are 413; an empty file part is ignored rather than stored. | `test_cov_api_edges.py` | automated |
 | T-API-334 | API | Unreadable last event id falls back | Run the cases of the test against synthetic fixtures | a mangled ``Last-Event-ID`` falls back to ``?cursor=``; a negative one is clamped to 0; a client gone before the first poll ends the stream after the greeting. | `test_cov_api_edges.py` | automated |
+| T-API-335 | API | Umlaut search over HTTP | `GET /products?q=` with `Fitnessbrötchen`, `brötchen`, `Brotchen`, `Broetchen`, a two-word brand and `Hähnchen` | The long name is the one hit for each spelling; both names holding `Hähnchen` come back, the prefix hit first | `test_routers.py` | automated |
 
 ## Web (`T-WEB`)
 
@@ -700,7 +703,7 @@ need nothing but files.
 | T-SVC-077 | Service | Promotion in place | Log the pending one-off, then approve the proposal | Same id becomes the product with its portion and `verified`; the line item is untouched and the product is searchable | `test_scope_boundary.py` | automated |
 | T-SVC-078 | Service | Rejection keeps the meal | Log the one-off, agent tries to decide, person rejects | The agent is refused; after rejection the meal keeps its macros and no product exists | `test_scope_boundary.py` | automated |
 | T-SVC-085 | Service | One verdict per day | Write a `summary` for a day, a note beside it, then a second `summary` | The second verdict replaces the first, the note stays, the day view carries the current one; a blank verdict and an unknown kind are refused | `test_agent.py` | automated |
-| T-SVC-079 | Service | Ranked search | Search `Ei` with ten products whose names contain those letters, then `Öl`, which `LIKE` cannot match | The product named "Ei" comes first and the syllable hits follow alphabetically; the fuzzy tier contributes on every query, so the umlaut is found | `test_product_search.py` | automated |
+| T-SVC-079 | Service | Ranked search | Search `Ei` with ten products whose names contain those letters, then `Öl` | The product named "Ei" comes first and the syllable hits follow alphabetically; the umlaut is found, and first | `test_product_search.py` | automated |
 | T-SVC-080 | Service | Paged catalogue | List 25 products in windows of ten, ask past the end, then page a ranked query | Every row is reached exactly once, an offset past the end is empty, and paging a query yields the ranked order | `test_product_search.py` | automated |
 | T-SVC-081 | Service | Two recordings, two transcripts | Transcribe a capture of a voice note, a photo and a second voice note | One transcript per recording, each keyed to its file and carrying its length; the photo never reaches the provider; the joined `transcript` holds both texts; a second call transcribes nothing, `force` both again | `test_captures.py` | automated |
 | T-SVC-082 | Service | A transcript without a recording | Store a transcript with no `attachment_id` on a capture of two notes, then transcribe | It is shown under the first recording, the second says it is waiting, and transcribing reads only the second | `test_captures.py` | automated |
@@ -793,6 +796,7 @@ need nothing but files.
 | T-MCP-237 | MCP | Network guard addresses and rate keys | Run the cases of the test against synthetic fixtures | allowed and foreign peers, no peer, lifespan traffic, per-address limits. | `test_cov_server.py` | automated |
 | T-MCP-238 | MCP | Client ip without a peer or with a malformed one | Run the cases of the test against synthetic fixtures | no peer trusts the forwarded header; a malformed peer is not a private proxy. | `test_cov_server.py` | automated |
 | T-MCP-239 | MCP | Mount without an origin uses the rp id | Run the cases of the test against synthetic fixtures | with no origin configured the MCP resource URL is built from the RP id. | `test_cov_server.py` | automated |
+| T-MCP-240 | MCP | `product_search` with umlauts | Search a long name by one of its words in every spelling of its umlaut | The tool returns the product for every spelling | `test_product_tools.py` | automated |
 
 ## E2E (`T-E2E`)
 

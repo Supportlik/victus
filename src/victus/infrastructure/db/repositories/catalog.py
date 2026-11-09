@@ -5,10 +5,11 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import date
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 
+from victus.domain.services import search_ranking
 from victus.infrastructure.db import orm
-from victus.infrastructure.db.repositories._base import Repo, normalize
+from victus.infrastructure.db.repositories._base import Repo
 
 
 class ProductRepo(Repo):
@@ -99,22 +100,33 @@ class ProductRepo(Repo):
         return self.session.scalars(stmt).all()
 
     def search(self, query: str, limit: int = 20) -> Sequence[orm.Product]:
-        """Case-insensitive substring search over name and brand (all words must match)."""
-        words = [w for w in normalize(query).split(" ") if w]
-        stmt = (
-            select(orm.Product)
-            .join(orm.Consumable, orm.Consumable.id == orm.Product.id)
-            .where(orm.Consumable.tenant_id == self.tenant_id)
+        """Products whose name or brand holds every word of ``query``, best match first.
+
+        The words are matched in Python, not with ``LIKE``: the query is folded to ASCII
+        and the stored name is not, and neither SQLite's ``lower()`` nor a collation
+        folds "ö" to "oe" (or to "o") the same way on both dialects — so a name with an
+        umlaut could never be found by a word it contains. The rows are ranked before the
+        ``limit`` is applied, so the limit cuts the tail and not the best answers.
+        """
+        stmt = self.scoped(
+            select(orm.Consumable.id, orm.Consumable.name, orm.Product.brand)
+            .join(orm.Product, orm.Product.id == orm.Consumable.id)
+            .where(orm.Consumable.kind == "product"),
+            orm.Consumable,
         )
-        for w in words:
-            like = f"%{w}%"
-            stmt = stmt.where(
-                or_(
-                    func.lower(orm.Consumable.name).like(like),
-                    func.lower(orm.Product.brand).like(like),
-                )
-            )
-        return self.session.scalars(stmt.order_by(orm.Consumable.name).limit(limit)).all()
+        hits = [
+            (search_ranking.sort_key(query, name, brand), int(cid))
+            for cid, name, brand in self.session.execute(stmt).all()
+            if search_ranking.matches(query, name, brand)
+        ]
+        ids = [cid for _, cid in sorted(hits)[:limit]]
+        if not ids:
+            return []
+        by_id = {
+            p.id: p
+            for p in self.session.scalars(select(orm.Product).where(orm.Product.id.in_(ids)))
+        }
+        return [by_id[i] for i in ids]
 
     def by_external_ref(self, external_ref: str) -> orm.Product | None:
         stmt = (

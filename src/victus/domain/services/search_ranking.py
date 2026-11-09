@@ -10,11 +10,19 @@ the whole name, then the name's beginning, then the beginning of a later word, a
 then a syllable buried anywhere. A brand hit comes after those, because the query was
 typed into a field that lists names. Ties inside a tier are left to the caller, which
 sorts them by name.
+
+Both sides are compared in two spellings: :func:`~victus.domain.services.matching.normalize`
+("ö" → "oe") and :func:`~victus.domain.services.matching.fold` ("ö", "oe" and "o" alike),
+and a row takes the better tier of the two. Which rows are hits at all is decided here too
+(:func:`matches`), and not by SQL: ``LIKE`` compares the query, folded to ASCII, with the
+stored name, which is not — so every name with an umlaut was beyond reach of the substring
+search, and only the fuzzy matcher, which scores against the length of the whole name,
+could still find the short ones.
 """
 
 from __future__ import annotations
 
-from victus.domain.services.matching import normalize
+from victus.domain.services.matching import fold, normalize
 
 #: The whole name is what was typed.
 EXACT = 0
@@ -30,12 +38,7 @@ BRAND = 4
 UNRANKED = 5
 
 
-def name_rank(query: str, name: str, brand: str | None = None) -> int:
-    """The tier ``name`` falls in for ``query``; lower answers the query better."""
-    wanted = normalize(query)
-    if not wanted:
-        return UNRANKED
-    candidate = normalize(name)
+def _rank(wanted: str, candidate: str, brand: str) -> int:
     if candidate == wanted:
         return EXACT
     if candidate.startswith(wanted):
@@ -44,9 +47,35 @@ def name_rank(query: str, name: str, brand: str | None = None) -> int:
         return WORD_PREFIX
     if wanted in candidate:
         return SUBSTRING
-    if wanted in normalize(brand or ""):
+    if wanted in brand:
         return BRAND
     return UNRANKED
+
+
+def name_rank(query: str, name: str, brand: str | None = None) -> int:
+    """The tier ``name`` falls in for ``query``; lower answers the query better."""
+    wanted = normalize(query)
+    if not wanted:
+        return UNRANKED
+    return min(
+        _rank(wanted, normalize(name), normalize(brand)),
+        _rank(fold(query), fold(name), fold(brand)),
+    )
+
+
+def matches(query: str, name: str, brand: str | None = None) -> bool:
+    """Whether every word of ``query`` occurs in the name or the brand, in either spelling.
+
+    A query without a word (empty, or nothing but punctuation) matches every row, as the
+    substring search it replaces did.
+    """
+    spellings = (
+        (normalize, f"{normalize(name)} {normalize(brand)}"),
+        (fold, f"{fold(name)} {fold(brand)}"),
+    )
+    return all(
+        any(spell(word) in text for spell, text in spellings) for word in normalize(query).split()
+    )
 
 
 def sort_key(query: str, name: str, brand: str | None = None) -> tuple[int, str]:

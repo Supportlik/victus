@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import re
-import unicodedata
 from typing import Any, Protocol, Self, TypeVar
 
 from sqlalchemy import ColumnElement
@@ -51,16 +49,3 @@ class Repo:
             entity.tenant_id = self.tenant_id
         elif tenant_id != self.tenant_id:
             raise TenantMismatchError(f"{type(entity).__name__} belongs to another tenant")
-
-
-_WS = re.compile(r"\s+")
-_PUNCT = re.compile(r"[^\w\s%]", re.UNICODE)
-
-
-def normalize(text: str) -> str:
-    """Lower-case, strip accents and punctuation, collapse whitespace."""
-    s = unicodedata.normalize("NFKD", text)
-    s = "".join(ch for ch in s if not unicodedata.combining(ch))
-    s = s.replace("ß", "ss").lower()
-    s = _PUNCT.sub(" ", s)
-    return _WS.sub(" ", s).strip()

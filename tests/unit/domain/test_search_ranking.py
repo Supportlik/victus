@@ -1,6 +1,8 @@
-"""T-DOM-085: search relevance tiers — a word boundary beats an initial letter."""
+"""T-DOM-085, T-DOM-088: search relevance tiers — a word boundary beats an initial letter."""
 
 from __future__ import annotations
+
+import unicodedata
 
 import pytest
 
@@ -55,3 +57,67 @@ def test_sorting_puts_the_named_product_first() -> None:
 def test_an_empty_query_ranks_nothing() -> None:
     assert sr.name_rank("", "Ei") == sr.UNRANKED
     assert sr.name_rank("   ", "Ei") == sr.UNRANKED
+
+
+#: A long name of the kind a bakery label produces: the word searched for sits in the
+#: middle, the name is many times longer than the query, and it carries umlauts.
+LONG_ROLL = (
+    "Bakery Example Fitnessbrötchen (Weizen 95 % / Roggen 5 % mit Quark, "
+    "Kürbis-, Lein- & Sonnenblumenkerne, Sesam)"
+)
+
+
+@pytest.mark.parametrize(
+    ("query", "tier"),
+    [
+        ("Fitnessbrötchen", sr.WORD_PREFIX),
+        ("fitnessbrotchen", sr.WORD_PREFIX),
+        ("brötchen", sr.SUBSTRING),
+        ("Brotchen", sr.SUBSTRING),
+        ("Broetchen", sr.SUBSTRING),
+    ],
+)
+def test_an_umlaut_matches_in_every_spelling(query: str, tier: int) -> None:
+    """T-DOM-088: "ö", "oe" and "o" are one letter to the search, however long the name."""
+    assert sr.matches(query, LONG_ROLL)
+    assert sr.name_rank(query, LONG_ROLL) == tier
+
+
+def test_a_decomposed_name_matches_a_composed_query() -> None:
+    """T-DOM-088: "ö" stored as "o" + combining diaeresis (NFD) is the same letter."""
+    decomposed = unicodedata.normalize("NFD", LONG_ROLL)
+    assert decomposed != LONG_ROLL
+    for query in ("brötchen", "Broetchen", unicodedata.normalize("NFD", "Brötchen")):
+        assert sr.matches(query, decomposed), query
+    assert sr.name_rank("Fitnessbrötchen", decomposed) == sr.WORD_PREFIX
+    assert sr.name_rank("Kürbis", decomposed) == sr.WORD_PREFIX
+
+
+def test_every_word_must_be_found_in_name_or_brand() -> None:
+    """T-DOM-088: words are matched one by one, so their order does not matter."""
+    assert sr.matches("Bakery Example", LONG_ROLL)
+    assert sr.matches("sesam bakery", LONG_ROLL)
+    assert sr.matches("skyr arla", "Skyr natural", "Arla")
+    assert not sr.matches("Bakery Other", LONG_ROLL)
+    assert not sr.matches("Hähnchen", LONG_ROLL)
+    assert sr.matches("", LONG_ROLL), "a query without a word matches every row"
+    assert sr.matches(" %% ", LONG_ROLL)
+
+
+def test_a_whole_word_ranks_before_a_syllable_and_a_fuzzy_hit() -> None:
+    """T-DOM-088: `Hähnchen` in any spelling, at the start, later on, or inside a word."""
+    names = [
+        "Zucchini",
+        "Grillhähnchen (Keule)",
+        "Bio Hähnchen-Schenkel mit Haut",
+        "Hähnchenbrust (roh)",
+        "Hahnchen",
+    ]
+    for query in ("Hähnchen", "haehnchen", "Hahnchen"):
+        assert sorted(names, key=lambda n: sr.sort_key(query, n)) == [
+            "Hahnchen",
+            "Hähnchenbrust (roh)",
+            "Bio Hähnchen-Schenkel mit Haut",
+            "Grillhähnchen (Keule)",
+            "Zucchini",
+        ], query
