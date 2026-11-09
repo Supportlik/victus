@@ -6,6 +6,8 @@ All notable changes to Victus are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.8.6] - 2026-11-09
+
 ### Fixed
 - **A product with an umlaut in its name is found by the words it contains.** The search compared
   the query, spelled in ASCII ("broetchen"), with the stored name, which was not ("brötchen"), so
