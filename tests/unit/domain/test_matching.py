@@ -3,10 +3,17 @@
 from __future__ import annotations
 
 import time
+import unicodedata
 
 import pytest
 
-from victus.domain.services.matching import ConsumableIndex, coverage, normalize, short_form
+from victus.domain.services.matching import (
+    ConsumableIndex,
+    coverage,
+    fold,
+    normalize,
+    short_form,
+)
 from victus.domain.values import ConsumableKind
 
 pytestmark = pytest.mark.domain
@@ -116,3 +123,13 @@ def test_short_form_stays_linear_on_bracket_storms() -> None:
     start = time.perf_counter()
     assert short_form(storm) == ""
     assert time.perf_counter() - start < 1.0
+
+
+def test_normalize_composes_before_it_spells_out_umlauts() -> None:
+    """T-DOM-088: a decomposed "ö" (NFD) gets the same spelling as a composed one."""
+    composed, decomposed = "Brötchen", unicodedata.normalize("NFD", "Brötchen")
+    assert composed != decomposed
+    assert normalize(composed) == normalize(decomposed) == "broetchen"
+    assert fold(composed) == fold(decomposed) == fold("Broetchen") == fold("Brotchen")
+    assert fold("Käse") == fold("Kaese") == fold("kase") == "kase"
+    assert fold(None) == ""

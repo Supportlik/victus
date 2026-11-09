@@ -395,6 +395,28 @@ def test_products_page_and_rank_over_http(client: TestClient, alice_token: dict[
     assert [p["name"] for p in ranked.json()] == ["Ei", "Eiweißmilch", "Bäckerei Brötchen"]
 
 
+@pytest.mark.covers("POST /api/v1/products", "GET /api/v1/products")
+def test_products_search_finds_umlauts_in_long_names_over_http(
+    client: TestClient, alice_token: dict[str, str]
+) -> None:
+    """T-API-335: the query string arrives as the browser sends it, umlaut and all."""
+    long_name = (
+        "Bäckerei Beispiel Fitnessbrötchen (Weizen 95 % / Roggen 5 % mit Quark, Kürbiskerne)"
+    )
+    for name in (long_name, "Hähnchenbrust (roh)", "Reispfanne mit Hähnchen (Fertiggericht)"):
+        r = client.post("/api/v1/products", json={"name": name, "kcal": 100}, headers=alice_token)
+        assert r.status_code == 201, r.text
+
+    for q in ("Fitnessbrötchen", "brötchen", "Brotchen", "Broetchen", "Bäckerei Beispiel"):
+        hits = client.get("/api/v1/products", params={"q": q}, headers=alice_token).json()
+        assert [p["name"] for p in hits] == [long_name], q
+    hits = client.get("/api/v1/products", params={"q": "Hähnchen"}, headers=alice_token).json()
+    assert [p["name"] for p in hits] == [
+        "Hähnchenbrust (roh)",
+        "Reispfanne mit Hähnchen (Fertiggericht)",
+    ]
+
+
 @pytest.mark.covers(
     "POST /api/v1/products",
     "GET /api/v1/products/{product_id}",

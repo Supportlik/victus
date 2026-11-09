@@ -1,4 +1,5 @@
-"""T-MCP-008/009/013/014/015/016: captures_open, product_update, portions, versions, density."""
+"""T-MCP-008/009/013/014/015/016/240: captures_open, product_update, portions, versions,
+density, search."""
 
 from __future__ import annotations
 
@@ -241,3 +242,19 @@ def test_t_mcp_016_a_density_is_visible_to_the_agent(
     )
     assert proposed["changes"] == {"density_g_per_ml": 1.04}
     assert proposed["current"] == {"density_g_per_ml": None}, "what the reader compares against"
+
+
+@pytest.mark.covers("mcp:product_search")
+def test_t_mcp_240_product_search_finds_umlauts_in_long_names(
+    tool_ctx: ToolContext, factory: UowFactory, alice: TenantContext
+) -> None:
+    """T-MCP-240: the agent finds a long name by one word, in every spelling of its umlaut."""
+    long_name = (
+        "Bäckerei Beispiel Fitnessbrötchen (Weizen 95 % / Roggen 5 % mit Quark, Kürbiskerne)"
+    )
+    made = products_uc.CreateProduct(factory, alice).execute(
+        products_uc.ProductInput(name=long_name, kcal=300)
+    )
+    for q in ("Fitnessbrötchen", "brötchen", "Brotchen", "Broetchen", "Bäckerei Beispiel"):
+        out = cast(dict[str, Any], dispatch(tool_ctx, "product_search", {"q": q}))
+        assert [p["id"] for p in out["products"]] == [made.id], q

@@ -38,13 +38,35 @@ _PARENS = re.compile(r"\([^()]*\)")
 
 
 def normalize(name: str | None) -> str:
-    """Lower-case ASCII form for comparison; parentheses content is kept."""
-    s = clean_text(name).lower()
+    """Lower-case ASCII form for comparison; parentheses content is kept.
+
+    The text is composed (NFC) first: a name pasted from a source that stores "ö" as
+    "o" plus a combining diaeresis would otherwise skip the "ö" → "oe" spelling below and
+    lose its accent to plain "o", while the same word typed on a keyboard becomes "oe" —
+    two spellings of one word that never compare equal.
+    """
+    s = unicodedata.normalize("NFC", clean_text(name)).lower()
     s = s.replace("ß", "ss").replace("ä", "ae").replace("ö", "oe").replace("ü", "ue")
     s = unicodedata.normalize("NFKD", s)
     s = "".join(c for c in s if not unicodedata.combining(c))
     s = re.sub(r"[^a-z0-9 ]", " ", s)
     return re.sub(r"\s+", " ", s).strip()
+
+
+_UMLAUT_SPELLING = re.compile(r"([aou])e")
+
+
+def fold(name: str | None) -> str:
+    """:func:`normalize` with "ae", "oe" and "ue" reduced to their vowel.
+
+    ``normalize`` spells "ö" as "oe", which matches a query typed as "Broetchen" but not
+    one typed as "Brotchen" — the way a keyboard without umlauts, or a hurried hand,
+    writes it. Folding both sides the same way makes "ö", "oe" and "o" one letter. It
+    is only ever a second chance next to ``normalize``: it merges a few unrelated
+    spellings too ("Paella" and "Palla"), which a search can afford and an exact match
+    cannot.
+    """
+    return _UMLAUT_SPELLING.sub(r"\1", normalize(name))
 
 
 def short_form(name: str | None) -> str:

@@ -6,6 +6,18 @@ All notable changes to Victus are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- **A product with an umlaut in its name is found by the words it contains.** The search compared
+  the query, spelled in ASCII ("broetchen"), with the stored name, which was not ("brötchen"), so
+  no word with an umlaut ever matched. Only the fuzzy matcher could still answer, and it scores
+  against the length of the whole name: a short name like "Hähnchenbrust (roh)" came back, a long
+  one with a brand in front and its ingredients behind did not. Searching a bakery's name or
+  `Hähnchen` therefore returned two products or none, in the web app and in the agent's
+  `product_search` alike. The words are now matched with "ö", "oe" and "o" as one letter on both
+  sides, a name stored in decomposed Unicode compares equal to a typed one, and the hits are
+  ranked before the result window is cut, so whole words still come before syllables and `Ei`
+  still finds the egg first.
+
 ## [1.8.5] - 2026-11-09
 
 ### Security
