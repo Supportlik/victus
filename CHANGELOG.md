@@ -6,6 +6,8 @@ All notable changes to Victus are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-11-09
+
 ### Added
 - **The agent's search tries the variants itself.** `product_search` takes the item as it was
   said — "110 g Fitnessbrötchen from Bakery X" — and does what a person would: it drops the
