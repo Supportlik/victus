@@ -6,6 +6,8 @@ All notable changes to Victus are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-11-09
+
 ### Added
 - **The drafting agent knows what you logged before.** Each day session now starts with a
   compact "Recently logged" block — every product, recipe batch and one-off logged within
