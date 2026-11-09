@@ -6,6 +6,26 @@ All notable changes to Victus are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.8.5] - 2026-11-09
+
+### Security
+- **pyasn1 0.6.5.** 0.6.4 carries four high-severity advisories
+  ([GHSA-fm9c-5rcf-2q5p](https://github.com/advisories/GHSA-fm9c-5rcf-2q5p),
+  [GHSA-9m75-vc3g-4x39](https://github.com/advisories/GHSA-9m75-vc3g-4x39),
+  [GHSA-mm57-4v3p-rchx](https://github.com/advisories/GHSA-mm57-4v3p-rchx),
+  [GHSA-2qm8-x737-gmw5](https://github.com/advisories/GHSA-2qm8-x737-gmw5)): crafted BER/DER
+  input makes decoding take quadratic CPU time. It comes in through the transitive dependencies
+  of the passkey and model-provider libraries; the fixed release closes all four.
+- The api image moves to Python 3.15.2, the web build to Node 26.13 and the edge image to
+  Caddy 2.11.9, so the fixes those releases carry are in the published images.
+
+### Changed
+- Dependencies at their newest compatible releases, among them anthropic 2.6, FastAPI 0.162,
+  SQLAlchemy 2.1.8, Starlette 1.10, Angular 22.2.5, vitest 5.1 and jsdom 31. With Angular 22.2.6
+  shipping a fixed vite itself, the `vite` override in `web/package.json` is gone.
+- For contributors: CI runs the suite on Python 3.15 as well, the version the api image now
+  ships.
+
 ## [1.8.4] - 2026-10-21
 
 ### Fixed

@@ -3,7 +3,7 @@
 [![CI](https://github.com/Supportlik/victus/actions/workflows/ci.yml/badge.svg)](https://github.com/Supportlik/victus/actions/workflows/ci.yml)
 [![Web](https://github.com/Supportlik/victus/actions/workflows/web.yml/badge.svg)](https://github.com/Supportlik/victus/actions/workflows/web.yml)
 [![Security](https://github.com/Supportlik/victus/actions/workflows/security.yml/badge.svg)](https://github.com/Supportlik/victus/actions/workflows/security.yml)
-[![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13%20%7C%203.14-blue)](pyproject.toml)
+[![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13%20%7C%203.14%20%7C%203.15-blue)](pyproject.toml)
 [![License: PolyForm Noncommercial](https://img.shields.io/badge/license-PolyForm%20Noncommercial-blue.svg)](LICENSE)
 
 **Self-hosted nutrition tracking with a real API.** Victus keeps your food diary, product
@@ -144,7 +144,7 @@ cd web && npm ci && npm test && npm run build   # Angular
 make help                           # docker compose wrappers (up, logs, backup, restore, …)
 ```
 
-Every push runs the suite on Python 3.12–3.14 against SQLite and PostgreSQL, builds the web app,
+Every push runs the suite on Python 3.12–3.15 against SQLite and PostgreSQL, builds the web app,
 scans dependencies and sources (pip-audit, npm audit, Trivy, CodeQL) and builds the container images.
 
 ## License

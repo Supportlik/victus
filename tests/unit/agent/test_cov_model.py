@@ -79,8 +79,9 @@ def test_fallback_request_uses_the_beta_endpoint_and_maps_the_reply() -> None:
 
     assert client.model == "claude-opus-5"
     request = seen[0]
+    # anthropic 2.x marks the beta surface internally instead of with a ``?beta=true``
+    # query; what reaches the API is the beta header and the ``fallbacks`` field.
     assert request.url.path == "/v1/messages"
-    assert request.url.params.get("beta") == "true"
     assert FALLBACK_BETA in request.headers["anthropic-beta"]
     body = json.loads(request.content)
     assert body["fallbacks"] == "default"
@@ -121,7 +122,7 @@ def test_plain_request_without_fallbacks_and_a_refusal_with_details() -> None:
 
     client, seen = _client(handler, fallbacks=False)
     response = _create(client)
-    assert "beta" not in seen[0].url.params
+    assert FALLBACK_BETA not in seen[0].headers.get("anthropic-beta", "")
     assert "fallbacks" not in json.loads(seen[0].content)
     assert response.stop_reason == "refusal"
     assert response.stop_details == {
